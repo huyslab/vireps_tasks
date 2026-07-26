@@ -467,11 +467,57 @@ function createPressBothTrial(stimulus, trialphase){
     }
 }
 
+/**
+ * Creates a "ready to begin" trial that works on both input modalities.
+ *
+ * On keyboard devices this is the existing press-both-arrow-keys trial, which doubles as
+ * an attention check. Touch devices have no arrow keys, so they get a single large button
+ * instead; the two-handed readiness the keyboard version enforces has no touch equivalent,
+ * so the button is a plain acknowledgement.
+ *
+ * @param {string} stimulus - HTML shown above the prompt, excluding any modality-specific
+ *   instruction line (pass those via keyboardPrompt/touchPrompt so each modality reads right)
+ * @param {string} trialphase - Phase identifier for data logging
+ * @param {Object} [options]
+ * @param {string} [options.keyboardPrompt] - HTML appended on keyboard devices
+ * @param {string} [options.touchPrompt] - HTML appended on touch devices
+ * @param {string} [options.buttonLabel] - Label for the touch button (default "I'm ready")
+ * @returns {Object} jsPsych trial configuration object
+ */
+function createReadyTrial(stimulus, trialphase, options = {}) {
+    const {
+        keyboardPrompt = `<p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong>both left and right arrow keys at the same time</strong> to begin.</p>
+            <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>`,
+        touchPrompt = `<p>When you're ready, tap the button below to begin.</p>`,
+        buttonLabel = "I'm ready"
+    } = options;
+
+    if (navigator.maxTouchPoints > 0) {
+        return {
+            type: jsPsychHtmlButtonResponse,
+            css_classes: ['instructions'],
+            stimulus: stimulus + touchPrompt,
+            choices: [buttonLabel],
+            data: { trialphase: trialphase },
+            simulation_options: { data: { response: 0 } },
+            on_finish: () => {
+                // Mirrors createPressBothTrial: reset the per-task deadline warning counter
+                jsPsych.data.addProperties({
+                    reversal_n_warnings: 0
+                });
+            }
+        };
+    }
+
+    return createPressBothTrial(stimulus + keyboardPrompt, trialphase);
+}
+
 // Export functions for use in other modules
 export {
     preventRefresh,
     fullscreen_prompt,
     kickOut,
+    createReadyTrial,
     createInstructionsKickOut,
     checkFullscreen,
     canBeWarned,

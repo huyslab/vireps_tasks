@@ -19,6 +19,33 @@ export const TASKS = {
     // never has. Excluding that is required to land on the actual trial, not instructions.
     readySelector: '.experiment-wrapper:not(:has(#instruction-container)) #piggy-container',
   },
+  // Both card-choosing entries below differ from vigour/reversal in one respect worth
+  // knowing: the PILT/WM instruction sequences build REAL plugin trials for their practice
+  // rounds (instructions.js -> buildCardChoosingTask), so #cardChoosingOptionBox legitimately
+  // appears during instructions too. Unlike vigour's instructions demo, those are genuine
+  // renders of the same plugin under test, so landing on one is a valid check rather than a
+  // false match - no extra qualifier is needed to exclude them.
+  PILT: {
+    url: '/examples/PILT.html',
+    preferredOrientation: 'landscape',
+    rotateMessageSelector: '.rotate-msg-landscape',
+    readySelector: '#cardChoosingOptionBox',
+  },
+  WM: {
+    url: '/examples/WM.html',
+    preferredOrientation: 'landscape',
+    rotateMessageSelector: '.rotate-msg-landscape',
+    readySelector: '#cardChoosingOptionBox',
+  },
+  // Used by the journey check only (not the rendering matrix): it reaches a real two-card
+  // trial after a single instructions page, where PILT's own path runs through practice
+  // rounds and a comprehension quiz first. Same plugin, same tap targets.
+  postPILTtest: {
+    url: '/examples/post-PILT-test.html',
+    preferredOrientation: 'landscape',
+    rotateMessageSelector: '.rotate-msg-landscape',
+    readySelector: '#cardChoosingOptionBox',
+  },
   reversal: {
     url: '/examples/reversal.html',
     preferredOrientation: 'landscape',

@@ -152,7 +152,31 @@ jsPsychCardChoosing = (function (jspsych) {
             },
             key: {
                 type: jspsych.ParameterType.STRING,
-                pretty_name: 'Key pressed (left or right arrow key)'
+                pretty_name: 'Key pressed (left or right arrow key), or null for a tap response'
+            },
+            pointer_type: {
+                type: jspsych.ParameterType.STRING,
+                pretty_name: 'Input modality used for the response (touch, mouse, pen, keyboard, or null)'
+            },
+            wrong_orientation: {
+                type: jspsych.ParameterType.BOOL,
+                pretty_name: 'Whether device was held in the non-preferred orientation at any point during trial'
+            },
+            wrong_orientation_times: {
+                type: jspsych.ParameterType.ARRAY,
+                pretty_name: 'Array of ms offsets from trial onset for each entry into wrong orientation'
+            },
+            viewport_width: {
+                type: jspsych.ParameterType.INT,
+                pretty_name: 'Viewport width at trial onset (px)'
+            },
+            viewport_height: {
+                type: jspsych.ParameterType.INT,
+                pretty_name: 'Viewport height at trial onset (px)'
+            },
+            viewport_changed: {
+                type: jspsych.ParameterType.BOOL,
+                pretty_name: 'Whether viewport geometry changed (resize/orientationchange) during trial'
             },
             stimulus_left: {
                 type: jspsych.ParameterType.STRING,
@@ -259,18 +283,86 @@ jsPsychCardChoosing = (function (jspsych) {
 
             this.data.response_deadline_warning = false;
 
+            // Tap targets are only rendered on touch-capable devices; desktop stays
+            // keyboard-only so mouse clicks can't substitute for an arrow key.
+            this.touchCapable = navigator.maxTouchPoints > 0;
+
+            // Single timestamp for both RT computation (pointer responses) and
+            // orientation-offset tracking
+            const trialOnset = performance.now();
+
+            // Viewport geometry at trial onset
+            let viewportWidth = window.innerWidth;
+            let viewportHeight = window.innerHeight;
+            let viewportChanged = false;
+
+            // Orientation tracking - the rotate-overlay is rendered by the experiment entry
+            // HTML and shown by CSS when a phone is held in the non-preferred orientation.
+            const rotateOverlay = document.getElementById('rotate-overlay');
+            const isRotateGateVisible = () => !!rotateOverlay && getComputedStyle(rotateOverlay).display !== 'none';
+            let gateVisible = isRotateGateVisible();
+            let wrongOrientation = false;
+            const wrongOrientationTimes = [];
+            if (gateVisible) {
+                wrongOrientation = true;
+                wrongOrientationTimes.push(0);  // offset from trial onset is 0
+            }
+
             // Create stimuli
             display_element.innerHTML = this.create_stimuli(trial.n_stimuli);
 
+            // --- Listener bookkeeping ---
+            // A pointer listener is not cancelled by clearAllTimeouts/cancelAllKeyboardResponses
+            // the way the keyboard path is, so responses must be guarded explicitly: without
+            // this a second tap during the feedback animation would re-enter handleResponse
+            // and double-count the trial.
+            let responded = false;
+            let cleaned = false;
+            const tapTargets = [];
+            let resizeHandler = null;
+            let resizeDebounce = null;
+
+            const suppressContextMenu = (e) => {
+                e.preventDefault();  // suppress right-click / long-press context menu
+            };
+
+            const cleanupAll = () => {
+                if (cleaned) return;
+                cleaned = true;
+
+                tapTargets.forEach(({ el, handler }) => {
+                    el.removeEventListener('pointerdown', handler);
+                    el.removeEventListener('contextmenu', suppressContextMenu);
+                });
+                if (resizeHandler) {
+                    window.removeEventListener('resize', resizeHandler);
+                    window.removeEventListener('orientationchange', resizeHandler);
+                }
+                if (resizeDebounce) {
+                    clearTimeout(resizeDebounce);
+                    resizeDebounce = null;
+                }
+                this.jsPsych.pluginAPI.cancelAllKeyboardResponses();
+            };
+
             // Trial end function
             const endTrial = () => {
+                cleanupAll();
+
                 // clear the display
                 let optionBox = document.getElementById("cardChoosingOptionBox");
                 optionBox.style.display = 'none';
 
                 const optimalSide = trial.n_stimuli === 2 ? (this.data.optimal_right == 1 ? 'right' : 'left') : trial.optimal_side
                 this.data.response_optimal = this.data.response === optimalSide
-                this.jsPsych.pluginAPI.cancelAllKeyboardResponses()
+
+                // Touch/viewport covariates
+                this.data.wrong_orientation = wrongOrientation;
+                this.data.wrong_orientation_times = wrongOrientationTimes;
+                this.data.viewport_width = viewportWidth;
+                this.data.viewport_height = viewportHeight;
+                this.data.viewport_changed = viewportChanged;
+
                 this.jsPsych.pluginAPI.clearAllTimeouts()
                 this.jsPsych.finishTrial(this.data)
 
@@ -321,19 +413,27 @@ jsPsychCardChoosing = (function (jspsych) {
             }
 
 
-            // Response function
-            const keyResponse = (e) => {
-                this.jsPsych.pluginAPI.cancelAllKeyboardResponses()
+            // Response function. Accepts a resolved side rather than an event, so pointer
+            // taps and key presses share one path:
+            //   handleResponse('left', 'touch')            - tap, RT measured here
+            //   handleResponse('left', 'keyboard', rt, key) - key press, RT from jsPsych
+            //   handleResponse(null)                        - response deadline elapsed
+            const handleResponse = (side, pointerType = null, rt = null, key = null) => {
+                if (responded) return;
+                responded = true;
+
+                cleanupAll();
                 this.jsPsych.pluginAPI.clearAllTimeouts()
                 this.data.keyPressOnset = performance.now()
+                this.data.pointer_type = pointerType;
 
-                if (e !== '') {
+                if (side !== null) {
                     // if there is a response:
-                    this.data.key = e.key.toLowerCase()
-                    this.data.response = this.keys[e.key.toLowerCase()]
+                    this.data.key = key
+                    this.data.response = side
                     const possible_responses = trial.n_stimuli === 2 ? ["right", "left"] : ["right", "left", "middle"]
                     const inverse_response = possible_responses.filter(element => element !== this.data.response)
-                    this.data.rt = e.rt
+                    this.data.rt = rt != null ? rt : Math.round(performance.now() - trialOnset)
                     this.n_stimuli = trial.n_stimuli
 
                     if (this.data.response === 'left') {
@@ -360,11 +460,16 @@ jsPsychCardChoosing = (function (jspsych) {
 
                     // Draw selection box:
                     if (trial.n_stimuli !== 1) {
-                        selImg.style.border = '20px solid darkgrey'    
+                        selImg.style.border = '20px solid darkgrey'
                     } else {
-                        // Press selected key
+                        // Show the chosen response target as pressed. Touch renders the three
+                        // targets as buttons and keyboard as key caps, so each has its own
+                        // pressed class - swapping className wholesale would drop the other's
+                        // base styling.
                         const selKey = document.getElementById(`${this.data.response}_key`)
-                        selKey.className = "spacebar-icon-pressed"
+                        selKey.className = this.touchCapable
+                            ? "cardChoosingResponseBtn cardChoosingResponseBtn-pressed"
+                            : "spacebar-icon-pressed"
 
                         // Remove other keys
                         inverse_response.forEach(response => {
@@ -474,19 +579,63 @@ jsPsychCardChoosing = (function (jspsych) {
                 }
             }
 
-            // Keyboard listener
+            // --- Pointer listeners on the response targets (touch devices only) ---
+            // For 2- and 3-card trials the card containers are the targets. For the
+            // single-card (WM) layout there is no spatial mapping to tap, so the three
+            // response buttons rendered below the card are the targets instead.
+            if (this.touchCapable) {
+                this.responseTargetIds(trial.n_stimuli).forEach(({ id, side }) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+
+                    const handler = (event) => {
+                        if (!event.isPrimary) return;       // ignore multi-touch
+                        if (event.button !== 0) return;     // ignore right-click / middle-click
+                        event.preventDefault();
+                        handleResponse(side, event.pointerType || 'unknown');
+                    };
+
+                    el.addEventListener('pointerdown', handler);
+                    el.addEventListener('contextmenu', suppressContextMenu);
+                    tapTargets.push({ el, handler });
+                });
+            }
+
+            // --- Keyboard listener (runs in parallel with pointer input) ---
             this.jsPsych.pluginAPI.getKeyboardResponse({
-                callback_function: keyResponse,
+                callback_function: (info) => {
+                    const side = this.keys[info.key.toLowerCase()];
+                    if (side) {
+                        handleResponse(side, 'keyboard', info.rt, info.key.toLowerCase());
+                    }
+                },
                 valid_responses: Object.keys(this.keys),
                 rt_method: 'performance',
                 persist: false,
                 allow_held_key: false
             });
 
+            // --- Viewport + orientation change listener ---
+            resizeHandler = () => {
+                viewportChanged = true;
+                if (resizeDebounce) clearTimeout(resizeDebounce);
+                resizeDebounce = setTimeout(() => {
+                    const nowVisible = isRotateGateVisible();
+                    if (nowVisible && !gateVisible) {
+                        // Transitioned INTO the wrong orientation during this trial
+                        wrongOrientation = true;
+                        wrongOrientationTimes.push(Math.round(performance.now() - trialOnset));
+                    }
+                    gateVisible = nowVisible;
+                }, 150);  // 150ms debounce, matching vigour/reversal
+            };
+            window.addEventListener('resize', resizeHandler);
+            window.addEventListener('orientationchange', resizeHandler);
+
             // Set listener for response_deadline
             if (trial.response_deadline > 0) {
                 this.jsPsych.pluginAPI.setTimeout(() => {
-                    keyResponse('')
+                    handleResponse(null)
                 }, trial.response_deadline);
             }
 
@@ -520,7 +669,8 @@ jsPsychCardChoosing = (function (jspsych) {
                 }
             }
 
-            // Set data
+            // Set data. Simulation drives the keyboard path (simulate_visual presses a key),
+            // so pointer_type reports keyboard rather than a tap.
             let default_data = {
                 key: this.jsPsych.pluginAPI.getValidKey(Object.keys(this.keys)),
                 stimulus_left: trial.stimulus_left,
@@ -528,7 +678,13 @@ jsPsychCardChoosing = (function (jspsych) {
                 feedback_left: trial.feedback_left,
                 feedback_right: trial.feedback_right,
                 rt: this.jsPsych.randomization.sampleExGaussian(500, 50, 1 / 150, true),
-                n_stimuli: trial.n_stimuli
+                n_stimuli: trial.n_stimuli,
+                pointer_type: 'keyboard',
+                wrong_orientation: false,
+                wrong_orientation_times: [],
+                viewport_width: window.innerWidth,
+                viewport_height: window.innerHeight,
+                viewport_changed: false
             };
 
             if (trial.n_stimuli !== 2) {
@@ -573,9 +729,37 @@ jsPsychCardChoosing = (function (jspsych) {
             }
         }
 
+        /**
+         * The elements a tap should select, per layout. Two- and three-card trials map a
+         * side to its card container; the single-card (WM) layout has no spatial mapping,
+         * so the three response targets below the card stand in for the three arrow keys.
+         * @param {number} num_stim - How many stimuli are presented (1, 2 or 3)
+         * @returns {Array<{id: string, side: string}>} Element ids paired with the side they select
+         */
+        responseTargetIds(num_stim) {
+            if (num_stim === 1) {
+                return [
+                    { id: 'left_key', side: 'left' },
+                    { id: 'middle_key', side: 'middle' },
+                    { id: 'right_key', side: 'right' }
+                ];
+            }
+            const targets = [
+                { id: 'left', side: 'left' },
+                { id: 'right', side: 'right' }
+            ];
+            if (num_stim === 3) {
+                targets.push({ id: 'middle', side: 'middle' });
+            }
+            return targets;
+        }
+
         // Stimuli creation
         create_stimuli(num_stim) {
             let html = ''
+
+            // Tap targets only on touch devices; keyboard users interact via arrow keys only
+            const tappable = this.touchCapable ? ' cardChoosing-tappable' : '';
 
             if (num_stim !== 2) {
                 html += `<div class="cardChoosingHelperTxt3">
@@ -589,8 +773,8 @@ jsPsychCardChoosing = (function (jspsych) {
                     `
 
             html += `
-                    <div id='left' class="cardChoosingOptionSide">
-                        <img id='cardChoosingLeftImg' ${num_stim === 1 ? `style='visibility: hidden'` : ``} src=${this.contingency.img[0]}></img> 
+                    <div id='left' class="cardChoosingOptionSide${num_stim === 1 ? '' : tappable}">
+                        <img id='cardChoosingLeftImg' ${num_stim === 1 ? `style='visibility: hidden'` : ``} src=${this.contingency.img[0]}></img>
                     </div>
 
                     `;
@@ -602,14 +786,14 @@ jsPsychCardChoosing = (function (jspsych) {
                         `;
             } else{
 
-                html += `<div id='middle' class="cardChoosingOptionSide">
+                html += `<div id='middle' class="cardChoosingOptionSide${num_stim === 1 ? '' : tappable}">
                             <img id='cardChoosingMiddleImg' src=${this.contingency.img[2]}></img>
                         </div>
                         `;
             }
 
             html += `
-                    <div id='right' class="cardChoosingOptionSide">
+                    <div id='right' class="cardChoosingOptionSide${num_stim === 1 ? '' : tappable}">
                         <img id='cardChoosingRightImg' ${num_stim === 1 ? `style='visibility: hidden'` : ``} src=${this.contingency.img[1]}></img>
                     </div>
             `;
@@ -617,8 +801,17 @@ jsPsychCardChoosing = (function (jspsych) {
             html += `</div>`
 
             if (num_stim !== 2) {
+                // Single-card layout: three response targets standing in for the arrow keys.
+                // Rendered as buttons on touch and as key caps on keyboard - same ids either
+                // way, so the pressed/faded response feedback above works for both.
+                const responseTargets = this.touchCapable
+                    ? `<button type="button" class="cardChoosingResponseBtn" id="left_key">←</button>
+                       <button type="button" class="cardChoosingResponseBtn" id="middle_key">↑</button>
+                       <button type="button" class="cardChoosingResponseBtn" id="right_key">→</button>`
+                    : `<span class="spacebar-icon" id="left_key">&nbsp;←&nbsp;</span>&nbsp;&nbsp;&nbsp;<span class="spacebar-icon" id="middle_key">&nbsp;↑&nbsp;</span>&nbsp;&nbsp;&nbsp;<span class="spacebar-icon" id="right_key">&nbsp;→&nbsp;</span>`;
+
                 html += `<div class="cardChoosingHelperTxt3">
-                            <p id="below">${num_stim === 1 ? `<span class="spacebar-icon" id="left_key">&nbsp;←&nbsp;</span>&nbsp;&nbsp;&nbsp;<span class="spacebar-icon" id="middle_key">&nbsp;↑&nbsp;</span>&nbsp;&nbsp;&nbsp;<span class="spacebar-icon" id="right_key">&nbsp;→&nbsp;</span>` : "&zwnj;"}</p>
+                            <p id="below">${num_stim === 1 ? responseTargets : "&zwnj;"}</p>
                 </div>
                 `
             }

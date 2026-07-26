@@ -1,8 +1,8 @@
 // Import necessary functions and components
 import { interBlockStimulus } from './utils.js';
-import { 
+import {
     updateState,
-    createPressBothTrial,
+    createReadyTrial,
     shuffleArray
 } from '@utils/index.js';
 import { 
@@ -12,6 +12,15 @@ import {
 
 // Configuration constants for PILT instructions
 const small_coin_size = 100; // Size of coin images in pixels
+
+// Touch devices tap the cards directly; keyboard devices use the arrow keys. Read once at
+// module load, matching how the plugin decides whether to render tap targets.
+const touchCapable = navigator.maxTouchPoints > 0;
+
+/** How the participant selects a card, for use mid-sentence in instruction copy. */
+const chooseCardPhrase = touchCapable
+    ? "tapping the card you want"
+    : "pressing the left or the right arrow keys";
 const demo_stimuli = [
     "almond_1.jpg",
     "envelope_1.jpg",
@@ -83,11 +92,9 @@ function preparePILTInstructions(settings) {
     // Add initial practice trial for screening sessions only
     if (settings.session === "screening"){
         inst.push(
-            createPressBothTrial(
-                `<p>You choose a card by pressing the left or the right arrow keys.</p>
+            createReadyTrial(
+                `<p>You choose a card by ${chooseCardPhrase}.</p>
                         <p>Let's try it out now! Flip a card on the next screen.</p>
-                        <p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong> both left and right arrow keys at the same time </strong> to begin.</p>
-                        <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>
                         `,
                 "pilt_instruction"
             ),
@@ -137,12 +144,10 @@ function preparePILTInstructions(settings) {
         show_clickable_nav: true,
         data: {trialphase: "pilt_instruction"}
     },
-    createPressBothTrial(
+    createReadyTrial(
         `<p>Let's practice collecting coins. \
             On the next screen, choose cards to collect as much money as you can.</p>
             <p>One of the picture cards has mostly £1 coins behind it, while the other has mostly ${settings.session === "screening" ? "50 pence coins" : "broken £1 coins"} behind it.</p>
-            <p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong> both left and right arrow keys at the same time </strong> to begin.</p>
-            <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>
         `,
         "pilt_instruction"
     )
@@ -345,12 +350,10 @@ function preparePILTInstructions(settings) {
     inst_total = inst_total.concat(
         [
             inst_loop,
-            createPressBothTrial(
+            createReadyTrial(
                 `<p>Great! Let's start playing for real.</p>
                 <p>You will now complete ${settings.session === "screening" ? "another round" : "15 rounds"} of the card choosing game, taking ${settings.session === "screening" ? "a couple of minutes" : "10-15 minutes"} on average to complete.</p>
-                ${settings.session !== "screening" ? "<p>You will be able to take a short break between rounds, if you feel you need it.</p>" : ""}
-                <p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong> both left and right arrow keys at the same time </strong> to begin.</p>
-                <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>`,
+                ${settings.session !== "screening" ? "<p>You will be able to take a short break between rounds, if you feel you need it.</p>" : ""}`,
                 "pilt_instruction"
             )
         ]
@@ -400,8 +403,49 @@ const testInstructions = (task) => {
 }
 
 /**
+ * Ready screen for the three-response variants (LTM's three cards, WM's single card with
+ * three responses). Kept separate from the shared createReadyTrial helper because the
+ * keyboard version here is a single up-arrow press, not the two-handed press-both check -
+ * this preserves that exactly and only adds the touch branch.
+ *
+ * @param {string} stimulus - HTML shown above the modality-specific prompt
+ * @param {string} trialphase - Phase identifier for data logging
+ * @param {string} warningCounter - Data property to zero when the trial finishes
+ * @returns {Object} jsPsych trial configuration object
+ */
+function threeResponseReadyTrial(stimulus, trialphase, warningCounter) {
+    const resetCounter = () => {
+        jsPsych.data.addProperties({
+            [warningCounter]: 0
+        });
+    };
+
+    if (touchCapable) {
+        return {
+            type: jsPsychHtmlButtonResponse,
+            css_classes: ['instructions'],
+            stimulus: stimulus + `<p>When you are ready to start playing, tap the button below.</p>`,
+            choices: ["I'm ready"],
+            data: { trialphase: trialphase },
+            simulation_options: { data: { response: 0 } },
+            on_finish: resetCounter
+        };
+    }
+
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        css_classes: ['instructions'],
+        stimulus: stimulus + `<p>When you are ready to start playing, place your fingers on the left, right, and up arrow keys as shown below, and press the up arrow key.</p>
+        <img src='./assets/images/3_finger_keys.jpg' style='width:250px;'></img>`,
+        choices: ['arrowup'],
+        data: { trialphase: trialphase },
+        on_finish: resetCounter
+    };
+}
+
+/**
  * Instructions for the Long-Term Memory (LTM) task variant
- * Uses three-card choice with arrow key controls (left, right, up)
+ * Uses three-card choice, selected by tapping a card or with the arrow keys
  */
 const LTM_instructions = [
     {
@@ -413,28 +457,21 @@ const LTM_instructions = [
             `<p>This time, you will choose between three cards on every turn.<p>
             <p>In every triplet, one picture card will always have £1 and 50-pence coins behind it, while the other two cards will have only pennies.<p>
             <p>You can earn more by learning which is the better picture card in each triplet and choosing that card when you next see same triplet.</p>`,
-            `<p>Use the right arrow key to choose the card on the right, the left arrow key to choose the card on the left, 
+            touchCapable
+                ? `<p><b>Tap the card you want to choose</b> - left, middle, or right.</p>`
+                : `<p>Use the right arrow key to choose the card on the right, the left arrow key to choose the card on the left,
             and <b>use the upwards arrow key to choose the card in the middle.</b>
             `
         ],
         show_clickable_nav: true,
         data: {trialphase: "LTM_instructions"}
     },
-    {
-        type: jsPsychHtmlKeyboardResponse,
-        css_classes: ['instructions'],
-        stimulus: `<p>Let's get started!</p>
-        <p>You will play one round with no breaks, lasting about 8 minutes.</p>
-        <p>When you are ready to start playing, place your fingers on the left, right, and up arrow keys as shown below, and press the up arrow key.</p>
-        <img src='./assets/images/3_finger_keys.jpg' style='width:250px;'></img>`,
-        choices: ['arrowup'],
-        data: {trialphase: "LTM_instructions"},
-        on_finish: () => {
-            jsPsych.data.addProperties({
-                ltm_n_warnings: 0
-            });
-        }
-    }
+    threeResponseReadyTrial(
+        `<p>Let's get started!</p>
+        <p>You will play one round with no breaks, lasting about 8 minutes.</p>`,
+        "LTM_instructions",
+        "ltm_n_warnings"
+    )
 ]
 
 /**
@@ -448,7 +485,12 @@ const WM_instructions = [
         pages: [
             '<p>You will now play another round of the card choosing game.</p>\
                 <p>Your goal remains to add as much money as you can to your safe.</p>',
-            `<p>This time, you will see only one card on each turn.<p>
+            touchCapable
+                ? `<p>This time, you will see only one card on each turn.<p>
+            <p>Below the card there are three buttons: <span class="cardChoosingResponseBtn">←</span> <span class="cardChoosingResponseBtn">↑</span> <span class="cardChoosingResponseBtn">→</span>. You can flip the card by tapping any one of them.</p>
+            <p>For each card, tapping one of the three buttons will always reveal £1 and 50-pence coins, while the other two will reveal only pennies.<p>
+            <p>You can earn more by learning which is the better button for each card, and tapping that button when you next see the same card.</p>`
+                : `<p>This time, you will see only one card on each turn.<p>
             <p>You can flip this card by pressing either the left <span class="spacebar-icon">&nbsp;←&nbsp;</span>, up <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or right <span class="spacebar-icon">&nbsp;→&nbsp;</span> arrow keys on your keyboard.</p>
             <p>For each card, pressing one of the keys will always reveal £1 and 50-pence coins, while the other two keys will reveal only pennies.<p>
             <p>You can earn more by learning which is the better key to press for each card and pressing that key when you next see same card.</p>`
@@ -456,21 +498,12 @@ const WM_instructions = [
         show_clickable_nav: true,
         data: {trialphase: "WM_instructions"}
     },
-    {
-        type: jsPsychHtmlKeyboardResponse,
-        css_classes: ['instructions'],
-        stimulus: `<p>Let's get started!</p>
-        <p>You will play one round with no breaks, lasting about 8 minutes.</p>
-        <p>When you are ready to start playing, place your fingers on the left, right, and up arrow keys as shown below, and press the up arrow key.</p>
-        <img src='./assets/images/3_finger_keys.jpg' style='width:250px;'></img>`,
-        choices: ['arrowup'],
-        data: {trialphase: "WM_instructions"},
-        on_finish: () => {
-            jsPsych.data.addProperties({
-                wm_n_warnings: 0
-            });
-        }
-    }
+    threeResponseReadyTrial(
+        `<p>Let's get started!</p>
+        <p>You will play one round with no breaks, lasting about 8 minutes.</p>`,
+        "WM_instructions",
+        "wm_n_warnings"
+    )
 ]
 
 export {

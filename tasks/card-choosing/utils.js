@@ -1,11 +1,11 @@
-import { 
-  saveDataREDCap, 
+import {
+  saveDataREDCap,
   updateBonusState,
   canBeWarned,
   noChoiceWarning,
   kickOut,
   fullscreen_prompt,
-  createPressBothTrial,
+  createReadyTrial,
   updateState,
   isValidNumber,
   countOccurrences
@@ -14,6 +14,9 @@ import {
 
 // CONSTANTS
 const STIMULI_PATH = './assets/images/card-choosing/stimuli/';
+
+// Touch devices tap the cards (or the WM response buttons) rather than using arrow keys.
+const touchCapable = navigator.maxTouchPoints > 0;
 
 const preloadAssets = (settings) => {
             // Base coin images
@@ -26,11 +29,14 @@ const preloadAssets = (settings) => {
                 images.push(...["1pennybroken.png", "1poundbroken.png", "50pencebroken.png"].map(s => `card-choosing/outcomes/${s}`));
             }
 
-            // Add key images according to n_choices
-            if (settings.n_choices === 2) {
-                images.push("2_finger_keys.jpg");
-            } else if (settings.n_choices === 3) {
-                images.push("3_finger_keys.jpg");
+            // Add key images according to n_choices. Touch devices never show the
+            // finger-position photos, so there is nothing to preload for them.
+            if (!touchCapable) {
+                if (settings.n_choices === 2) {
+                    images.push("2_finger_keys.jpg");
+                } else if (settings.n_choices === 3) {
+                    images.push("3_finger_keys.jpg");
+                }
             }
 
             // Add PIT images if present_pavlovian is true
@@ -91,6 +97,30 @@ function adjustStimuliPaths(structure, folder) {
 // TRIAL COMPONENTS
 // Message between blocks - saves data and shows outcome summary
 const interBlockMsg = (settings) => {
+    // Touch devices have no arrow keys to continue with, so the same screen becomes a
+    // single button. Both variants share the stimulus and the save/bonus bookkeeping.
+    if (touchCapable) {
+        return {
+            type: jsPsychHtmlButtonResponse,
+            css_classes: ['instructions'],
+            stimulus: () => interBlockStimulus(settings),
+            choices: ['Continue'],
+            simulation_options: { data: { response: 0 } },
+            data: {
+                trialphase: "card_choosing_inter_block",
+            },
+            on_start: () => {
+                // Save progress and update bonus calculations
+                saveDataREDCap();
+                updateBonusState(settings);
+            },
+            on_finish: () => {
+                // Reset early stop flag for next block
+                window.skipThisBlock = false
+            }
+        };
+    }
+
     return {
         type: jsPsychHtmlKeyboardResponse,
         choices: () => {
@@ -487,10 +517,14 @@ function interBlockStimulus(settings){
 
     txt += `<p>Altogether on this round, you've ${earnings >= 0 ? "collected" : "lost"} coins worth £${Math.abs(earnings).toFixed(2)}.</p>`;
         
-    // Add continuation instructions based on number of stimuli
+    // Add continuation instructions based on input modality and number of stimuli
     if (isValidNumber(block)){
-        txt += n_stimuli === 2 ? `<p>Press the right arrow to continue.</p>` :
-         `<p>Place your fingers on the left, right, and up arrow keys, and press either one to continue.</p>`
+        if (touchCapable) {
+            txt += `<p>Tap the button below to continue.</p>`
+        } else {
+            txt += n_stimuli === 2 ? `<p>Press the right arrow to continue.</p>` :
+             `<p>Place your fingers on the left, right, and up arrow keys, and press either one to continue.</p>`
+        }
     }
 
     return txt
@@ -533,13 +567,18 @@ function buildCardChoosingTask(structure, insert_msg = true, settings = {task_na
         // Add pre-block instructions for numbered blocks
         if (isValidNumber(block_number) & settings.task_name === "pilt" && (settings.session !== "screening")){
             block.push(
-                createPressBothTrial(
+                createReadyTrial(
                     `
                         <h3>Round ${i + 1} out of ${structure.length}</h3>` +
-                        (valence != 0 ? `<p>On the next round you will play to <b>${valence > 0 ? "win" : "avoid losing"} coins</b>.<p>` : "") + 
-                       ( n_stimuli === 2 ? `<p>Place your fingers on the left and right arrow keys, and <b>press both</b> to continue.</p>` :
-                        `<p>Place your fingers on the left, right, and up arrow keys, and press either one to continue.</p>`),
-                    "pre_block"
+                        (valence != 0 ? `<p>On the next round you will play to <b>${valence > 0 ? "win" : "avoid losing"} coins</b>.<p>` : ""),
+                    "pre_block",
+                    {
+                        keyboardPrompt: n_stimuli === 2
+                            ? `<p>Place your fingers on the left and right arrow keys, and <b>press both</b> to continue.</p>`
+                            : `<p>Place your fingers on the left, right, and up arrow keys, and press either one to continue.</p>`,
+                        touchPrompt: `<p>Tap the button below to continue.</p>`,
+                        buttonLabel: 'Continue'
+                    }
                 )
             )
         }

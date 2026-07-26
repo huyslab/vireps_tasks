@@ -24,7 +24,8 @@ export const TaskRegistry = {
         present_pavlovian: true,
         include_instructions: true,
         sequence: 'wk0',
-        session: 'wk0'
+        session: 'wk0',
+        preferredOrientation: "landscape"
     },
     sequences: {
         screening: '@tasks/card-choosing/sequences/PILT/trial1_screening.js',
@@ -53,7 +54,8 @@ export const TaskRegistry = {
         present_pavlovian: "Whether to present stimuli for pavlovian conditioning along with trial outcomes. Default is true.",
         include_instructions: "Whether to show instructions before the task. Default is true.",
         sequence: "The key for the sequence to use for the learning phase. Default is 'wk0'.",
-        session: "Session identifier to govern session-specific behaviour. Default is 'wk0'. Should be deprecated, with settings exposed."
+        session: "Session identifier to govern session-specific behaviour. Default is 'wk0'. Should be deprecated, with settings exposed.",
+        preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). On a phone held in the other orientation, a 'please rotate' overlay blocks the task until it is rotated; tablets and desktop are exempt. Default is 'landscape' - the cards are laid out in a row, and the single-card layout keeps its three response buttons on one line.",
     }
   },
   WM: {
@@ -68,7 +70,8 @@ export const TaskRegistry = {
         present_pavlovian: false,
         include_instructions: true,
         sequence: 'wk0',
-        session: 'wk0'
+        session: 'wk0',
+        preferredOrientation: "landscape"
     },
     sequences: {
         wk0: '@tasks/card-choosing/sequences/WM/trial1_wk0.js',
@@ -96,7 +99,8 @@ export const TaskRegistry = {
         present_pavlovian: "Whether to present stimuli for pavlovian conditioning along with trial outcomes. Default is true.",
         include_instructions: "Whether to show instructions before the task. Default is true.",
         sequence: "The key for the sequence to use for the learning phase. Default is 'wk0'.",
-        session: "Session identifier to govern session-specific behaviour. Default is 'wk0'. Should be deprecated, with settings exposed."
+        session: "Session identifier to govern session-specific behaviour. Default is 'wk0'. Should be deprecated, with settings exposed.",
+        preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). On a phone held in the other orientation, a 'please rotate' overlay blocks the task until it is rotated; tablets and desktop are exempt. Default is 'landscape' - the cards are laid out in a row, and the single-card layout keeps its three response buttons on one line.",
     }
   },
   post_PILT_test: {
@@ -106,7 +110,8 @@ export const TaskRegistry = {
     defaultConfig: {
         task_name: "pilt_test",
         test_confidence_every: 4,
-        sequence: 'wk0'
+        sequence: 'wk0',
+        preferredOrientation: "landscape"
     },
     requirements: {
       css: ['@tasks/card-choosing/styles.css'],
@@ -125,6 +130,7 @@ export const TaskRegistry = {
         task_name: "The name of the test phase - can be 'pilt_test' or 'wm_test'. Default is 'pilt_test'.",
         test_confidence_every: "How often (in trials) to elicit confidence ratings in the test phase. Default is every 4 trials.",
         sequence: "The key for the sequence to use for the test phase - should match the learning phase. Default is 'wk0'.",
+        preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). On a phone held in the other orientation, a 'please rotate' overlay blocks the task until it is rotated; tablets and desktop are exempt. Default is 'landscape' - the cards are laid out in a row, and the single-card layout keeps its three response buttons on one line.",
     }
   },
   post_WM_test: {
@@ -134,7 +140,8 @@ export const TaskRegistry = {
     defaultConfig: {
         task_name: "wm_test",
         test_confidence_every: 4,
-        sequence: 'wk0'
+        sequence: 'wk0',
+        preferredOrientation: "landscape"
     },
     requirements: {
       css: ['@tasks/card-choosing/styles.css'],
@@ -153,6 +160,7 @@ export const TaskRegistry = {
         task_name: "The name of the test phase - can be 'pilt_test' or 'wm_test'. Default is 'wm_test'.",
         test_confidence_every: "How often (in trials) to elicit confidence ratings in the test phase. Default is every 4 trials.",
         sequence: "The key for the sequence to use for the test phase - should match the learning phase. Default is 'wk0'.",
+        preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). On a phone held in the other orientation, a 'please rotate' overlay blocks the task until it is rotated; tablets and desktop are exempt. Default is 'landscape' - the cards are laid out in a row, and the single-card layout keeps its three response buttons on one line.",
     }
   },
   vigour_test: {

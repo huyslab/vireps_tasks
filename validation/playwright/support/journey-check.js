@@ -127,9 +127,112 @@ async function reversalJourney(page, testInfo, hasTouch) {
   await captureShot(page, testInfo, 'reversal', 'feedback');
 }
 
+/**
+ * Clicks past the instruction pages that precede a card-choosing trial, then answers the
+ * modality-appropriate ready screen: a button on touch, both arrow keys at once on keyboard
+ * (core/utils/participation-validation.js createReadyTrial / threeResponseReadyTrial).
+ */
+async function passCardChoosingInstructions(page, hasTouch) {
+  const next = page.locator('#jspsych-instructions-next');
+  await expect(next, 'instructions page should appear').toBeVisible({ timeout: 15000 });
+  while (await next.isVisible().catch(() => false)) {
+    await next.click();
+    await page.waitForTimeout(100);
+  }
+
+  if (hasTouch) {
+    const readyButton = page.locator('.jspsych-btn');
+    if (await readyButton.first().isVisible().catch(() => false)) {
+      await readyButton.first().click();
+    }
+  } else {
+    // Keyboard ready screens are either press-both-arrows (createReadyTrial) or a single
+    // up-arrow (threeResponseReadyTrial); sending both covers either without branching on
+    // which task this is.
+    await Promise.all([page.keyboard.down('ArrowLeft'), page.keyboard.down('ArrowRight')]);
+    await page.waitForTimeout(50); // hold together long enough to register as simultaneous
+    await Promise.all([page.keyboard.up('ArrowLeft'), page.keyboard.up('ArrowRight')]);
+    await page.keyboard.press('ArrowUp');
+  }
+}
+
+/** Reads the most recent completed card-choosing trial out of the jsPsych data store. */
+async function lastCardChoosingTrial(page) {
+  return page.evaluate(() =>
+    window.jsPsych.data.get().filter({ trial_type: 'card-choosing' }).last(1).values()[0]
+  );
+}
+
+/**
+ * WM is the conversion's hard case: one card and three responses, so there is no card to
+ * tap and the three arrow keys become three on-screen buttons. This drives a real response
+ * through the middle button (the one with no left/right analogue) and checks it is recorded
+ * as that side, with the input modality captured.
+ */
+async function wmJourney(page, testInfo, hasTouch) {
+  await passOrientationHint(page, hasTouch);
+  await captureShot(page, testInfo, 'WM', 'instructions');
+  await passCardChoosingInstructions(page, hasTouch);
+
+  await expect(page.locator('#cardChoosingOptionBox'), 'WM trial should appear').toBeVisible({ timeout: 15000 });
+
+  if (hasTouch) {
+    const middle = page.locator('#middle_key');
+    await expect(middle, 'WM response buttons should be present on touch').toBeVisible();
+    await middle.tap();
+  } else {
+    await page.keyboard.press('ArrowUp');
+  }
+
+  await expect
+    .poll(async () => (await lastCardChoosingTrial(page))?.response, {
+      message: 'the middle response should be recorded',
+      timeout: 10000,
+    })
+    .toBe('middle');
+
+  const trial = await lastCardChoosingTrial(page);
+  expect(trial.pointer_type, 'input modality should be recorded').toBe(hasTouch ? 'touch' : 'keyboard');
+  expect(trial.rt, 'a response time should be recorded').toBeGreaterThan(0);
+  await captureShot(page, testInfo, 'WM', 'feedback');
+}
+
+/**
+ * The two-card layout, reached via the post-PILT test (one instructions page, then real
+ * trials). Taps the left card and checks the tap selected that side.
+ */
+async function postPILTtestJourney(page, testInfo, hasTouch) {
+  await passOrientationHint(page, hasTouch);
+  await passCardChoosingInstructions(page, hasTouch);
+
+  await expect(page.locator('#cardChoosingOptionBox'), 'test trial should appear').toBeVisible({ timeout: 15000 });
+  await captureShot(page, testInfo, 'postPILTtest', 'in-task');
+
+  if (hasTouch) {
+    await page.locator('#left').tap();
+  } else {
+    await page.keyboard.press('ArrowLeft');
+  }
+
+  await expect
+    .poll(async () => (await lastCardChoosingTrial(page))?.response, {
+      message: 'the left card should be recorded as chosen',
+      timeout: 10000,
+    })
+    .toBe('left');
+
+  const trial = await lastCardChoosingTrial(page);
+  expect(trial.pointer_type, 'input modality should be recorded').toBe(hasTouch ? 'touch' : 'keyboard');
+  // Per-trial viewport values must survive the write-time merge with entry-time data
+  // properties (see validation/playwright/data-properties.spec.js).
+  expect(trial.viewport_width, 'per-trial viewport width should be recorded').toBeGreaterThan(0);
+}
+
 const JOURNEYS = {
   vigour: vigourJourney,
   reversal: reversalJourney,
+  WM: wmJourney,
+  postPILTtest: postPILTtestJourney,
 };
 
 /**

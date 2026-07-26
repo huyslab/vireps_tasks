@@ -16,9 +16,13 @@
     justify-content: center;
 }
 
+/* Card size is capped on the short axis as well as the long one. Sizing on width alone
+   (the original 20vw) overflows a landscape phone, where the viewport is far wider than
+   it is tall: 20vw on a 844x390 screen asks for a 169px-wide card in 390px of height,
+   before the response row and safe-area insets are subtracted. */
 .cardChoosingOptionSide img {
     height: auto;
-    width: 20vw;
+    width: min(20vw, 26vh);
     max-width: 500px;
    /* flex-direction: column;*/
     margin: auto;
@@ -60,10 +64,13 @@
     z-index: 3;
 }
 
+/* The coin circle and Pavlovian background are layered in the same grid cell as the card
+   and must scale with it, so they track the same min(vw, vh) cap - otherwise the coin
+   overflows the card on a short viewport. Ratios to the card's 20vw/26vh are preserved. */
 .cardChoosingOptionSide .cardChoosingCoinCircle {
     visibility: hidden;
-    height: 21vw;
-    width: 21vw;
+    height: min(21vw, 27.3vh);
+    width: min(21vw, 27.3vh);
     max-width: 500px;
     margin: auto;
     grid-column: 1;
@@ -75,7 +82,7 @@
 
 .cardChoosingOptionSide img.cardChoosingCoinBackground {
     visibility: hidden;
-    width: 30vw;
+    width: min(30vw, 39vh);
     max-width: 30vw;
     z-index: 1;
     overflow: hidden;
@@ -102,4 +109,65 @@
   font-family: monospace;
   box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2); /* Inner shadow for pressed effect */
   transform: translateY(1.5px); /* Moves key down */
+}
+
+/* --- Touch/pointer response targets --- */
+
+/* Applied to the card containers on touch devices only (see plugin create_stimuli). The
+   container is 25vw around a 20vw card, so the tap area already carries ~2.5vw of slop
+   either side of the image without any extra padding. */
+.cardChoosing-tappable {
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Single-card (WM) layout: the three arrow keys become three tap targets. Sized past the
+   44px minimum touch target on the short axis, and spaced so a mis-tap lands on nothing
+   rather than on a neighbouring response. */
+.cardChoosingResponseBtn {
+  display: inline-block;
+  min-width: 4.5rem;
+  min-height: 3rem;
+  margin: 0 0.6rem;
+  padding: 0.4rem 1rem;
+  font-size: 1.6rem;
+  line-height: 1;
+  font-family: inherit;
+  color: #182b4b;
+  background-color: #f0f0f0;
+  border: 2px solid #b6c2d4;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cardChoosingResponseBtn-pressed {
+  background-color: #d8e0ec;
+  border-color: #4a6fa5;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translateY(1.5px);
+}
+
+/* Phone screens: the helper-text rows around the cards use fixed 1.5rem/3rem type that
+   crowds a short viewport, and the response buttons need to stay reachable. */
+@media (max-height: 500px), (max-width: 500px) {
+  .cardChoosingHelperTxt2,
+  .cardChoosingHelperTxt3 {
+    font-size: 1.1rem;
+    line-height: 1.8rem;
+  }
+
+  .cardChoosingResponseBtn {
+    min-width: 3.75rem;
+    margin: 0 0.4rem;
+    font-size: 1.4rem;
+  }
 }
