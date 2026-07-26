@@ -28,8 +28,8 @@
    The vh line is the fallback for browsers without dvh support. */
 .cardChoosingOptionSide img {
     height: auto;
-    width: min(20vw, 26vh);
-    width: min(20vw, 26dvh);
+    width: min(20vw, 55vh);
+    width: min(20vw, 55dvh);
     max-width: 500px;
    /* flex-direction: column;*/
     margin: auto;
@@ -73,14 +73,14 @@
 
 /* The coin circle and Pavlovian background are layered in the same grid cell as the card
    and must scale with it, so they track the same min(vw, dvh) cap - otherwise the coin
-   overflows the card on a short viewport. Ratios to the card's 20vw/26dvh are preserved,
+   overflows the card on a short viewport. Ratios to the card's 20vw/55dvh are preserved,
    and each keeps the vh fallback line for browsers without dvh. */
 .cardChoosingOptionSide .cardChoosingCoinCircle {
     visibility: hidden;
-    height: min(21vw, 27.3vh);
-    height: min(21vw, 27.3dvh);
-    width: min(21vw, 27.3vh);
-    width: min(21vw, 27.3dvh);
+    height: min(21vw, 57.8vh);
+    height: min(21vw, 57.8dvh);
+    width: min(21vw, 57.8vh);
+    width: min(21vw, 57.8dvh);
     max-width: 500px;
     margin: auto;
     grid-column: 1;
@@ -92,8 +92,8 @@
 
 .cardChoosingOptionSide img.cardChoosingCoinBackground {
     visibility: hidden;
-    width: min(30vw, 39vh);
-    width: min(30vw, 39dvh);
+    width: min(30vw, 82.5vh);
+    width: min(30vw, 82.5dvh);
     max-width: 30vw;
     z-index: 1;
     overflow: hidden;
