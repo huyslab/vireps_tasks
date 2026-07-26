@@ -19,10 +19,17 @@
 /* Card size is capped on the short axis as well as the long one. Sizing on width alone
    (the original 20vw) overflows a landscape phone, where the viewport is far wider than
    it is tall: 20vw on a 844x390 screen asks for a 169px-wide card in 390px of height,
-   before the response row and safe-area insets are subtracted. */
+   before the response row and safe-area insets are subtracted.
+
+   The cap is in dvh, not vh, and this matters on iPhone: vh is the LARGE viewport height,
+   measured as though the browser chrome were retracted, while #display_element is sized in
+   100dvh - the height actually visible. With Safari's address and tab bars showing, a vh
+   cap sizes the cards against ~15% more height than they are placed in and they overflow.
+   The vh line is the fallback for browsers without dvh support. */
 .cardChoosingOptionSide img {
     height: auto;
     width: min(20vw, 26vh);
+    width: min(20vw, 26dvh);
     max-width: 500px;
    /* flex-direction: column;*/
     margin: auto;
@@ -65,12 +72,15 @@
 }
 
 /* The coin circle and Pavlovian background are layered in the same grid cell as the card
-   and must scale with it, so they track the same min(vw, vh) cap - otherwise the coin
-   overflows the card on a short viewport. Ratios to the card's 20vw/26vh are preserved. */
+   and must scale with it, so they track the same min(vw, dvh) cap - otherwise the coin
+   overflows the card on a short viewport. Ratios to the card's 20vw/26dvh are preserved,
+   and each keeps the vh fallback line for browsers without dvh. */
 .cardChoosingOptionSide .cardChoosingCoinCircle {
     visibility: hidden;
     height: min(21vw, 27.3vh);
+    height: min(21vw, 27.3dvh);
     width: min(21vw, 27.3vh);
+    width: min(21vw, 27.3dvh);
     max-width: 500px;
     margin: auto;
     grid-column: 1;
@@ -83,6 +93,7 @@
 .cardChoosingOptionSide img.cardChoosingCoinBackground {
     visibility: hidden;
     width: min(30vw, 39vh);
+    width: min(30vw, 39dvh);
     max-width: 30vw;
     z-index: 1;
     overflow: hidden;

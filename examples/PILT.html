@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- Launches without browser chrome when added to the Home Screen. iPhone Safari has no
+         Fullscreen API, so this is the only way to reclaim the address/tab bars; inert for
+         participants who just follow a link. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <base href="../">
     <title>Card Choosing Task</title>
     
