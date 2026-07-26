@@ -167,6 +167,40 @@
   transform: translateY(1.5px);
 }
 
+/* Tablets: the 20vw card was calibrated for a desktop monitor and leaves a tablet screen
+   sparse at arm's length, so cards are scaled up 30% there. Targeted by coarse pointer plus
+   a min dimension above phone size, which catches tablets in either orientation while
+   excluding phones (short axis < 600px) and desktop (fine pointer).
+
+   The ceiling on this bump is the single-card and three-card layouts: both render THREE
+   .cardChoosingOptionSide containers (WM hides the outer two but they still occupy space),
+   so the container width must stay under ~32vw or the row overflows. 26vw card + the
+   original 5vw of tap slop = 31vw, giving 93vw across. The rendering specs assert no
+   horizontal overflow, so a larger bump here fails the suite rather than shipping. */
+@media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
+  .cardChoosingOptionSide {
+    width: 31vw;
+  }
+
+  .cardChoosingOptionSide img {
+    width: min(26vw, 55vh);
+    width: min(26vw, 55dvh);
+  }
+
+  .cardChoosingOptionSide .cardChoosingCoinCircle {
+    height: min(27.3vw, 57.8vh);
+    height: min(27.3vw, 57.8dvh);
+    width: min(27.3vw, 57.8vh);
+    width: min(27.3vw, 57.8dvh);
+  }
+
+  .cardChoosingOptionSide img.cardChoosingCoinBackground {
+    width: min(39vw, 82.5vh);
+    width: min(39vw, 82.5dvh);
+    max-width: 39vw;
+  }
+}
+
 /* Phone screens: the helper-text rows around the cards use fixed 1.5rem/3rem type that
    crowds a short viewport, and the response buttons need to stay reachable. */
 @media (max-height: 500px), (max-width: 500px) {

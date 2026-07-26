@@ -1,6 +1,5 @@
 import { expect } from '@playwright/test';
 import path from 'node:path';
-import { GATE_MIN_DIMENSION_THRESHOLD } from './task-config.js';
 
 export const SCREENSHOT_DIR = path.join(process.cwd(), 'validation', 'playwright', 'screenshots');
 
@@ -10,16 +9,15 @@ export function orientationOf({ width, height }) {
 
 /**
  * Re-derives whether the rotate-overlay gate should be active, from the same signals
- * the app itself uses (api/utils.js: `navigator.maxTouchPoints > 0` gates eligibility at
- * all; the CSS media query then further restricts to phone-sized viewports). Reading
- * real page signals here - rather than trusting Playwright project config - keeps this
- * accurate even if a project's `use` block is tweaked later.
+ * the app itself uses: `navigator.maxTouchPoints > 0` gates eligibility (api/utils.js sets
+ * the body attribute the CSS keys off), and the gate then applies in the wrong orientation
+ * regardless of viewport size - tablets included. Reading real page signals here - rather
+ * than trusting Playwright project config - keeps this accurate even if a project's `use`
+ * block is tweaked later.
  */
 export function expectedGate(preferredOrientation, viewport, hasTouch) {
-  const minDimension = Math.min(viewport.width, viewport.height);
-  const gateEligible = hasTouch && minDimension <= GATE_MIN_DIMENSION_THRESHOLD;
   const wrongOrientation = orientationOf(viewport) !== preferredOrientation;
-  return gateEligible && wrongOrientation;
+  return hasTouch && wrongOrientation;
 }
 
 export function trackPageErrors(page) {

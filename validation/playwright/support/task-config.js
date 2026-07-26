@@ -1,8 +1,6 @@
-// Mirrors the CSS gate thresholds in examples/vigour.html and examples/reversal.html:
-// `@media (orientation: landscape) and (max-height: 500px)` and
-// `@media (orientation: portrait) and (max-width: 500px)`. Keep this in sync if those
-// thresholds ever change - see support/render-check.js for how it's used.
-export const GATE_MIN_DIMENSION_THRESHOLD = 500;
+// The orientation gate applies to every touch device in the wrong orientation, with no
+// viewport-size condition - see expectedGate() in support/helpers.js. Phone vs tablet only
+// changes the wording of the hint screen (api/utils.js), not whether the gate fires.
 
 export const TASKS = {
   // readySelector must uniquely match the real per-trial stimulus - both tasks reuse markup

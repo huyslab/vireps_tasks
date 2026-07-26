@@ -61,9 +61,10 @@
             margin: 1em 0;
         }
 
-        /* Orientation gate: on phones, block the wrong orientation for the active task; tablets/
-           desktop are exempt (larger min dimension). Driven by
-           <body data-preferred-orientation="portrait|landscape">, set per task by the registry. */
+        /* Orientation gate: block the wrong orientation for the active task on any touch
+           device, phones and tablets alike. No viewport-size condition is needed - the
+           <body data-preferred-orientation="portrait|landscape"> attribute that drives this
+           is only set on touch-capable devices (api/utils.js), so desktop never matches. */
         #rotate-overlay {
             display: none;
             flex-direction: column;
@@ -117,7 +118,7 @@
             100%     { transform: rotate(0deg); }
         }
         /* Portrait-preferred task on a phone held in landscape */
-        @media (orientation: landscape) and (max-height: 500px) {
+        @media (orientation: landscape) {
             body[data-preferred-orientation="portrait"] #rotate-overlay { display: flex; }
             body[data-preferred-orientation="portrait"] #rotate-overlay .rotate-msg-portrait { display: block; }
             body[data-preferred-orientation="portrait"] .phone-rotate-icon { display: block; }
@@ -127,7 +128,7 @@
             body[data-preferred-orientation="portrait"][data-orientation-angle="90"] .phone-rotate-icon svg { animation: rotate-portrait-from-left 2.5s ease-in-out infinite; }
         }
         /* Landscape-preferred task on a phone held in portrait */
-        @media (orientation: portrait) and (max-width: 500px) {
+        @media (orientation: portrait) {
             body[data-preferred-orientation="landscape"] #rotate-overlay { display: flex; }
             body[data-preferred-orientation="landscape"] #rotate-overlay .rotate-msg-landscape { display: block; }
             body[data-preferred-orientation="landscape"] .phone-rotate-icon { display: block; }

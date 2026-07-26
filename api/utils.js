@@ -99,16 +99,13 @@ export async function createTaskTimeline(taskName, config = {}) {
         const orientationHintTrial = {
             type: jsPsychHtmlButtonResponse,
             stimulus: function() {
-                // Mirror the CSS gate threshold: phones have min(width, height) ≤ 500px
+                // The gate applies to every touch device, tablets included, so the required
+                // orientation is stated the same way on all of them - only the noun differs.
                 const isPhone = Math.min(window.innerWidth, window.innerHeight) <= 500;
-                if (isPhone) {
-                    return `<div style="text-align:center;max-width:min(500px,92vw);margin:0 auto;">
-                        ${phoneIcon}
-                        <p>For this task, please hold your phone in <strong>${orientationLabel}</strong> mode.</p>
-                    </div>`;
-                }
+                const deviceNoun = isPhone ? 'phone' : 'tablet';
                 return `<div style="text-align:center;max-width:min(500px,92vw);margin:0 auto;">
-                    <p>You can hold your tablet in whichever orientation feels comfortable — just keep it consistent throughout the task.</p>
+                    ${phoneIcon}
+                    <p>For this task, please hold your ${deviceNoun} in <strong>${orientationLabel}</strong> mode.</p>
                 </div>`;
             },
             choices: ['Got it'],
