@@ -3,6 +3,7 @@ import { interBlockStimulus } from './utils.js';
 import {
     updateState,
     createReadyTrial,
+    createInstructionQuiz,
     shuffleArray
 } from '@utils/index.js';
 import { 
@@ -237,30 +238,13 @@ function preparePILTInstructions(settings) {
         });
     }
 
-    // Create quiz trial object
-    let quiz = [
-        {
-            type: jsPsychSurveyMultiChoice,
-            questions: quiz_questions,
-            css_classes: ["instructions"],
-            preamble: `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`,
-            data: {
-                trialphase: "instruction_quiz"
-            },
-            simulation_options: {
-                data: {
-                    response: settings.session === "screening" ? {
-                        Q0: `True`,
-                        Q1: `True`
-                    } : {
-                        Q0: `True`,
-                        Q1: `True`,
-                        Q2: `True`
-                    }
-                }
-            },
-        }
-    ];
+    // Create quiz trials - one statement per screen with True/False buttons. The aggregate
+    // record it writes under "instruction_quiz" keeps the same {Q0, Q1, ...} response shape
+    // the review screen and loop_function below already read.
+    let quiz = createInstructionQuiz(quiz_questions, {
+        trialphase: "instruction_quiz",
+        preamble: `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`
+    });
 
     // Explanation for wrong answers
     let piltQuizExplanation = [

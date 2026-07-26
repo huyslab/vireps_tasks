@@ -7,3 +7,7 @@ import { TASKS } from './support/task-config.js';
 // practice rounds plus comprehension quiz.
 defineTaskJourneyTest('WM', TASKS.WM);
 defineTaskJourneyTest('postPILTtest', TASKS.postPILTtest);
+
+// PILT walks its full instruction path to reach the comprehension quiz, which is the one
+// screen the other journeys never see.
+defineTaskJourneyTest('PILT', TASKS.PILT);

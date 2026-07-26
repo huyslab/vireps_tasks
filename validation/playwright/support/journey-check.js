@@ -228,11 +228,88 @@ async function postPILTtestJourney(page, testInfo, hasTouch) {
   expect(trial.viewport_width, 'per-trial viewport width should be recorded').toBeGreaterThan(0);
 }
 
+/**
+ * PILT's full instruction path: rules pages, a practice round, then the comprehension quiz.
+ * The quiz is the point of this journey - it is one statement per screen with True/False
+ * buttons (core/utils/quiz.js), and it must still write the single aggregate record that the
+ * wrong-answer review screen and the retry loop_function read.
+ */
+async function piltJourney(page, testInfo, hasTouch) {
+  await passOrientationHint(page, hasTouch);
+
+  // Walk whatever instruction/practice screens come before the quiz. The sequence differs by
+  // modality (button vs press-both ready screens) and includes real card trials, so this
+  // dispatches on what is actually on screen rather than assuming a fixed order.
+  const statement = page.locator('.quiz-statement');
+  for (let i = 0; i < 80 && !(await statement.isVisible().catch(() => false)); i++) {
+    const next = page.locator('#jspsych-instructions-next');
+    if (await next.isVisible().catch(() => false)) {
+      await next.click();
+      await page.waitForTimeout(80);
+      continue;
+    }
+    const button = page.locator('.jspsych-btn').first();
+    if (await button.isVisible().catch(() => false)) {
+      await button.click();
+      await page.waitForTimeout(80);
+      continue;
+    }
+    if (await page.locator('#cardChoosingOptionBox').isVisible().catch(() => false)) {
+      if (hasTouch) await page.locator('#left').tap();
+      else await page.keyboard.press('ArrowLeft');
+      await page.waitForTimeout(150);
+      continue;
+    }
+    // Keyboard ready screen: both arrow keys held together.
+    await Promise.all([page.keyboard.down('ArrowLeft'), page.keyboard.down('ArrowRight')]);
+    await page.waitForTimeout(50);
+    await Promise.all([page.keyboard.up('ArrowLeft'), page.keyboard.up('ArrowRight')]);
+    await page.waitForTimeout(150);
+  }
+
+  await expect(statement, 'the comprehension quiz should appear').toBeVisible({ timeout: 20000 });
+  await captureShot(page, testInfo, 'PILT', 'quiz');
+
+  expect(await statement.count(), 'the quiz should show one statement per screen').toBe(1);
+  expect(await page.locator('.quiz-btn').allInnerTexts()).toEqual(['True', 'False']);
+
+  const button = await page.locator('.quiz-btn').first().boundingBox();
+  expect(button.height, 'quiz buttons should clear the 44px touch-target minimum').toBeGreaterThanOrEqual(44);
+
+  let answered = 0;
+  while (await statement.isVisible().catch(() => false)) {
+    await page.locator('.quiz-btn', { hasText: 'True' }).first().click();
+    answered++;
+    await page.waitForTimeout(200);
+    expect(answered, 'quiz should terminate').toBeLessThan(11);
+  }
+  expect(answered, 'the quiz should have asked at least two questions').toBeGreaterThan(1);
+
+  // The aggregate record has to keep the shape the single-page survey produced, or the
+  // review screen and retry loop silently stop working.
+  const aggregate = await page.evaluate(
+    () => window.jsPsych.data.get().filter({ trialphase: 'instruction_quiz' }).last(1).values()[0]
+  );
+  expect(aggregate, 'an aggregate instruction_quiz record should be written').toBeTruthy();
+  expect(
+    Object.keys(aggregate.response),
+    'response should be keyed Q0..Qn as jsPsychSurveyMultiChoice was'
+  ).toEqual(Array.from({ length: answered }, (_, i) => `Q${i}`));
+  expect(Object.values(aggregate.response).every((v) => v === 'True')).toBe(true);
+  expect(aggregate.quiz_passed, 'answering all True should pass').toBe(true);
+
+  const itemRows = await page.evaluate(
+    () => window.jsPsych.data.get().filter({ trialphase: 'instruction_quiz_item' }).values().length
+  );
+  expect(itemRows, 'each question should also leave its own row').toBe(answered);
+}
+
 const JOURNEYS = {
   vigour: vigourJourney,
   reversal: reversalJourney,
   WM: wmJourney,
   postPILTtest: postPILTtestJourney,
+  PILT: piltJourney,
 };
 
 /**

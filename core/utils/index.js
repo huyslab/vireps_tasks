@@ -10,4 +10,5 @@ export * from './data-handling.js';
 export * from './participation-validation.js';
 export * from './setup.js';
 export * from './resumption.js';
+export * from './quiz.js';
 

@@ -1,5 +1,5 @@
 import { controlConfig } from "./configuration.js";
-import { createPressBothTrial, updateState } from "@utils/index.js"
+import { createPressBothTrial, createInstructionQuiz, updateState } from "@utils/index.js"
 
 /**
  * Creates ocean current visual elements based on strength level and rule matching
@@ -855,64 +855,46 @@ export function createControlInstructionsTimeline(settings) {
 
 
     // Comprehension check
+    // One statement per screen with True/False buttons. The aggregate record written under
+    // "control_instruction_quiz" keeps the {Q0, Q1, ...} response shape that the review
+    // screen, the failure counter and the restart logic below all already read.
     let controlIntroComprehension = [];
-    controlIntroComprehension.push({
-        type: jsPsychSurveyMultiChoice,
-        preamble: () => {
-            var preamble = `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`
-            // Show warning if participant is close to max failures
-            if (jsPsych.data.get().last(1).select('control_instruction_fail').values[0] == settings.max_instruction_fails - 1) {
-                preamble += `<p style="color:#f44336; font-weight:bold">You have almost reached the maximum number of failures allowed. Please pay close attention to the instructions.</p>`;
-            }
-            return preamble;
-        },
-        data: {trialphase: "control_instruction_quiz"},
-        questions: [
+    controlIntroComprehension.push(...createInstructionQuiz(
+        [
             {
-                prompt: "During <strong>learning</strong> periods, I need to learn about the home fruit island for each ship and how much to fuel for different current strengths.",
-                name: "learning",
-                options: ["True", "False"],
-                required: true
+                prompt: "During <strong>learning</strong> periods, I need to learn about the home fruit island for each ship and how much to fuel for different current strengths."
             },
             {
-                prompt: "When a ship doesn't have enough fuel, it will drift to the island at the top of the screen following ocean currents.",
-                name: "drift",
-                options: ["True", "False"],
-                required: true
+                prompt: "When a ship doesn't have enough fuel, it will drift to the island at the top of the screen following ocean currents."
             },
             {
-                prompt: "The amount of fuel needed to reach a ship's home fruit island depends on the ocean current strength.",
-                name: "current_fuel",
-                options: ["True", "False"],
-                required: true
+                prompt: "The amount of fuel needed to reach a ship's home fruit island depends on the ocean current strength."
             },
             {
-                prompt: `The ${rightShip} ship has ${controlConfig(settings)[`${homebaseIsland}_name`][settings.session]} island as its home fruit island.`,
-                name: "homebase",
-                options: ["True", "False"],
-                required: true
+                prompt: `The ${rightShip} ship has ${controlConfig(settings)[`${homebaseIsland}_name`][settings.session]} island as its home fruit island.`
             }
         ],
-        simulation_options: {
-            data: {
-                response: {
-                    Q0: `True`,
-                    Q1: `True`,
-                    Q2: `True`,
-                    Q3: `True`
+        {
+            trialphase: "control_instruction_quiz",
+            preamble: () => {
+                var preamble = `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`
+                // Show warning if participant is close to max failures
+                if (jsPsych.data.get().last(1).select('control_instruction_fail').values[0] == settings.max_instruction_fails - 1) {
+                    preamble += `<p style="color:#f44336; font-weight:bold">You have almost reached the maximum number of failures allowed. Please pay close attention to the instructions.</p>`;
+                }
+                return preamble;
+            },
+            onComplete: (response, allCorrect) => {
+                // Track failed comprehension attempts
+                if (!allCorrect) {
+                    var up_to_now = parseInt(jsPsych.data.get().last(1).select('control_instruction_fail').values[0]);
+                    jsPsych.data.addProperties({
+                        control_instruction_fail: up_to_now + 1
+                    });
                 }
             }
-        },
-        on_finish: function(data) {
-            // Track failed comprehension attempts
-            if (!Object.values(data.response).every(value => value === "True")) {
-                var up_to_now = parseInt(jsPsych.data.get().last(1).select('control_instruction_fail').values[0]);
-                jsPsych.data.addProperties({
-                    control_instruction_fail: up_to_now + 1
-                });
-            }
         }
-    });
+    ));
 
 
     const controlQuizExplanation = [
