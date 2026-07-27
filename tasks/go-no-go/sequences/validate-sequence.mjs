@@ -194,7 +194,7 @@ function validateSession(file) {
   );
 }
 
-const files = readdirSync(HERE).filter((f) => /^trial1_.*\.js$/.test(f)).sort();
+const files = readdirSync(HERE).filter((f) => /^trial1(_.*)?\.js$/.test(f)).sort();
 files.forEach((f) => {
   validate(f);
   console.log(`  -- session totals --`);

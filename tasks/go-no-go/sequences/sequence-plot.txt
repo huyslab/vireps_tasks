@@ -1,0 +1,66 @@
+GO/NO-GO SEQUENCE - valenced faces
+
+valence   + = win            - = avoid loss
+response  + = go             - = no-go
+affect    + = positive face  - = negative face
+cue       letter identifies which of the 12 cues (a cue keeps one cell all block)
+new       ^ marks a cue's first appearance
+
+BLOCK 1  (120 trials, 12 cues)
+========================================================================
+
+          trials 1-60
+                   1         2         3         4         5         6   (tens)
+valence   ++--++----++++--+--++--++-+-++-------------+-+--+--+++--++--
+response  -++-+--++--+-++--+-+-+-+++---++---+++-+-+------+--++-+-+-++-
+affect    --++--++++----++-++--++--+-+--++-+-++--+-+-+++--+--+++--++--
+cue       ADBCDACBBCADADBCABCDABCDDBACADBCFCEBBFECECFGCGFEGFEHGHFEGHEF
+new       ^^^^                            ^ ^        ^       ^        
+
+          trials 61-120
+                   7         8         9         0         1         2   (tens)
+valence   --++-+-+++---+++++-++++++++++-+-+--+-+-+--++-++-+--++--++--+
+response  +-+-++---+-+++-++-++++--++--+--+++---++--+-++-+--+-+-+-+--++
+affect    --++-+-+++----++-+-+-++--++--+-+-++-+-+-++--+--+-++--++--++-
+cue       EFHGEHFGGHFEEIGHIGEHIHGJIHGJILJKIKLJLIKJLKJIKJILJKLIJKLIJLKI
+new                    ^         ^     ^ ^                            
+
+BLOCK 2  (120 trials, 12 cues)
+========================================================================
+
+          trials 1-60
+                   1         2         3         4         5         6   (tens)
+valence   --+++-+--++---++--++++--+-+--++----------+---+--+-+-+--+-++-
+response  -+-++--+-+-++-+-+-+--++-++----++++--+--++------+++---+-+--++
+affect    --+++-+--++---++--++++--+-+--++--+-+++--+--+--++-+-+-++-+--+
+cue       CBADDCABCDABBCDABCDAADBCDBACCADBBECFEFCBEGCFCGFEHEGFGEFHFGHE
+new       ^^^^                             ^ ^     ^      ^           
+
+          trials 61-120
+                   7         8         9         0         1         2   (tens)
+valence   -+-+-++--++-+++-+++-++++++++-++-+--++-+-++----++-+-+++----++
+response  ++--+-+--+-+++-++-+++--+--+++-+-++--++--+--+-++-++---+-+-+-+
+affect    +-+-+--++--++--++--++-+-+-+--++-+--++-+-++----++-+-+++----++
+cue       EHFGEGHFFHGEIHGEIGHEIGJHJGIHKJILIKLJIKJLIJLKLKIJKILJJILKLKJI
+new                   ^         ^     ^  ^                            
+
+SUMMARY
+========================================================================
+trials per cell (target 30):
+  avoid_loss go   negative     30
+  avoid_loss go   positive     30
+  avoid_loss nogo negative     30
+  avoid_loss nogo positive     30
+  win        go   negative     30
+  win        go   positive     30
+  win        nogo negative     30
+  win        nogo positive     30
+
+marginals:
+  valence    win=120  avoid_loss=120
+  response   nogo=120  go=120
+  affect     negative=120  positive=120
+
+cue introductions (trial number within block):
+  block 1: A@1  D@2  B@3  C@4  F@33  E@35  G@44  H@52  I@74  J@84  L@90  K@92
+  block 2: C@1  B@2  A@3  D@4  E@34  F@36  G@42  H@49  I@73  J@83  K@89  L@92

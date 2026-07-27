@@ -1,8 +1,10 @@
 /**
  * Generates trial sequences for the valenced-faces go/no-go task.
  *
- * Run:  node tasks/go-no-go/sequences/generate-sequence.mjs [session ...]
- *       (no arguments regenerates every session listed in SESSIONS)
+ * Run:  node tasks/go-no-go/sequences/generate-sequence.mjs
+ *
+ * Emits ONE sequence (trial1.js) used by every session. Sessions differ only in
+ * which faces are shown - see tasks/go-no-go/README.md.
  *
  * ---------------------------------------------------------------------------
  * Provenance
@@ -59,9 +61,7 @@
  * s19/s28 score 9), which is why assignment is now driven by rank and search
  * rather than by wave.
  *
- * s13 is still used for block 1 of every session because it is the only
- * perfectly staggered sheet; block 2 rotates across sessions so repeat visits
- * are not identical.
+ * s13 is used for both blocks - see the SEQUENCE constant for why.
  *
  * ---------------------------------------------------------------------------
  * Feedback validity
@@ -85,16 +85,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // Recomputed and asserted below so this comment cannot silently go stale.
 const RUNSHEET_WAVE_BALANCE = { s13: 12, s00: 10, s03: 10, s14: 10, s19: 9, s28: 9 };
 
-// Block 1 is always s13 (the only perfectly staggered sheet); block 2 rotates so
-// that a participant returning for a later session does not get the same
-// temporal structure twice.
-const SESSIONS = {
-  wk0: { sheets: ['s13', 's03'], seed: 20260727 },
-  wk2: { sheets: ['s13', 's00'], seed: 20260728 },
-  wk4: { sheets: ['s13', 's14'], seed: 20260729 },
-  wk24: { sheets: ['s13', 's28'], seed: 20260730 },
-  wk28: { sheets: ['s13', 's19'], seed: 20260731 },
-};
+// ONE sequence, shared by every session. Sessions differ only in which faces are
+// shown (see README.md); the trial structure is deliberately identical so that
+// change across sessions cannot be an artefact of a different trial order.
+//
+// s13 is used for BOTH blocks: it is the only runsheet whose every condition has
+// one cue per introduction wave (12/12 in RUNSHEET_WAVE_BALANCE; the rest score
+// 9-10), and there is no cost to reusing it. The blocks show different faces, so
+// the repeated timing is imperceptible, and it makes block 1 vs block 2 a
+// parallel-forms comparison - same structure, different stimuli - which is a
+// cleaner reliability estimate than two structurally different halves.
+const SEQUENCE = { sheets: ['s13', 's13'], seed: 20260727 };
 
 const CONDITIONS = [
   { valence: 'win', correct_response: 'go' },
@@ -373,19 +374,16 @@ function buildBlock(sheet, blockNumber, heavyAffect, rng) {
   });
 }
 
-function generate(session) {
-  const config = SESSIONS[session];
-  if (!config) throw new Error(`unknown session "${session}" - known: ${Object.keys(SESSIONS).join(', ')}`);
+function generate() {
+  const config = SEQUENCE;
 
   const runsheets = loadRunsheets();
   const rng = mulberry32(config.seed);
 
   // Two conditions are negative-heavy and two positive-heavy in block 1, keeping
   // cue counts at 6/6 within the block; block 2 flips every condition so each
-  // cell ends the session with 2 + 1 = 3 cues. Which conditions start heavy is
-  // rotated by session so the pairing is not identical on repeat visits.
-  const rotation = Object.keys(SESSIONS).indexOf(session);
-  const heavyBlock1 = [0, 1, 2, 3].map((c) => ((c + rotation) % 4 < 2 ? 0 : 1));
+  // cell ends the session with 2 + 1 = 3 cues.
+  const heavyBlock1 = [0, 0, 1, 1];
   const heavyBlock2 = heavyBlock1.map((a) => 1 - a);
 
   const blocks = config.sheets.map((name, i) => {
@@ -400,22 +398,19 @@ function generate(session) {
 
   const header =
     `// GENERATED FILE - do not edit by hand.\n` +
-    `// Regenerate with: node tasks/go-no-go/sequences/generate-sequence.mjs ${session}\n` +
+    `// Regenerate with: node tasks/go-no-go/sequences/generate-sequence.mjs\n` +
     `//\n` +
-    `// Session ${session}: blocks from Zorowitz runsheets ${config.sheets.join(' + ')} (seed ${config.seed}).\n` +
+    `// ONE sequence for every session - sessions differ only in which faces are shown.\n` +
+    `// Blocks from Zorowitz runsheets ${config.sheets.join(' + ')} (seed ${config.seed}).\n` +
     `// Trial order is Sam Zorowitz's RobotFactory (nivlab, study02-jspsych); affect assignment,\n` +
     `// balanced feedback validity and the flattened trial records are added here. See\n` +
     `// generate-sequence.mjs for the full rationale.\n`;
 
-  const path = join(HERE, `trial1_${session}.js`);
+  const path = join(HERE, 'trial1.js');
   writeFileSync(path, `${header}const GNG_json = '${JSON.stringify(blocks)}';\n`);
   return { path, blocks };
 }
 
-const requested = process.argv.slice(2);
-const sessions = requested.length ? requested : Object.keys(SESSIONS);
-for (const session of sessions) {
-  const { path, blocks } = generate(session);
-  const total = blocks.reduce((n, b) => n + b.length, 0);
-  console.log(`wrote ${path.split('/').slice(-1)[0]}: ${blocks.length} blocks, ${total} trials`);
-}
+const { path, blocks } = generate();
+const total = blocks.reduce((n, b) => n + b.length, 0);
+console.log(`wrote ${path.split('/').slice(-1)[0]}: ${blocks.length} blocks, ${total} trials (shared by all sessions)`);
