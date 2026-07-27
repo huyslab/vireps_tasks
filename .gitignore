@@ -23,4 +23,3 @@ launch.json
 # the norming workbook and the face images local; scripts read them from a path
 # you supply, and only the derived manifest of filenames is committed.
 tasks/go-no-go/sequences/CFD*.xlsx
-assets/images/go-no-go/faces/
