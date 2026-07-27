@@ -105,7 +105,7 @@ export async function createTaskTimeline(taskName, config = {}) {
                 const deviceNoun = isPhone ? 'phone' : 'tablet';
                 return `<div style="text-align:center;max-width:min(500px,92vw);margin:0 auto;">
                     ${phoneIcon}
-                    <p>For this task, please hold your ${deviceNoun} in <strong>${orientationLabel}</strong> mode.</p>
+                    <p>For this game, please hold your ${deviceNoun} in <strong>${orientationLabel}</strong> mode.</p>
                 </div>`;
             },
             choices: ['Got it'],
