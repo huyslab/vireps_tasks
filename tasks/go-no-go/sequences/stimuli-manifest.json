@@ -1,0 +1,871 @@
+{
+  "sessions": [
+    {
+      "session": 1,
+      "faces": [
+        {
+          "file": "s1_ang_BF-038.jpg",
+          "model": "BF-038",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_BF-045.jpg",
+          "model": "BF-045",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_BF-035.jpg",
+          "model": "BF-035",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_hap_BF-028.jpg",
+          "model": "BF-028",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_BF-036.jpg",
+          "model": "BF-036",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_BF-020.jpg",
+          "model": "BF-020",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_ang_BM-025.jpg",
+          "model": "BM-025",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_BM-033.jpg",
+          "model": "BM-033",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_BM-024.jpg",
+          "model": "BM-024",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_hap_BM-043.jpg",
+          "model": "BM-043",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_BM-034.jpg",
+          "model": "BM-034",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_BM-028.jpg",
+          "model": "BM-028",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_ang_WF-019.jpg",
+          "model": "WF-019",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_WF-037.jpg",
+          "model": "WF-037",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_WF-021.jpg",
+          "model": "WF-021",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_hap_WF-022.jpg",
+          "model": "WF-022",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_WF-039.jpg",
+          "model": "WF-039",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_WF-024.jpg",
+          "model": "WF-024",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_ang_WM-010.jpg",
+          "model": "WM-010",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_WM-036.jpg",
+          "model": "WM-036",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_ang_WM-041.jpg",
+          "model": "WM-041",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s1_hap_WM-024.jpg",
+          "model": "WM-024",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_WM-037.jpg",
+          "model": "WM-037",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s1_hap_WM-040.jpg",
+          "model": "WM-040",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "faces": [
+        {
+          "file": "s2_ang_BF-051.jpg",
+          "model": "BF-051",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_BF-016.jpg",
+          "model": "BF-016",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_BF-047.jpg",
+          "model": "BF-047",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_hap_BF-041.jpg",
+          "model": "BF-041",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_BF-018.jpg",
+          "model": "BF-018",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_BF-006.jpg",
+          "model": "BF-006",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_ang_BM-015.jpg",
+          "model": "BM-015",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_BM-009.jpg",
+          "model": "BM-009",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_BM-037.jpg",
+          "model": "BM-037",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_hap_BM-019.jpg",
+          "model": "BM-019",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_BM-040.jpg",
+          "model": "BM-040",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_BM-002.jpg",
+          "model": "BM-002",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_ang_WF-029.jpg",
+          "model": "WF-029",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_WF-025.jpg",
+          "model": "WF-025",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_WF-034.jpg",
+          "model": "WF-034",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_hap_WF-013.jpg",
+          "model": "WF-013",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_WF-015.jpg",
+          "model": "WF-015",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_WF-031.jpg",
+          "model": "WF-031",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_ang_WM-019.jpg",
+          "model": "WM-019",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_WM-038.jpg",
+          "model": "WM-038",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_ang_WM-020.jpg",
+          "model": "WM-020",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s2_hap_WM-023.jpg",
+          "model": "WM-023",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_WM-028.jpg",
+          "model": "WM-028",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s2_hap_WM-009.jpg",
+          "model": "WM-009",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        }
+      ]
+    },
+    {
+      "session": 3,
+      "faces": [
+        {
+          "file": "s3_ang_BF-029.jpg",
+          "model": "BF-029",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_BF-034.jpg",
+          "model": "BF-034",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_BF-011.jpg",
+          "model": "BF-011",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_hap_BF-049.jpg",
+          "model": "BF-049",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_BF-017.jpg",
+          "model": "BF-017",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_BF-025.jpg",
+          "model": "BF-025",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_ang_BM-023.jpg",
+          "model": "BM-023",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_BM-018.jpg",
+          "model": "BM-018",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_BM-039.jpg",
+          "model": "BM-039",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_hap_BM-021.jpg",
+          "model": "BM-021",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_BM-013.jpg",
+          "model": "BM-013",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_BM-022.jpg",
+          "model": "BM-022",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_ang_WF-016.jpg",
+          "model": "WF-016",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_WF-002.jpg",
+          "model": "WF-002",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_WF-017.jpg",
+          "model": "WF-017",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_hap_WF-008.jpg",
+          "model": "WF-008",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_WF-030.jpg",
+          "model": "WF-030",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_WF-011.jpg",
+          "model": "WF-011",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_ang_WM-035.jpg",
+          "model": "WM-035",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_WM-016.jpg",
+          "model": "WM-016",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_ang_WM-011.jpg",
+          "model": "WM-011",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s3_hap_WM-029.jpg",
+          "model": "WM-029",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_WM-032.jpg",
+          "model": "WM-032",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s3_hap_WM-003.jpg",
+          "model": "WM-003",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        }
+      ]
+    },
+    {
+      "session": 4,
+      "faces": [
+        {
+          "file": "s4_ang_BF-012.jpg",
+          "model": "BF-012",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_BF-024.jpg",
+          "model": "BF-024",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_BF-044.jpg",
+          "model": "BF-044",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_hap_BF-002.jpg",
+          "model": "BF-002",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_BF-010.jpg",
+          "model": "BF-010",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_BF-039.jpg",
+          "model": "BF-039",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_ang_BM-038.jpg",
+          "model": "BM-038",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_BM-045.jpg",
+          "model": "BM-045",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_BM-031.jpg",
+          "model": "BM-031",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_hap_BM-020.jpg",
+          "model": "BM-020",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_BM-036.jpg",
+          "model": "BM-036",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_BM-046.jpg",
+          "model": "BM-046",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_ang_WF-001.jpg",
+          "model": "WF-001",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_WF-018.jpg",
+          "model": "WF-018",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_WF-020.jpg",
+          "model": "WF-020",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_hap_WF-003.jpg",
+          "model": "WF-003",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_WF-033.jpg",
+          "model": "WF-033",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_WF-014.jpg",
+          "model": "WF-014",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_ang_WM-002.jpg",
+          "model": "WM-002",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_WM-022.jpg",
+          "model": "WM-022",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_ang_WM-026.jpg",
+          "model": "WM-026",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s4_hap_WM-004.jpg",
+          "model": "WM-004",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_WM-014.jpg",
+          "model": "WM-014",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s4_hap_WM-039.jpg",
+          "model": "WM-039",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        }
+      ]
+    },
+    {
+      "session": 5,
+      "faces": [
+        {
+          "file": "s5_ang_BF-007.jpg",
+          "model": "BF-007",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_BF-015.jpg",
+          "model": "BF-015",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_BF-031.jpg",
+          "model": "BF-031",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_hap_BF-003.jpg",
+          "model": "BF-003",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_BF-013.jpg",
+          "model": "BF-013",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_BF-043.jpg",
+          "model": "BF-043",
+          "ethnicity": "B",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_ang_BM-011.jpg",
+          "model": "BM-011",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_BM-017.jpg",
+          "model": "BM-017",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_BM-026.jpg",
+          "model": "BM-026",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_hap_BM-041.jpg",
+          "model": "BM-041",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_BM-030.jpg",
+          "model": "BM-030",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_BM-032.jpg",
+          "model": "BM-032",
+          "ethnicity": "B",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_ang_WF-026.jpg",
+          "model": "WF-026",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_WF-028.jpg",
+          "model": "WF-028",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_WF-009.jpg",
+          "model": "WF-009",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_hap_WF-027.jpg",
+          "model": "WF-027",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_WF-005.jpg",
+          "model": "WF-005",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_WF-007.jpg",
+          "model": "WF-007",
+          "ethnicity": "W",
+          "gender": "F",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_ang_WM-017.jpg",
+          "model": "WM-017",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_WM-021.jpg",
+          "model": "WM-021",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_ang_WM-013.jpg",
+          "model": "WM-013",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "negative"
+        },
+        {
+          "file": "s5_hap_WM-033.jpg",
+          "model": "WM-033",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_WM-025.jpg",
+          "model": "WM-025",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        },
+        {
+          "file": "s5_hap_WM-006.jpg",
+          "model": "WM-006",
+          "ethnicity": "W",
+          "gender": "M",
+          "affect": "positive"
+        }
+      ]
+    }
+  ],
+  "generated": "2026-07-27",
+  "width": 512
+}

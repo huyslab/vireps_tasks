@@ -97,34 +97,62 @@ Requiring **both** expressions per model, rather than splitting models into an
 angry pool and a happy pool, is what allows affect to be assigned to identities
 per participant — see step 6 below.
 
-### Selection procedure
+### Selected stimuli
 
-1. **Filter** to frontal, direct-gaze images. Hold age band constant (FACES
-   `young` alone is simplest) or balance it explicitly across cells — do not
-   leave it to vary freely, since apparent age affects both salience and the
-   social meaning of an expression.
-2. **Normalise** the images: oval crop removing hair and background, equal pixel
-   dimensions, matched mean luminance and RMS contrast. Cues must be
-   discriminable from each other without differing in low-level salience by
-   condition, or "affect" partly measures image energy.
-3. **Draw 48 identities** from the both-expressions subset: 12 per
-   ethnicity × gender cell (Black F/M, White F/M).
-4. **Partition into 2 disjoint session pools of 24**, each 6 per
-   ethnicity × gender cell.
-5. **Do not fix affect to identity.** Every model in the subset has both
-   expressions, so which face appears angry and which happy is a per-participant
-   draw: 3 per ethnicity × gender × affect cell, exactly balanced.
-6. **Assign faces to cues at runtime, per participant.** The sequence fixes each
-   cue's affect; the specific face filling that cue is drawn randomly from the
-   matching affect pool, seeded by participant ID so it survives a resumed
-   session. Constrain the draw so each 2×2 condition receives a balanced gender
-   mix.
+Selection is done: **5 sessions x 24 faces = 120 CFD models, each used exactly
+once.** Regenerate with:
 
-Step 6 matters more than it looks. With a fixed face→cue assignment, any
-idiosyncratic face — unusually distinctive, unusually ambiguous — is perfectly
-confounded with its cell for every participant in the study, and no analysis can
-separate the two. Randomising per participant turns that into noise. RobotFactory
-does the same thing with its rune sets.
+```
+node tasks/go-no-go/sequences/select-cfd-stimuli.mjs \
+  --images "<path>/CFD Version 3.0/Images/CFD"
+```
+
+Per session, per gender x ethnicity cell: 3 angry + 3 happy, so every session is
+exactly balanced 2 ethnicities x 2 genders x 2 affects x 3 models.
+
+Angry uses the `A` image, happy the closed-mouth `HC` image. Within each cell,
+models are ranked by z(Threatening) - z(Trustworthy) and the top take angry, the
+bottom happy. Because a model can hold only one role this is a joint assignment,
+not two independent top-N lists. Sessions are then filled serpentine down each
+ranked list so scores match across sessions:
+
+| session | angry: Threatening | happy: Trustworthy |
+|---|---|---|
+| 1 | 2.83 | 3.76 |
+| 2 | 2.73 | 3.81 |
+| 3 | 2.72 | 3.76 |
+| 4 | 2.81 | 3.72 |
+| 5 | 2.71 | 3.73 |
+
+Pooled separation: Threatening 2.76 (angry) vs 1.94 (happy); Trustworthy 3.17
+vs 3.76.
+
+**Read those ratings carefully.** CFD norms every model on their *neutral*
+image, so "high Threatening" means the person looks threatening at rest, not
+that their angry photo is especially fierce. Selecting this way stacks a
+threatening-looking face with an angry expression, which should amplify the
+manipulation - but the ratings are not of the images actually shown.
+
+This also means affect is now fixed to identity by design, so it can no longer
+be randomised per participant. Any idiosyncratic face effect sits inside the
+affect contrast for the whole sample. That is the deliberate trade: a stronger
+manipulation for a fixed face-to-affect mapping.
+
+### Images are NOT in this repository
+
+The CFD terms forbid redistribution ("shall not be re-distributed to third
+parties") and publication ("shall not be published ... without written
+consent"), and **this repository is public**. Gitignored accordingly:
+
+- `tasks/go-no-go/sequences/CFD*.xlsx` — the norming workbook
+- `assets/images/go-no-go/faces/` — the staged images
+
+Committed instead is `sequences/stimuli-manifest.json`, which lists filenames,
+model ids and design roles but contains no image data. Any deployment must run
+`select-cfd-stimuli.mjs` against a local CFD copy to populate the images.
+
+The staged set is 120 images at 512px wide, 3.6 MB total, downscaled from CFD's
+2444x1718 originals (1.1 MB each, 354 MB for the full expression subset).
 
 ### Open decisions
 
