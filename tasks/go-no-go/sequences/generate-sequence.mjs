@@ -30,31 +30,34 @@
  * ---------------------------------------------------------------------------
  * What this task adds: stimulus affect
  * ---------------------------------------------------------------------------
- * Cues are valenced faces, adding a third factor (negative/neutral/positive) to
- * the 2 (valence) x 2 (correct response) design. That is 12 cells - exactly the
- * 12 cues in a Zorowitz block, so each block is a full crossing with one cue per
- * cell, replacing his three arbitrary replicate cues per condition.
+ * Cues are valenced faces, adding a third factor (negative/positive) to the
+ * 2 (valence) x 2 (correct response) design: 8 cells.
  *
- * Affect is assigned by RANK WITHIN CONDITION, not by wave: a condition's three
- * cues, ordered by when they are introduced, get affects
- *     (condition + rank + offset) % 3
- * which guarantees, for any runsheet:
- *   - every condition sees all three affect levels, so all 12 cells are filled
- *     with exactly one cue each;
- *   - each affect level gets exactly four cues per block;
- *   - affect is decorrelated from introduction order across conditions, because
- *     the rotation term shifts which affect comes first in each condition.
+ * Neutral was dropped deliberately to buy statistical power. The 240 trials are
+ * fixed by the runsheets, so cells divide it: 12 cells (with neutral) gives 20
+ * trials per cell, 8 cells gives 30 - a 50% increase at identical task length.
+ * Across the two blocks there are 24 cues and 8 cells, so every cell gets
+ * exactly 3 cues. The 3-affect variant is in git history if neutral is ever
+ * wanted back as a reference category.
  *
- * An earlier version keyed affect on wave index instead. That silently breaks on
- * any sheet where one condition has two cues in the same wave - they collide on
- * the same affect, leaving a duplicate cell and a missing affect level. Only s13
- * is immune (12/12 in RUNSHEET_WAVE_BALANCE below; s00/s03/s14 score 10,
- * s19/s28 score 9), so the rank-based rule is used to keep sheet choice free.
+ * Each condition has 3 cues per block but only 2 affect levels, so one affect
+ * gets 2 cues and the other 1. Which affect is "heavy" flips between block 1 and
+ * block 2 for every condition, so over the session each cell receives 2 + 1 = 3
+ * cues. Within a block, 2 of the 4 conditions are negative-heavy and 2 are
+ * positive-heavy, keeping cue counts level at 6/6 per block.
  *
- * `offset` is chosen per block from {0,1,2} to minimise imbalance in the NUMBER
- * OF TRIALS per affect. Cues appear 8-12 times, so four cues per affect does not
- * by itself equalise trial counts, and unequal counts mean unequal power across
- * the affect levels this task exists to compare.
+ * Which of a condition's cues takes which affect is searched over all
+ * assignments, scored to equalise TRIALS per cell (cues appear 8-12 times, so
+ * cue counts alone do not equalise trial counts) and to keep affect from
+ * tracking introduction order - an affect that always arrived first would be
+ * confounded with time on task.
+ *
+ * An earlier 3-affect version keyed affect on wave index. That silently breaks
+ * on any sheet where one condition has two cues in the same wave - they collide
+ * on the same affect, leaving a duplicate cell and a missing affect level. Only
+ * s13 is immune (12/12 in RUNSHEET_WAVE_BALANCE below; s00/s03/s14 score 10,
+ * s19/s28 score 9), which is why assignment is now driven by rank and search
+ * rather than by wave.
  *
  * s13 is still used for block 1 of every session because it is the only
  * perfectly staggered sheet; block 2 rotates across sessions so repeat visits
@@ -100,7 +103,7 @@ const CONDITIONS = [
   { valence: 'avoid_loss', correct_response: 'nogo' },
 ];
 
-const AFFECTS = ['negative', 'neutral', 'positive'];
+const AFFECTS = ['negative', 'positive'];
 
 // Outcome magnitudes, following RobotFactory: win cues pay +10 (correct) or +1,
 // loss cues cost -1 (correct) or -10. `sham` swaps them for that trial.
@@ -210,51 +213,94 @@ function assignShamTrials(indicesByCue, rng) {
  * offset) % 3, with offset chosen to even out the number of TRIALS per affect.
  * See the header for why rank rather than wave.
  */
-function assignAffects(describe) {
+/**
+ * Assigns an affect level to every cue in one block.
+ *
+ * Each condition has 3 cues and there are 2 affects, so one affect takes 2 of
+ * them and the other takes 1. `heavyAffect[c]` says which, and is flipped
+ * between blocks by the caller so each cell ends the session with 2 + 1 = 3
+ * cues. Within a condition, WHICH cues take the heavy affect is searched
+ * exhaustively (3 ways to choose the single light cue), scored to equalise
+ * trials per cell and to avoid affect tracking introduction order.
+ *
+ * @param {Object} describe - output of describeSheet
+ * @param {number[]} heavyAffect - per condition, the affect index given 2 cues
+ */
+function assignAffects(describe, heavyAffect) {
   const { condition, nPresentations, introOrder } = describe;
 
-  // Each condition gets its own rotation: its three cues, in introduction order,
-  // take affects (rank + rotation) % 3. Any rotation still gives each condition
-  // all three affects, so each affect always ends up with exactly four cues
-  // (one per condition) - the rotations only change WHICH cues, and therefore
-  // how many trials, land on each affect. All 3^4 combinations are searched
-  // because a single global offset leaves only three candidates, and on some
-  // runsheets none of those three balances the trial counts.
-  const build = (rotations) => {
+  const cuesByCondition = [0, 1, 2, 3].map((c) => introOrder.filter((cue) => condition[cue] === c));
+
+  // A candidate is, per condition, the RANK of the cue that gets the light
+  // affect (0, 1 or 2). 3^4 = 81 candidates.
+  const build = (lightRanks) => {
     const affectOfCue = {};
-    for (let c = 0; c < 4; c++) {
-      introOrder
-        .filter((cue) => condition[cue] === c)
-        .forEach((cue, rank) => {
-          affectOfCue[cue] = (rank + rotations[c]) % 3;
-        });
-    }
+    cuesByCondition.forEach((cues, c) => {
+      const light = 1 - heavyAffect[c];
+      cues.forEach((cue, rank) => {
+        affectOfCue[cue] = rank === lightRanks[c] ? light : heavyAffect[c];
+      });
+    });
     return affectOfCue;
   };
 
-  const imbalance = (affectOfCue) => {
-    const trials = [0, 0, 0];
+  // Trials per CELL (condition x affect), not merely per affect: the cells are
+  // what the analysis compares, and a cell is what can end up underpowered.
+  const cellSpread = (affectOfCue) => {
+    const cells = {};
     Object.entries(affectOfCue).forEach(([cue, affect]) => {
-      trials[affect] += nPresentations[cue];
+      const key = `${condition[cue]}|${affect}`;
+      cells[key] = (cells[key] || 0) + nPresentations[cue];
     });
-    return Math.max(...trials) - Math.min(...trials);
+    const counts = Object.values(cells);
+    return Math.max(...counts) - Math.min(...counts);
   };
 
+  // How lopsided the affect mix is within each introduction wave, summed. This
+  // has to be scored explicitly: optimising trials-per-cell alone happily
+  // produces assignments where a whole wave is one affect, which means the
+  // participant sees only positive faces early and only negative in the middle -
+  // affect confounded with time on task, the very thing the design must avoid.
+  const waveImbalance = (affectOfCue) => {
+    const perWave = {};
+    Object.entries(affectOfCue).forEach(([cue, affect]) => {
+      const w = describe.wave[cue];
+      perWave[w] = perWave[w] || [0, 0];
+      perWave[w][affect]++;
+    });
+    return Object.values(perWave).reduce((sum, [neg, pos]) => sum + Math.abs(neg - pos), 0);
+  };
+
+  // Penalise assignments where the light affect always sits at the same rank -
+  // that would make affect a function of introduction order.
+  const rankDiversity = (lightRanks) => new Set(lightRanks).size;
+
+  // Lexicographic: balanced waves FIRST, then equal cell counts, then rank
+  // diversity. The two objectives genuinely conflict on some runsheets, and wave
+  // balance has to win: a few trials' difference between cells costs a sliver of
+  // power, whereas a wave that is entirely one affect means every participant
+  // meets one affect early and the other in the middle, which confounds affect
+  // with time on task and with how much learning has already happened. Cell
+  // counts stay within a trial or two of 30 either way - see validate-sequence.
+  const better = (a, b) =>
+    a.waves !== b.waves ? a.waves < b.waves
+      : a.spread !== b.spread ? a.spread < b.spread
+      : a.diversity > b.diversity;
+
   let best = null;
-  for (let r0 = 0; r0 < 3; r0++) {
-    for (let r1 = 0; r1 < 3; r1++) {
-      for (let r2 = 0; r2 < 3; r2++) {
-        for (let r3 = 0; r3 < 3; r3++) {
-          const rotations = [r0, r1, r2, r3];
-          const affectOfCue = build(rotations);
-          const spread = imbalance(affectOfCue);
-          // Tie-break on rotation diversity: if every condition used the same
-          // rotation, affect would be a pure function of introduction rank and
-          // the first cue a participant meets would always be the same affect.
-          const diversity = new Set(rotations).size;
-          if (best === null || spread < best.spread || (spread === best.spread && diversity > best.diversity)) {
-            best = { affectOfCue, spread, diversity };
-          }
+  for (let a = 0; a < 3; a++) {
+    for (let b = 0; b < 3; b++) {
+      for (let c = 0; c < 3; c++) {
+        for (let d = 0; d < 3; d++) {
+          const lightRanks = [a, b, c, d];
+          const affectOfCue = build(lightRanks);
+          const candidate = {
+            affectOfCue,
+            spread: cellSpread(affectOfCue),
+            waves: waveImbalance(affectOfCue),
+            diversity: rankDiversity(lightRanks),
+          };
+          if (best === null || better(candidate, best)) best = candidate;
         }
       }
     }
@@ -262,22 +308,22 @@ function assignAffects(describe) {
   return best.affectOfCue;
 }
 
-function buildBlock(sheet, blockNumber, rng) {
+function buildBlock(sheet, blockNumber, heavyAffect, rng) {
   const describe = describeSheet(sheet);
   const { condition, wave, nPresentations } = describe;
 
-  const affectOfCue = assignAffects(describe);
+  const affectOfCue = assignAffects(describe, heavyAffect);
 
-  // Guard the two properties the design depends on, for whichever sheet is used.
+  // Guard the properties the design depends on, for whichever sheet is used.
   const cells = new Set();
   Object.keys(condition).forEach((cue) => cells.add(`${condition[cue]}|${affectOfCue[cue]}`));
-  if (cells.size !== 12) {
-    throw new Error(`block ${blockNumber}: affect assignment filled ${cells.size} of 12 design cells`);
+  if (cells.size !== 8) {
+    throw new Error(`block ${blockNumber}: affect assignment filled ${cells.size} of 8 design cells`);
   }
-  const cuesPerAffect = [0, 0, 0];
+  const cuesPerAffect = [0, 0];
   Object.values(affectOfCue).forEach((a) => cuesPerAffect[a]++);
-  if (!cuesPerAffect.every((n) => n === 4)) {
-    throw new Error(`block ${blockNumber}: cues per affect ${cuesPerAffect.join('/')}, expected 4/4/4`);
+  if (!cuesPerAffect.every((n) => n === 6)) {
+    throw new Error(`block ${blockNumber}: cues per affect ${cuesPerAffect.join('/')}, expected 6/6`);
   }
 
   // Within-quartet order is shuffled at runtime in RobotFactory; baked in here so
@@ -334,6 +380,14 @@ function generate(session) {
   const runsheets = loadRunsheets();
   const rng = mulberry32(config.seed);
 
+  // Two conditions are negative-heavy and two positive-heavy in block 1, keeping
+  // cue counts at 6/6 within the block; block 2 flips every condition so each
+  // cell ends the session with 2 + 1 = 3 cues. Which conditions start heavy is
+  // rotated by session so the pairing is not identical on repeat visits.
+  const rotation = Object.keys(SESSIONS).indexOf(session);
+  const heavyBlock1 = [0, 1, 2, 3].map((c) => ((c + rotation) % 4 < 2 ? 0 : 1));
+  const heavyBlock2 = heavyBlock1.map((a) => 1 - a);
+
   const blocks = config.sheets.map((name, i) => {
     const sheet = runsheets[name];
     if (!sheet) throw new Error(`runsheet ${name} not found`);
@@ -341,7 +395,7 @@ function generate(session) {
     if (score !== RUNSHEET_WAVE_BALANCE[name]) {
       throw new Error(`wave balance for ${name} is ${score}, but RUNSHEET_WAVE_BALANCE says ${RUNSHEET_WAVE_BALANCE[name]}`);
     }
-    return buildBlock(sheet, i + 1, rng);
+    return buildBlock(sheet, i + 1, i === 0 ? heavyBlock1 : heavyBlock2, rng);
   });
 
   const header =

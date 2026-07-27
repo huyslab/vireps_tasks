@@ -49,8 +49,8 @@ function validate(file) {
     check(Object.keys(cellOfCue).length === 12, `block ${blockNumber}: 12 distinct cues`);
     check(consistent, `block ${blockNumber}: each cue keeps one valence x response x affect cell`);
     check(
-      new Set(Object.values(cellOfCue)).size === 12,
-      `block ${blockNumber}: all 12 design cells filled, one cue each`
+      new Set(Object.values(cellOfCue)).size === 8,
+      `block ${blockNumber}: all 8 design cells filled`
     );
 
     // --- marginal balance -------------------------------------------------
@@ -75,8 +75,8 @@ function validate(file) {
       cuesPerAffect[affect] = (cuesPerAffect[affect] || 0) + 1;
     });
     check(
-      Object.values(cuesPerAffect).every((n) => n === 4),
-      `block ${blockNumber}: 4 cues per affect ${JSON.stringify(cuesPerAffect)}`
+      Object.values(cuesPerAffect).every((n) => n === 6),
+      `block ${blockNumber}: 6 cues per affect ${JSON.stringify(cuesPerAffect)}`
     );
     const affectTrials = count('affect');
     const spread = Math.max(...Object.values(affectTrials)) - Math.min(...Object.values(affectTrials));
@@ -92,8 +92,8 @@ function validate(file) {
       (conditionAffects[`${v}|${r}`] = conditionAffects[`${v}|${r}`] || []).push(a);
     });
     check(
-      Object.values(conditionAffects).every((a) => new Set(a).size === 3),
-      `block ${blockNumber}: every condition sees all 3 affect levels`
+      Object.values(conditionAffects).every((a) => new Set(a).size === 2),
+      `block ${blockNumber}: every condition sees both affect levels`
     );
 
     const waveOfCue = {};
@@ -151,8 +151,55 @@ function validate(file) {
   });
 }
 
+function validateSession(file) {
+  const blocks = loadSequence(file);
+  const trials = blocks.flat();
+
+  // The headline number: with neutral dropped there are 8 cells over 240 trials,
+  // so the design targets 30 trials per cell. Cues appear 8-12 times, so exact
+  // equality is not achievable; this asserts every cell lands close to 30.
+  const perCell = {};
+  const cuesPerCell = {};
+  trials.forEach((t) => {
+    const cell = `${t.valence}|${t.correct_response}|${t.affect}`;
+    perCell[cell] = (perCell[cell] || 0) + 1;
+    (cuesPerCell[cell] = cuesPerCell[cell] || new Set()).add(`b${t.block}c${t.cue}`);
+  });
+
+  const counts = Object.values(perCell);
+  check(Object.keys(perCell).length === 8, `session: 8 design cells`);
+  check(
+    Object.values(cuesPerCell).every((s) => s.size === 3),
+    `session: 3 cues per cell ${JSON.stringify(Object.fromEntries(Object.entries(cuesPerCell).map(([k, v]) => [k, v.size])))}`
+  );
+  check(
+    counts.reduce((a, b) => a + b, 0) === 240,
+    `session: 240 trials total`
+  );
+  console.log(`    trials per cell: ${JSON.stringify(perCell)}`);
+  check(
+    Math.min(...counts) >= 26 && Math.max(...counts) <= 34,
+    `session: every cell within 26-34 trials (min ${Math.min(...counts)}, max ${Math.max(...counts)}, target 30)`
+  );
+
+  // Collapsing affect, each of the 4 core conditions should hold ~60 trials.
+  const perCondition = {};
+  trials.forEach((t) => {
+    const key = `${t.valence}|${t.correct_response}`;
+    perCondition[key] = (perCondition[key] || 0) + 1;
+  });
+  check(
+    Object.values(perCondition).every((n) => n === 60),
+    `session: 60 trials per 2x2 condition ${JSON.stringify(perCondition)}`
+  );
+}
+
 const files = readdirSync(HERE).filter((f) => /^trial1_.*\.js$/.test(f)).sort();
-files.forEach(validate);
+files.forEach((f) => {
+  validate(f);
+  console.log(`  -- session totals --`);
+  validateSession(f);
+});
 
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : `\nall checks passed across ${files.length} sequence files`);
 process.exit(failures ? 1 : 0);
