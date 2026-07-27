@@ -1,0 +1,77 @@
+/* CSS for the valenced-faces go/no-go task */
+
+.gng-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+}
+
+/* The stimulus sits in a fixed-size slot so the grow/shrink animation does not
+   reflow the layout: the face scales inside the slot while the coin below stays
+   put. The slot is sized for the largest state (grow_scale = 1.25). */
+.gng-stimulus-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(45vw, 45vh);
+  width: min(45vw, 45dvh);
+  height: min(45vw, 45vh);
+  height: min(45vw, 45dvh);
+}
+
+/* Sized on the short axis as well as the long one - on a landscape phone the
+   viewport is far wider than it is tall, and width-only sizing overflows. */
+.gng-stimulus {
+  width: min(34vw, 34vh);
+  width: min(34vw, 34dvh);
+  height: auto;
+  max-width: 420px;
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Reserved space for the coin, so its appearance does not shift the face. */
+.gng-coin-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: min(14vw, 14vh);
+  height: min(14vw, 14dvh);
+}
+
+.gng-coin {
+  width: min(12vw, 12vh);
+  width: min(12vw, 12dvh);
+  height: auto;
+  max-width: 140px;
+  visibility: hidden;
+}
+
+.gng-coin-visible {
+  visibility: visible;
+}
+
+/* Tablets: the task is run at arm's length in an in-person setting, so the face
+   is scaled up the way the card-choosing stimuli are. Matched to that rule -
+   coarse pointer plus a 600px minimum on both axes catches tablets in either
+   orientation while excluding phones and desktop. */
+@media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
+  .gng-stimulus-slot {
+    width: min(58vw, 58vh);
+    width: min(58vw, 58dvh);
+    height: min(58vw, 58vh);
+    height: min(58vw, 58dvh);
+  }
+
+  .gng-stimulus {
+    width: min(44vw, 44vh);
+    width: min(44vw, 44dvh);
+  }
+}

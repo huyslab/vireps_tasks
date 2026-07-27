@@ -304,12 +304,59 @@ async function piltJourney(page, testInfo, hasTouch) {
   expect(itemRows, 'each question should also leave its own row').toBe(answered);
 }
 
+
+/**
+ * Go/no-go: one go trial and one no-go trial, checking that the face grows on a
+ * response and shrinks when the window elapses, and that both are recorded.
+ */
+async function goNoGoJourney(page, testInfo, hasTouch) {
+  await passOrientationHint(page, hasTouch);
+
+  const face = page.locator('#gng-stimulus');
+  for (let i = 0; i < 20 && !(await face.isVisible().catch(() => false)); i++) {
+    const button = page.locator('.jspsych-btn').first();
+    if (await button.isVisible().catch(() => false)) {
+      await button.click();
+      continue;
+    }
+    await page.waitForTimeout(300);
+  }
+  await expect(face, 'the face cue should appear').toBeVisible({ timeout: 20000 });
+  await captureShot(page, testInfo, 'go_no_go', 'cue');
+
+  // GO: respond straight away, the face should grow (approach).
+  const beforeGo = (await face.boundingBox()).width;
+  if (hasTouch) await face.tap();
+  else await page.keyboard.press(' ');
+  await page.waitForTimeout(200);
+  const afterGo = (await face.boundingBox().catch(() => ({ width: 0 }))).width;
+  expect(afterGo, 'face should grow on a go response').toBeGreaterThan(beforeGo);
+  await captureShot(page, testInfo, 'go_no_go', 'feedback');
+
+  const trials = () => page.evaluate(() => window.jsPsych.data.get().filter({ trialphase: 'go_no_go' }).values());
+  await expect.poll(async () => (await trials()).length, { timeout: 10000 }).toBeGreaterThan(0);
+  const go = (await trials())[0];
+  expect(go.response, 'a go response should be recorded').toBe('go');
+  expect(go.rt, 'go trials carry an RT').toBeGreaterThan(0);
+  expect(go.pointer_type).toBe(hasTouch ? 'touch' : 'keyboard');
+  expect([10, 1, -1, -10]).toContain(go.outcome);
+
+  // NO-GO: let the window elapse.
+  await expect(face, 'the next cue should appear').toBeVisible({ timeout: 10000 });
+  await page.waitForTimeout(2400);
+  await expect.poll(async () => (await trials()).length, { timeout: 10000 }).toBeGreaterThan(1);
+  const nogo = (await trials())[1];
+  expect(nogo.response, 'letting the window elapse is a no-go').toBe('nogo');
+  expect(nogo.rt, 'no-go trials have no RT').toBeNull();
+}
+
 const JOURNEYS = {
   vigour: vigourJourney,
   reversal: reversalJourney,
   WM: wmJourney,
   postPILTtest: postPILTtestJourney,
   PILT: piltJourney,
+  go_no_go: goNoGoJourney,
 };
 
 /**

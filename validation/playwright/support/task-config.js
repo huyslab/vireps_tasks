@@ -44,6 +44,14 @@ export const TASKS = {
     rotateMessageSelector: '.rotate-msg-landscape',
     readySelector: '#cardChoosingOptionBox',
   },
+  go_no_go: {
+    url: '/examples/go-no-go.html',
+    preferredOrientation: 'landscape',
+    rotateMessageSelector: '.rotate-msg-landscape',
+    // The face is the whole stimulus and is present for the entire response
+    // window, so no disambiguating qualifier is needed here.
+    readySelector: '#gng-stimulus',
+  },
   reversal: {
     url: '/examples/reversal.html',
     preferredOrientation: 'landscape',

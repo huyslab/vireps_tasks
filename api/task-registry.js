@@ -2,6 +2,7 @@
 // This module defines a registry for tasks in the API, allowing for easy management and execution of tasks.
 
 import { computeRelativeCardChoosingBonus, createCardChoosingTimeline, createPostLearningTestTimeline } from '@tasks/card-choosing/index.js';
+import { createGoNoGoTimeline, computeRelativeGoNoGoBonus } from '@tasks/go-no-go/index.js';
 import { createDelayDiscountingTimeline } from '@tasks/delay-discounting/index.js';
 import { createMaxPressTimeline } from '@tasks/max-press-test/task.js';
 import { createVigourTimeline, computeRelativePiggyTasksBonus, createPITTimeline, createVigourTestTimeline } from '@tasks/piggy-banks/index.js';
@@ -177,6 +178,49 @@ export const TaskRegistry = {
       enabled: true
     },
     configOptions: {
+    }
+  },
+  go_no_go: {
+    name: 'Go/No-Go with valenced faces',
+    description: 'Orthogonalised go/no-go learning task: 2 (win/avoid loss) x 2 (go/no-go) x 2 (positive/negative face affect)',
+    createTimeline: createGoNoGoTimeline,
+    computeBonus: computeRelativeGoNoGoBonus,
+    defaultConfig: {
+      task_name: "go_no_go",
+      sequence: 'trial1',
+      session: 'wk0',
+      stimulus_session: 1,
+      response_window: 1800,
+      resize_duration: 300,
+      feedback_duration: 1000,
+      iti: 400,
+      preferredOrientation: "landscape"
+    },
+    sequences: {
+      trial1: '@tasks/go-no-go/sequences/trial1.js',
+    },
+    requirements: {
+      css: ['@tasks/go-no-go/styles.css'],
+    },
+    resumptionRules: {
+      enabled: true,
+      granularity: 'block',
+      statePattern: (taskName) => `${taskName}_block_(\\d+)_start`,
+      extractProgress: (lastState, taskName) => {
+        const match = lastState.match(new RegExp(`${taskName}_block_(\\d+)_start`));
+        return match ? parseInt(match[1]) : 0;
+      }
+    },
+    configOptions: {
+      task_name: "Name of the task as it appears in the bonus object. Default is 'go_no_go'.",
+      sequence: "Trial sequence key. One sequence serves every session - sessions differ only in which faces are shown. Default is 'trial1'.",
+      session: "Session identifier for session-specific behaviour. Default is 'wk0'.",
+      stimulus_session: "Which face set (1-5) from stimuli-manifest.json to use. Each is a disjoint set of 24 CFD models, so a returning participant never sees a face twice. Default is 1.",
+      response_window: "Time in ms from cue onset to respond. Default is 1800. RobotFactory uses 1300 but opens its window 1500ms after onset; here the window opens immediately.",
+      resize_duration: "Duration in ms of the grow (go) / shrink (no-go) animation. Default is 300.",
+      feedback_duration: "How long in ms the coin is shown. Default is 1000.",
+      iti: "Blank gap in ms after feedback. Default is 400.",
+      preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). Default is 'landscape'."
     }
   },
   reversal: {
