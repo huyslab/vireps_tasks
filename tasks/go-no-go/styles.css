@@ -8,27 +8,32 @@
   gap: 2vh;
 }
 
-/* The stimulus sits in a fixed-size slot so the grow/shrink animation does not
-   reflow the layout: the face scales inside the slot while the coin below stays
-   put. The slot must fit the largest state, so it is the face size times
-   grow_scale (1.4) with a little headroom. */
+/* The stimulus sits in a fixed-height slot so the grown face never reaches the
+   coin below it. Only HEIGHT is reserved: `transform: scale()` does not reflow,
+   so the coin cannot be pushed anywhere - the slot exists purely to stop the two
+   overlapping visually.
+   
+   The faces are about 1.42:1, so grown height = width x 1.4 / 1.42, i.e. almost
+   exactly the width value. That is why the slot height reuses the same
+   expression as the face width. Sizing the slot as a square (the earlier
+   version) reserved far more vertical space than the grown face ever used and
+   held the face smaller than it needed to be. */
 .gng-stimulus-slot {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(56vw, 56vh);
-  width: min(56vw, 56dvh);
-  height: min(56vw, 56vh);
-  height: min(56vw, 56dvh);
+  width: 100%;
+  height: min(52vw, 52vh);
+  height: min(52vw, 52dvh);
 }
 
 /* Sized on the short axis as well as the long one - on a landscape phone the
    viewport is far wider than it is tall, and width-only sizing overflows. */
 .gng-stimulus {
-  width: min(38vw, 38vh);
-  width: min(38vw, 38dvh);
+  width: min(52vw, 52vh);
+  width: min(52vw, 52dvh);
   height: auto;
-  max-width: 460px;
+  max-width: 700px;
   /* CFD frames end mid-torso, so with the background keyed out the shoulders
      stop at a hard horizontal line. Invisible on white; against the feedback
      tint it reads as a cut-out pasted on the screen. Fading the bottom edge
@@ -69,16 +74,28 @@
    coarse pointer plus a 600px minimum on both axes catches tablets in either
    orientation while excluding phones and desktop. */
 @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
+  /* Separate vw and dvh coefficients here: on a landscape tablet the short axis
+     is what binds, and the face is wider than it is tall, so the two limits are
+     not interchangeable. */
   .gng-stimulus-slot {
-    width: min(70vw, 70vh);
-    width: min(70vw, 70dvh);
-    height: min(70vw, 70vh);
-    height: min(70vw, 70dvh);
+    height: min(70vw, 60vh);
+    height: min(70vw, 60dvh);
   }
 
   .gng-stimulus {
-    width: min(48vw, 48vh);
-    width: min(48vw, 48dvh);
+    width: min(70vw, 60vh);
+    width: min(70vw, 60dvh);
+  }
+
+  /* The face is now most of the short axis, so the coin row gives up some
+     height to keep the grown state clear of it. */
+  .gng-wrapper {
+    gap: 1vh;
+  }
+
+  .gng-coin-slot {
+    height: min(12vw, 12vh);
+    height: min(12vw, 12dvh);
   }
 }
 
