@@ -126,9 +126,13 @@ function preKickOutWarning(settings) {
         css_classes: ['instructions'],
         timeline: [
             {
+                // No threat of removal here: nothing in the battery terminates a
+                // session. kickOut() only ever shows this screen and the
+                // speed-accuracy one; the single trial that could end a session
+                // (createInstructionsKickOut) is unused and disabled. Saying we
+                // would stop someone's participation was simply untrue.
                 stimulus: `<p>You seem to be taking too long to respond on the games.</p>
                     <p>Please try to respond more quickly. Also, please keep your attention on the game window, and don't use other tabs or windows.</p>
-                    <p>If you continue to receive too many warnings, we will have to stop your participation in this experiment.</p>
                     <p>Tap the button below to continue.</p>
                 `,
                 on_start: function(trial) {
@@ -194,10 +198,16 @@ function kickOut(settings) {
 }
 
 /**
- * Creates instruction-based kick-out trial for participants who fail comprehension checks
- * Only applies to Prolific context (RELMED participants get more chances)
+ * Creates instruction-based kick-out trial for participants who fail comprehension checks.
+ *
+ * CURRENTLY DISABLED AND UNUSED. No task calls it, and PARTICIPANT_EXPERIENCE is
+ * 'relmed', so it always returns undefined: the battery never terminates a
+ * session, which is deliberate. It is kept rather than deleted because it is the
+ * mechanism an online cohort would need if that decision were ever reversed -
+ * note that its copy is Prolific-specific and would need rewriting first.
+ *
  * @param {string} task - Task name for tracking instruction failures
- * @returns {Object|undefined} jsPsych trial object or undefined for RELMED context
+ * @returns {Object|undefined} jsPsych trial object, or undefined while disabled
  */
 
 const createInstructionsKickOut = (task) => {
