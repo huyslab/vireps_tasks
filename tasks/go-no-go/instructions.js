@@ -18,12 +18,7 @@ const TRAINING_MAX_TOTAL = 60;
 
 const isTouch = () => navigator.maxTouchPoints > 0;
 
-const actionText = () =>
-  isTouch()
-    ? 'press on the face'
-    : 'press SPACE when the face is on the screen';
-
-const noActionText = () => 'do not press anything';
+const actionText = () => (isTouch() ? 'touch the picture' : 'press the space bar');
 const FEEDBACK_GREEN = '#2e7d32';
 const FEEDBACK_RED = '#c62828';
 
@@ -110,29 +105,32 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     data: { trialphase: 'go_no_go_instruction' },
     on_start: () => updateState('go_no_go_instructions_start'),
     pages: [
-      `<p><b>THE FACES GAME</b></p>
-       <p>Welcome.</p>
-       <p>You will see many faces.</p>
-       <p>Your job is simple:</p>
-       <p>decide whether to press on each face or not.</p>`,
+      `<p><b>THE PEOPLE GAME</b></p>
+       <p>In this game you will see pictures of people, one at a time.</p>
+       <p>For each person, you decide whether to tap or not.</p>`,
 
-      `<p>When a face appears, choose quickly.</p>
-       <p><b>Press</b>: ${actionText()}.</p>
-       <p><b>Do not press</b>: ${noActionText()}.</p>`,
+      `<p>Each picture stays on screen for a moment.</p>
+       <p><b>To tap:</b> ${actionText()}.</p>
+       <p><b>To not tap:</b> just wait, and the picture will go away on its own.</p>
+       <p>Choose quickly - you do not have long.</p>`,
 
-      `<p>Some faces let you <b style="color:${FEEDBACK_GREEN};">WIN</b> coins.</p>
-        <p>If you choose correctly, you get a <b>£1 coin</b>. ${coinInline(COIN_IMAGES.pound, '1 pound coin')}</p>
-        <p>If you choose incorrectly, you get a <b>1p coin</b>. ${coinInline(COIN_IMAGES.penny, '1 penny coin')}</p>
-       <p>Some faces make you <b style="color:${FEEDBACK_RED};">LOSE</b> coins.</p>
-        <p>If you choose correctly, you lose only <b>1p</b>. ${coinInline(COIN_IMAGES.brokenPenny, 'broken 1 penny coin')}</p>
-        <p>If you choose incorrectly, you lose <b>£1</b>. ${coinInline(COIN_IMAGES.brokenPound, 'broken 1 pound coin')}</p>`,
+      `<p>With some people, there is <b style="color:${FEEDBACK_GREEN};">money to win</b>.</p>
+       <p>Get it right and you win <b>£1</b>. ${coinInline(COIN_IMAGES.pound, '1 pound coin')}</p>
+       <p>Get it wrong and you win only <b>1p</b>. ${coinInline(COIN_IMAGES.penny, '1 penny coin')}</p>
+       <p>With others, there is <b style="color:${FEEDBACK_RED};">money to lose</b>.</p>
+       <p>Get it right and you lose only <b>1p</b>. ${coinInline(COIN_IMAGES.brokenPenny, 'broken 1 penny coin')}</p>
+       <p>Get it wrong and you lose <b>£1</b>. ${coinInline(COIN_IMAGES.brokenPound, 'broken 1 pound coin')}</p>`,
 
-      `<p>You may see the same face many times.</p>
-       <p>Learn what works best for each face.</p>
-       <p>Try to win more coins and lose fewer coins.</p>`,
+      `<p>The same people come back again and again.</p>
+       <p>Some are best tapped. Others are best left alone. You cannot tell by looking - you have to find out by trying.</p>
+       <p>Watch what happens each time, and try to remember what works for each person.</p>`,
 
-      `<p>Now you will do short training rounds.</p>
-       <p>This will help you get ready for the main game.</p>`,
+      // Feedback is only 80% valid, so a participant will make the better choice and
+      // still see the worse coin. Phrased after PILT's "even the best cards may
+      // sometimes give only a penny": it names the exception in terms of the coins
+      // themselves, rather than telling anyone what to do about it.
+      `<p>Even when you make the better choice, you may sometimes get only a penny, or occasionally break a £1 coin.</p>
+       <p>First, let's try a few.</p>`,
     ],
   };
 
@@ -143,9 +141,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'go',
       outcome_correct: 10,
       outcome_incorrect: 1,
-      intro: `<p>Training 1 of 4.</p>
-              <p>In this round, try pressing on the face.</p>
-              <p>If you choose correctly, you get a <b>£1 coin</b>.</p>`,
+      intro: `<p><b>Let's try tapping.</b> (1 of 4)</p>
+              <p>Tap this person's picture and see what happens.</p>
+              <p>When you get it right, you win <b>£1</b>.</p>`,
     },
     {
       id: 'wait_win',
@@ -153,9 +151,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'nogo',
       outcome_correct: 10,
       outcome_incorrect: 1,
-      intro: `<p>Training 2 of 4.</p>
-              <p>In this round, try not to press.</p>
-              <p>If you choose correctly, you get a <b>£1 coin</b>.</p>`,
+      intro: `<p><b>Now let's try waiting.</b> (2 of 4)</p>
+              <p>This time, do not tap. Just wait.</p>
+              <p>When you get it right, you win <b>£1</b>.</p>`,
     },
     {
       id: 'press_lose_less',
@@ -163,10 +161,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'go',
       outcome_correct: -1,
       outcome_incorrect: -10,
-      intro: `<p>Training 3 of 4.</p>
-              <p>In this round, try pressing on the face.</p>
-              <p>If you choose correctly, you lose only <b>1p</b>.</p>
-              <p>If you choose incorrectly, you lose <b>£1</b>.</p>`,
+      intro: `<p><b>Sometimes there is money to lose.</b> (3 of 4)</p>
+              <p>Here, tapping is the better choice.</p>
+              <p>Get it right and you lose only <b>1p</b>. Get it wrong and you lose <b>£1</b>.</p>`,
     },
     {
       id: 'wait_lose_less',
@@ -174,10 +171,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'nogo',
       outcome_correct: -1,
       outcome_incorrect: -10,
-      intro: `<p>Training 4 of 4.</p>
-              <p>In this round, try not to press.</p>
-              <p>If you choose correctly, you lose only <b>1p</b>.</p>
-              <p>If you choose incorrectly, you lose <b>£1</b>.</p>`,
+      intro: `<p><b>One more.</b> (4 of 4)</p>
+              <p>Here, waiting is the better choice.</p>
+              <p>Get it right and you lose only <b>1p</b>. Get it wrong and you lose <b>£1</b>.</p>`,
     },
   ];
 
@@ -196,15 +192,15 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
   const quizQuestions = [
     {
-      prompt: `In the Faces Game, I choose to press on each face or not.`,
+      prompt: `For each person, I choose whether to tap or not.`,
       correct: 'True',
     },
     {
-      prompt: `A broken coin means I lose coins.`,
+      prompt: `A broken coin means I have lost money.`,
       correct: 'True',
     },
     {
-      prompt: `I should learn the best choice for each face.`,
+      prompt: `The same people come back, so I can learn what works for each one.`,
       correct: 'True',
     },
   ];
@@ -215,9 +211,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     show_clickable_nav: true,
     data: { trialphase: 'go_no_go_instruction' },
     pages: [
-      `<p>Great work.</p>
-       <p>Now answer a few short questions.</p>
-       <p>You must get all of them right.</p>`,
+      `<p>Nicely done.</p>
+       <p>Before you start, a few quick questions.</p>
+       <p>You need all of them right to go on.</p>`,
     ],
   };
 
@@ -227,8 +223,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     show_clickable_nav: true,
     data: { trialphase: 'go_no_go_instruction_quiz_review' },
     pages: [
-      `<p>Some answers were wrong.</p>
-       <p>Please try again.</p>`,
+      `<p>Not quite. Have another go.</p>`,
     ],
     conditional_function: checkQuizFailed,
   };
@@ -238,7 +233,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       ...createInstructionQuiz(quizQuestions, {
         trialphase: 'go_no_go_instruction_quiz',
         preamble:
-          `<div class="instructions"><p>Read each sentence. Choose True or False.</p></div>`,
+          `<div class="instructions"><p>Is each sentence true or false?</p></div>`,
       }),
       quizRetryPrompt,
     ],
