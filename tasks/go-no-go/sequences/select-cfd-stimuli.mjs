@@ -5,7 +5,7 @@
  *   node tasks/go-no-go/sequences/select-cfd-stimuli.mjs \
  *     --images "<path>/CFD Version 3.0/Images/CFD" \
  *     --norming "tasks/go-no-go/sequences/CFD 3.0 Norming Data and Codebook.xlsx" \
- *     [--out assets/images/go-no-go/faces] [--width 512] [--dry-run]
+ *     [--out assets/images/go-no-go/faces] [--width 500] [--dry-run]
  *
  * ---------------------------------------------------------------------------
  * Licensing - why the images are not in this repository
@@ -58,7 +58,7 @@ const opt = (name, fallback) => {
 const IMAGES = opt('images');
 const NORMING = opt('norming', 'tasks/go-no-go/sequences/CFD 3.0 Norming Data and Codebook.xlsx');
 const OUT = opt('out', 'assets/images/go-no-go/faces');
-const WIDTH = parseInt(opt('width', '512'), 10);
+const WIDTH = parseInt(opt('width', '500'), 10);
 const DRY = args.includes('--dry-run');
 
 if (!IMAGES) {
@@ -67,6 +67,10 @@ if (!IMAGES) {
 }
 
 const CUES_PER_SESSION = 24; // 12 per block x 2 blocks
+
+// White-background removal. See the staging step for why 0.10 is the ceiling.
+const KEY_SIMILARITY = 0.10;
+const KEY_BLEND = 0.02;
 const CELLS = 4; // Black/White x F/M - the only groups with expression images
 const PER_CELL_PER_SESSION = CUES_PER_SESSION / CELLS; // 6 = 3 angry + 3 happy
 
@@ -295,16 +299,29 @@ if (DRY) {
 if (existsSync(OUT)) rmSync(OUT, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 
-const manifest = { sessions: [], generated: new Date().toISOString().slice(0, 10), width: WIDTH };
+const manifest = { sessions: [], generated: new Date().toISOString().slice(0, 10), width: WIDTH, format: 'png-transparent' };
 for (let s = 0; s < SESSIONS; s++) {
   const entries = selected
     .filter((m) => m.session === s)
     .map((m) => {
       const src = m.affect === 'negative' ? m.angry : m.happy;
-      const file = `s${s + 1}_${m.affect === 'negative' ? 'ang' : 'hap'}_${m.model}.jpg`;
-      execFileSync('sips', ['--resampleWidth', String(WIDTH), src, '--out', join(OUT, file)], {
-        stdio: 'ignore',
-      });
+      const file = `s${s + 1}_${m.affect === 'negative' ? 'ang' : 'hap'}_${m.model}.png`;
+      // Transparent PNG, not JPEG: the task tints the whole background on
+      // feedback, so the face has to sit on nothing rather than on CFD's white
+      // rectangle. CFD backgrounds are pure #FFFFFF, which colorkey removes
+      // cleanly.
+      //
+      // similarity 0.10 is an empirical ceiling, not a guess. The models wear a
+      // light grey shirt (#b9bec2); at 0.16 the key starts eating it and at 0.24
+      // it is visibly shredded. 0.10 leaves the shirt intact and only mild
+      // fringing around fine hair.
+      execFileSync(
+        'ffmpeg',
+        ['-v', 'error', '-y', '-i', src,
+         '-vf', `scale=${WIDTH}:-1,colorkey=0xFFFFFF:${KEY_SIMILARITY}:${KEY_BLEND},format=rgba`,
+         join(OUT, file)],
+        { stdio: 'ignore' }
+      );
       return {
         file,
         model: m.model,

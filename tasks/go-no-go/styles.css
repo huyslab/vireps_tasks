@@ -10,25 +10,31 @@
 
 /* The stimulus sits in a fixed-size slot so the grow/shrink animation does not
    reflow the layout: the face scales inside the slot while the coin below stays
-   put. The slot is sized for the largest state (grow_scale = 1.25). */
+   put. The slot must fit the largest state, so it is the face size times
+   grow_scale (1.4) with a little headroom. */
 .gng-stimulus-slot {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(45vw, 45vh);
-  width: min(45vw, 45dvh);
-  height: min(45vw, 45vh);
-  height: min(45vw, 45dvh);
+  width: min(56vw, 56vh);
+  width: min(56vw, 56dvh);
+  height: min(56vw, 56vh);
+  height: min(56vw, 56dvh);
 }
 
 /* Sized on the short axis as well as the long one - on a landscape phone the
    viewport is far wider than it is tall, and width-only sizing overflows. */
 .gng-stimulus {
-  width: min(34vw, 34vh);
-  width: min(34vw, 34dvh);
+  width: min(38vw, 38vh);
+  width: min(38vw, 38dvh);
   height: auto;
-  max-width: 420px;
-  border-radius: 8px;
+  max-width: 460px;
+  /* CFD frames end mid-torso, so with the background keyed out the shoulders
+     stop at a hard horizontal line. Invisible on white; against the feedback
+     tint it reads as a cut-out pasted on the screen. Fading the bottom edge
+     lets the shoulders dissolve into the background instead. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent 98%);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
@@ -64,14 +70,50 @@
    orientation while excluding phones and desktop. */
 @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
   .gng-stimulus-slot {
-    width: min(58vw, 58vh);
-    width: min(58vw, 58dvh);
-    height: min(58vw, 58vh);
-    height: min(58vw, 58dvh);
+    width: min(70vw, 70vh);
+    width: min(70vw, 70dvh);
+    height: min(70vw, 70vh);
+    height: min(70vw, 70dvh);
   }
 
   .gng-stimulus {
-    width: min(44vw, 44vh);
-    width: min(44vw, 44dvh);
+    width: min(48vw, 48vh);
+    width: min(48vw, 48dvh);
+  }
+}
+
+/* --- Feedback background tint ---------------------------------------------
+   Covers the viewport behind the face and coin, which sit above it via the
+   wrapper's stacking order. Deliberately low-alpha: this is a peripheral cue
+   confirming what the coin already says, and a saturated full-screen flash 240
+   times would be punishing. It transitions rather than animates so it eases in
+   and back out, and the face reads normally because the stimuli are transparent
+   PNGs with the white CFD background keyed out. */
+.gng-tint {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: rgba(0, 0, 0, 0);
+  transition: background-color 260ms ease-in-out;
+}
+
+.gng-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+.gng-tint-correct {
+  background-color: rgba(46, 125, 50, 0.16);
+}
+
+.gng-tint-incorrect {
+  background-color: rgba(198, 40, 40, 0.16);
+}
+
+/* Respect a reduced-motion preference: keep the colour, drop the fade. */
+@media (prefers-reduced-motion: reduce) {
+  .gng-tint {
+    transition: none;
   }
 }

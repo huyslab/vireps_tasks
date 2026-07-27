@@ -12,8 +12,13 @@
  *      response (approach) and SHRINKS when the window elapses (withdrawal).
  *      This runs on both correct and incorrect trials - it reflects the action
  *      taken, not whether it was right.
- *   4. A coin appears below the face: £1 for +10, broken £1 for -10, 1p for +1,
- *      broken 1p for -1.
+ *   4. The whole background tints - green for a correct response, red for an
+ *      incorrect one - fading in gently, and a coin appears below the face:
+ *      £1 for +10, broken £1 for -10, 1p for +1, broken 1p for -1.
+ *
+ * The tint is why the face stimuli are transparent PNGs rather than CFD's
+ * white-background JPEGs: a white rectangle behind the face would block the
+ * colour and leave the feedback looking like a framed picture on a wall.
  *
  * Go trials end their response phase as soon as the response arrives, so trial
  * length varies with RT - the same as RobotFactory. If fixed-length trials are
@@ -45,13 +50,13 @@ var jsPsychGoNoGo = (function (jspsych) {
       response_window: { type: jspsych.ParameterType.INT, default: 1800 },
       /** Duration of the grow/shrink animation */
       resize_duration: { type: jspsych.ParameterType.INT, default: 300 },
-      /** How long the coin stays on screen */
-      feedback_duration: { type: jspsych.ParameterType.INT, default: 1000 },
+      /** How long the coin and background tint stay on screen */
+      feedback_duration: { type: jspsych.ParameterType.INT, default: 1600 },
       /** Blank gap after feedback */
       iti: { type: jspsych.ParameterType.INT, default: 400 },
       /** Scale factors for the approach / withdrawal animations */
-      grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.25 },
-      shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.75 },
+      grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
+      shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },
       /** Coin image per outcome value */
       coin_images: {
         type: jspsych.ParameterType.OBJECT,
@@ -105,6 +110,7 @@ var jsPsychGoNoGo = (function (jspsych) {
       let wrongOrientation = gateVisible();
 
       display_element.innerHTML = `
+        <div class="gng-tint" id="gng-tint"></div>
         <div class="gng-wrapper">
           <div class="gng-stimulus-slot">
             <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
@@ -116,6 +122,7 @@ var jsPsychGoNoGo = (function (jspsych) {
 
       const stimulus = display_element.querySelector('#gng-stimulus');
       const coin = display_element.querySelector('#gng-coin');
+      const tint = display_element.querySelector('#gng-tint');
 
       let responded = false;
       let cleaned = false;
@@ -196,9 +203,17 @@ var jsPsychGoNoGo = (function (jspsych) {
         );
 
         animation.finished.then(() => {
+          // Tint the whole background by correctness, and show the coin. The
+          // tint fades via a CSS transition rather than an animation so it eases
+          // in gently instead of snapping on.
+          tint.classList.add(correct ? 'gng-tint-correct' : 'gng-tint-incorrect');
           coin.src = trial.coin_images[String(outcome)] || trial.coin_images[outcome];
           coin.classList.add('gng-coin-visible');
+
           this.jsPsych.pluginAPI.setTimeout(() => {
+            // Fade the tint back out before the blank gap, so the ITI is neutral
+            // and the next cue does not arrive on a coloured screen.
+            tint.classList.remove('gng-tint-correct', 'gng-tint-incorrect');
             coin.classList.remove('gng-coin-visible');
             stimulus.style.visibility = 'hidden';
             this.jsPsych.pluginAPI.setTimeout(endTrial, simulating ? 20 : trial.iti);
