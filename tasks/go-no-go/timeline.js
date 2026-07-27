@@ -14,6 +14,7 @@ import {
   kickOut,
   fullscreen_prompt,
 } from '@utils/index.js';
+import { prepareGoNoGoInstructions } from './instructions.js';
 
 const FACES_PATH = './assets/images/go-no-go/faces/';
 const MANIFEST_PATH = './tasks/go-no-go/sequences/stimuli-manifest.json';
@@ -110,9 +111,30 @@ export async function createGoNoGoTimeline(settings) {
   const faceOfCue = assignFaces(structure, manifestSession, participant);
 
   const faceFiles = [...faceOfCue.values()].map((f) => FACES_PATH + f.file);
+
+  // Practice uses its own four NEUTRAL faces, from models that appear nowhere
+  // else in the study (see select-cfd-stimuli.mjs). Training on a real cue would
+  // teach a cue-action mapping before the task starts and contaminate the very
+  // first trials of that cue. The four are one per gender x ethnicity cell, so
+  // 2 female / 2 male and 2 Black / 2 White.
+  const practiceFiles = (manifestSession.practice ?? []).map((f) => FACES_PATH + f.file);
+  if (settings.include_instructions !== false && practiceFiles.length === 0) {
+    console.error(
+      'go/no-go: no practice faces in the manifest for this session. ' +
+        'Re-run select-cfd-stimuli.mjs to generate them.'
+    );
+  }
+
   const timeline = [
-    createPreloadTrial([...faceFiles, ...Object.values(COIN_IMAGES)], 'go_no_go'),
+    createPreloadTrial(
+      [...faceFiles, ...practiceFiles, ...Object.values(COIN_IMAGES)],
+      'go_no_go'
+    ),
   ];
+
+  if (settings.include_instructions !== false && practiceFiles.length > 0) {
+    timeline.push(...prepareGoNoGoInstructions(settings, practiceFiles));
+  }
 
   structure.forEach((trials, blockIndex) => {
     const blockNumber = blockIndex + 1;

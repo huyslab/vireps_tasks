@@ -313,10 +313,17 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   await passOrientationHint(page, hasTouch);
 
   const face = page.locator('#gng-stimulus');
-  for (let i = 0; i < 20 && !(await face.isVisible().catch(() => false)); i++) {
-    const button = page.locator('.jspsych-btn').first();
-    if (await button.isVisible().catch(() => false)) {
-      await button.click();
+  for (let i = 0; i < 120 && !(await face.isVisible().catch(() => false)); i++) {
+    const quizTrue = page.locator('.quiz-btn', { hasText: 'True' }).first();
+    if (await quizTrue.isVisible().catch(() => false)) {
+      await quizTrue.click();
+      await page.waitForTimeout(150);
+      continue;
+    }
+
+    const nextButton = page.locator('#jspsych-instructions-next:not([disabled])').first();
+    if (await nextButton.isVisible().catch(() => false)) {
+      await nextButton.click();
       continue;
     }
     await page.waitForTimeout(300);
@@ -333,7 +340,10 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   expect(afterGo, 'face should grow on a go response').toBeGreaterThan(beforeGo);
   await captureShot(page, testInfo, 'go_no_go', 'feedback');
 
-  const trials = () => page.evaluate(() => window.jsPsych.data.get().filter({ trialphase: 'go_no_go' }).values());
+  // The first trials may come from training or the main task depending on the
+  // instruction path, so we look at all go/no-go plugin rows.
+  const trials = () =>
+    page.evaluate(() => window.jsPsych.data.get().filter({ trial_type: 'go-no-go' }).values());
   await expect.poll(async () => (await trials()).length, { timeout: 10000 }).toBeGreaterThan(0);
   const go = (await trials())[0];
   expect(go.response, 'a go response should be recorded').toBe('go');
@@ -369,6 +379,14 @@ const JOURNEYS = {
  */
 export function defineTaskJourneyTest(taskKey, taskConfig) {
   test(`${taskKey} instructions and feedback render correctly`, async ({ page }, testInfo) => {
+    // Journeys drive the real instruction flow at real speed - PILT walks
+    // instruction pages, practice trials with their post-trial gaps, and a
+    // comprehension quiz, which is ~14s on an idle machine. Playwright's generic
+    // 30s default leaves no room once the whole matrix is running in parallel
+    // against one static server, and PILT then fails deterministically rather
+    // than flakily. These tests are slow by design, so they get their own budget.
+    test.setTimeout(120_000);
+
     const errors = trackPageErrors(page);
     await patchWebkitTouchPoints(page);
 

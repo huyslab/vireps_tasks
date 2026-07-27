@@ -36,6 +36,15 @@
  *    trustworthy faces.
  * 5. As many sessions as the subset supports are produced.
  *
+ * Practice faces are chosen separately, 4 per session, one from each of the four
+ * gender x ethnicity cells - which is what gives 2 male / 2 female and 2 Black /
+ * 2 White. They are NEUTRAL images from models used nowhere else, drawn
+ * preferentially from outside the both-expressions subset so that models capable
+ * of carrying angry and happy are not spent on practice. Within each cell the
+ * models closest to the cell mean on Threatening and Trustworthy are taken, so a
+ * participant's first exposure to the task is not an unusually threatening or
+ * unusually warm face.
+ *
  * Note the design consequence of rule 3: affect is now a property of the
  * identity, chosen deliberately to strengthen the manipulation. It cannot also
  * be randomised per participant, so any idiosyncratic face effect sits inside
@@ -71,6 +80,15 @@ const CUES_PER_SESSION = 24; // 12 per block x 2 blocks
 // White-background removal. See the staging step for why 0.10 is the ceiling.
 const KEY_SIMILARITY = 0.10;
 const KEY_BLEND = 0.02;
+
+// Output format. Transparency rules out JPEG, but PNG is a poor fit for
+// photographs with alpha: the same face is 168 KB as PNG and 17 KB as WebP q90,
+// visually indistinguishable at display size. Across a session that is 4 MB of
+// preload versus 0.4 MB, which matters on a tablet over wi-fi and matters even
+// more to the test suite, where several browsers preload simultaneously from one
+// static server. WebP with alpha is supported by every browser this battery
+// targets (Chrome/Android, Safari 14+).
+const WEBP_QUALITY = 90;
 const CELLS = 4; // Black/White x F/M - the only groups with expression images
 const PER_CELL_PER_SESSION = CUES_PER_SESSION / CELLS; // 6 = 3 angry + 3 happy
 
@@ -265,6 +283,58 @@ for (const key of cellKeys) {
   assign(happy, 'positive');
 }
 
+// ---------------------------------------------------------------- practice
+
+// Practice uses neutral faces from models that appear nowhere else, so nothing a
+// participant learns in training transfers to a real cue.
+const usedModels = new Set(selected.map((m) => m.model));
+const expressionCapable = new Set(eligible.map((m) => m.model));
+
+
+const practiceCandidates = [];
+for (const [model, imgs] of imagesByModel) {
+  if (usedModels.has(model)) continue;
+  if (!imgs.N) continue;
+  const n = norms.get(model);
+  if (!n || Number.isNaN(n.threatening) || Number.isNaN(n.trustworthy)) continue;
+  if (!['B', 'W'].includes(n.ethnicity)) continue; // match the task faces
+  practiceCandidates.push({ model, ...n, neutral: imgs.N, reserved: expressionCapable.has(model) });
+}
+
+const practiceByCell = {};
+for (const m of practiceCandidates) {
+  const key = `${m.ethnicity}${m.gender}`;
+  (practiceByCell[key] = practiceByCell[key] || []).push(m);
+}
+
+const PRACTICE_CELLS = ['BF', 'BM', 'WF', 'WM']; // 2 female / 2 male, 2 Black / 2 White
+const practicePerCell = {};
+for (const key of PRACTICE_CELLS) {
+  const pool = practiceByCell[key] || [];
+  if (pool.length < SESSIONS) {
+    throw new Error(`only ${pool.length} unused neutral ${key} models, need ${SESSIONS}`);
+  }
+  const zThreat = zscore(pool.map((m) => m.threatening));
+  const zTrust = zscore(pool.map((m) => m.trustworthy));
+  // Closest to the cell mean on both dimensions, and models that cannot carry
+  // expressions first so the A+HC subset is preserved for real cues.
+  practicePerCell[key] = [...pool]
+    .sort((a, b) => {
+      if (a.reserved !== b.reserved) return a.reserved ? 1 : -1;
+      const d = (m) => Math.hypot(zThreat(m.threatening), zTrust(m.trustworthy));
+      return d(a) - d(b);
+    })
+    .slice(0, SESSIONS);
+}
+
+const practiceBySession = [];
+for (let s = 0; s < SESSIONS; s++) {
+  // Rotate cell order by session so the first training face is not always drawn
+  // from the same gender x ethnicity cell.
+  const order = PRACTICE_CELLS.map((_, i) => PRACTICE_CELLS[(i + s) % PRACTICE_CELLS.length]);
+  practiceBySession.push(order.map((key) => ({ ...practicePerCell[key][s], cell: key })));
+}
+
 // ---------------------------------------------------------------- report
 
 console.log('Balance across sessions (mean rating, 1-7):');
@@ -286,8 +356,15 @@ console.log('\nSeparation achieved (all sessions pooled):');
 console.log(`  Threatening   angry ${mean(allAngry, (m) => m.threatening).toFixed(2)}  vs happy ${mean(allHappy, (m) => m.threatening).toFixed(2)}`);
 console.log(`  Trustworthy   angry ${mean(allAngry, (m) => m.trustworthy).toFixed(2)}  vs happy ${mean(allHappy, (m) => m.trustworthy).toFixed(2)}`);
 
-const usedModels = new Set(selected.map((m) => m.model));
-console.log(`\nModels used: ${selected.length} (${usedModels.size} distinct - each used once: ${usedModels.size === selected.length ? 'YES' : 'NO'})`);
+console.log(`\nModels used for cues: ${selected.length} (${usedModels.size} distinct - each used once: ${usedModels.size === selected.length ? 'YES' : 'NO'})`);
+
+const practiceModels = practiceBySession.flat().map((m) => m.model);
+console.log(`Practice models: ${practiceModels.length} (${new Set(practiceModels).size} distinct), neutral expression`);
+console.log(`  overlap with cue models: ${practiceModels.filter((m) => usedModels.has(m)).length}`);
+console.log(`  drawn from the expression subset: ${practiceBySession.flat().filter((m) => m.reserved).length}`);
+practiceBySession.forEach((faces, i) =>
+  console.log(`  session ${i + 1}: ${faces.map((f) => `${f.cell}:${f.model}`).join('  ')}`)
+);
 
 // ---------------------------------------------------------------- stage
 
@@ -299,13 +376,13 @@ if (DRY) {
 if (existsSync(OUT)) rmSync(OUT, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 
-const manifest = { sessions: [], generated: new Date().toISOString().slice(0, 10), width: WIDTH, format: 'png-transparent' };
+const manifest = { sessions: [], generated: new Date().toISOString().slice(0, 10), width: WIDTH, format: 'webp-transparent' };
 for (let s = 0; s < SESSIONS; s++) {
   const entries = selected
     .filter((m) => m.session === s)
     .map((m) => {
       const src = m.affect === 'negative' ? m.angry : m.happy;
-      const file = `s${s + 1}_${m.affect === 'negative' ? 'ang' : 'hap'}_${m.model}.png`;
+      const file = `s${s + 1}_${m.affect === 'negative' ? 'ang' : 'hap'}_${m.model}.webp`;
       // Transparent PNG, not JPEG: the task tints the whole background on
       // feedback, so the face has to sit on nothing rather than on CFD's white
       // rectangle. CFD backgrounds are pure #FFFFFF, which colorkey removes
@@ -319,6 +396,7 @@ for (let s = 0; s < SESSIONS; s++) {
         'ffmpeg',
         ['-v', 'error', '-y', '-i', src,
          '-vf', `scale=${WIDTH}:-1,colorkey=0xFFFFFF:${KEY_SIMILARITY}:${KEY_BLEND},format=rgba`,
+         '-c:v', 'libwebp', '-lossless', '0', '-q:v', String(WEBP_QUALITY), '-pix_fmt', 'yuva420p',
          join(OUT, file)],
         { stdio: 'ignore' }
       );
@@ -330,8 +408,27 @@ for (let s = 0; s < SESSIONS; s++) {
         affect: m.affect,
       };
     });
-  manifest.sessions.push({ session: s + 1, faces: entries });
-  console.log(`session ${s + 1}: staged ${entries.length} images`);
+  const practice = practiceBySession[s].map((m) => {
+    const file = `s${s + 1}_prac_${m.model}.webp`;
+    execFileSync(
+      'ffmpeg',
+      ['-v', 'error', '-y', '-i', m.neutral,
+       '-vf', `scale=${WIDTH}:-1,colorkey=0xFFFFFF:${KEY_SIMILARITY}:${KEY_BLEND},format=rgba`,
+       '-c:v', 'libwebp', '-lossless', '0', '-q:v', String(WEBP_QUALITY), '-pix_fmt', 'yuva420p',
+       join(OUT, file)],
+      { stdio: 'ignore' }
+    );
+    return {
+      file,
+      model: m.model,
+      ethnicity: m.ethnicity,
+      gender: m.gender,
+      affect: 'neutral',
+    };
+  });
+
+  manifest.sessions.push({ session: s + 1, faces: entries, practice });
+  console.log(`session ${s + 1}: staged ${entries.length} cue images + ${practice.length} practice`);
 }
 
 writeFileSync(
