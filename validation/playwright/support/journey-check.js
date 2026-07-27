@@ -357,8 +357,10 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   const faceBox = await face.boundingBox();
   const coinBox = await page.locator('#gng-coin').boundingBox();
   const goCoinWidth = coinBox.width;
-  const heightFraction = (coinBox.y + coinBox.height / 2 - faceBox.y) / faceBox.height;
-  expect(heightFraction, 'coin should sit low on the torso, not over the face').toBeGreaterThan(0.85);
+  // Assert the coin's TOP edge, not its centre: what matters is that nothing of
+  // the coin reaches the mouth (~0.72-0.75 of the face in CFD framing).
+  const goTopFraction = (coinBox.y - faceBox.y) / faceBox.height;
+  expect(goTopFraction, 'coin must not cover the mouth on a go trial').toBeGreaterThan(0.78);
   expect(
     Math.abs(coinBox.x + coinBox.width / 2 - (faceBox.x + faceBox.width / 2)),
     'coin should be horizontally centred on the face'
@@ -388,6 +390,14 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   // and scaling it fully with the face would shrink the outcome on exactly the
   // trials where it is the only thing to read.
   const nogoCoin = await page.locator('#gng-coin').boundingBox();
+  const nogoFace = await face.boundingBox().catch(() => null);
+  if (nogoCoin && nogoFace) {
+    // The face shrinks to 0.65x on a no-go while the coin only shrinks to
+    // sqrt(0.65), so a coin positioned by its centre rode up over the mouth.
+    // Positioning by the top edge keeps this true at any scale.
+    const nogoTopFraction = (nogoCoin.y - nogoFace.y) / nogoFace.height;
+    expect(nogoTopFraction, 'coin must not cover the mouth on a no-go trial').toBeGreaterThan(0.78);
+  }
   if (nogoCoin && goCoinWidth) {
     const observed = goCoinWidth / nogoCoin.width;
     const expected = Math.sqrt(1.4 / 0.65); // grow_scale / shrink_scale

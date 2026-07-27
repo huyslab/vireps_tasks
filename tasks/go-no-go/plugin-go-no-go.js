@@ -65,11 +65,14 @@ var jsPsychGoNoGo = (function (jspsych) {
       /** Scale factors for the approach / withdrawal animations */
       grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
       shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },
-      /** Where the coin lands, as a fraction of the face's displayed height.
-       *  CFD frames end at the upper chest, so the shoulders occupy only the
-       *  bottom tenth or so of the image: 0.84 still lands on the chin. 0.95
-       *  puts the coin on the shirt, straddling the lower edge. */
-      coin_chest_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.95 },
+      /** How far down the face the coin's TOP EDGE may reach, as a fraction of
+       *  the face's displayed height. The coin is placed below this line rather
+       *  than at a fixed centre point, so the mouth stays visible whatever the
+       *  face and coin happen to be scaled to. Positioning by centre instead let
+       *  the coin ride up over the mouth on no-go trials, where the face shrinks
+       *  to 0.65x but the coin only to sqrt(0.65). Mouths sit around 0.72-0.75
+       *  in CFD framing, so 0.80 leaves a margin. */
+      coin_clear_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.8 },
       /** Duration of the coin's fly-out from the face */
       coin_fly_duration: { type: jspsych.ParameterType.INT, default: 350 },
       /** Sound per outcome value; set to null to run silently */
@@ -284,13 +287,20 @@ var jsPsychGoNoGo = (function (jspsych) {
           // reflects the transform, so one read covers both the grown and shrunk
           // states without needing to know which happened.
           const faceRect = stimulus.getBoundingClientRect();
-          const chestY = faceRect.top + faceRect.height * trial.coin_chest_fraction;
           const centreY = faceRect.top + faceRect.height / 2;
-          coin.style.left = `${faceRect.left + faceRect.width / 2}px`;
-          coin.style.top = `${chestY}px`;
 
           coin.src = trial.coin_images[String(outcome)] || trial.coin_images[outcome];
           coin.classList.add('gng-coin-visible');
+
+          // Position by the coin's TOP edge, not its centre: the coin is placed
+          // just below coin_clear_fraction of the face so the mouth is never
+          // covered. Its rendered height depends on the scale applied below, so
+          // measure the element and account for that scale here.
+          const coinScale = Math.sqrt(scale);
+          const coinHeight = coin.getBoundingClientRect().height * coinScale;
+          const chestY = faceRect.top + faceRect.height * trial.coin_clear_fraction + coinHeight / 2;
+          coin.style.left = `${faceRect.left + faceRect.width / 2}px`;
+          coin.style.top = `${chestY}px`;
 
           // Fly the coin out of the face: it starts small and centred on the
           // face, then drops to the chest. Transform-only, so it stays on the
@@ -305,7 +315,6 @@ var jsPsychGoNoGo = (function (jspsych) {
           // read. The square root splits the difference: the relative-size gap
           // narrows from about 2.2x to 1.5x while the coin stays close to its
           // intended size in both cases.
-          const coinScale = Math.sqrt(scale);
           const dy = chestY - centreY;
           coin.animate(
             [
