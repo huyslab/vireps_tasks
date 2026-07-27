@@ -73,7 +73,7 @@ const dataProjects = [
   {
     name: 'data invariants',
     use: { ...devices['Desktop Chrome'] },
-    testMatch: /[\\/]data-[^\\/]*\.spec\.js$/,
+    testMatch: /[\\/](data|go-no-go-audio)-?[^\\/]*\.spec\.js$/,
   },
 ];
 

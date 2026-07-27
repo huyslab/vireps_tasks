@@ -152,6 +152,7 @@ var jsPsychGoNoGo = (function (jspsych) {
       let prematurePresses = 0;
       let windowOpen = true;
       let deadlineTimer = null;
+      let playedPlayer = null;
       let resizeHandler = null;
       let keyboardListener = null;
       let superListener = null;
@@ -200,6 +201,17 @@ var jsPsychGoNoGo = (function (jspsych) {
 
       const endTrial = () => {
         cleanupAll();
+        // Reset the audio source node so the same sound can play on a later
+        // trial. Safe here: the sounds are under half a second and feedback runs
+        // for well over a second, so playback has finished by now.
+        if (playedPlayer) {
+          try {
+            playedPlayer.stop();
+          } catch (error) {
+            /* already stopped, or never started - nothing to reset */
+          }
+          playedPlayer = null;
+        }
         this.jsPsych.pluginAPI.clearAllTimeouts();
         display_element.innerHTML = '';
         this.jsPsych.finishTrial(this.data);
@@ -246,8 +258,25 @@ var jsPsychGoNoGo = (function (jspsych) {
 
           // Outcome sound. Independent of the coin, so the outcome still lands
           // even if the participant happens to be looking away.
+          //
+          // jsPsych caches one AudioPlayer per file and, under Web Audio, its
+          // play() calls start() on an AudioBufferSourceNode - which may only be
+          // started once. Reusing it on a later trial throws InvalidStateError
+          // and the sound is silently never heard again. stop() recreates the
+          // node, so the player is reset in endTrial once the sound has
+          // finished, which is what makes it replayable.
           const player = audioPlayers[outcome];
-          if (player) player.then((p) => p && p.play());
+          if (player) {
+            player.then((p) => {
+              if (!p) return;
+              playedPlayer = p;
+              try {
+                p.play();
+              } catch (error) {
+                console.warn('go/no-go: could not play outcome sound', error);
+              }
+            });
+          }
 
           // Place the coin on the chest of the face AS CURRENTLY DISPLAYED. The
           // face has just been scaled by a transform, so its rendered geometry -
