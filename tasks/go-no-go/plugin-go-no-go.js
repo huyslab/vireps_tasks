@@ -293,13 +293,24 @@ var jsPsychGoNoGo = (function (jspsych) {
           coin.classList.add('gng-coin-visible');
 
           // Fly the coin out of the face: it starts small and centred on the
-          // face, then drops to the chest at full size. Transform-only, so it
-          // stays on the compositor.
+          // face, then drops to the chest. Transform-only, so it stays on the
+          // compositor.
+          //
+          // The coin scales by the SQUARE ROOT of the face's scale. At constant
+          // size it went from ~20% of the face's width on a go response to ~41%
+          // on a no-go, because the face itself changes by 1.4x vs 0.65x - a
+          // systematic perceptual difference between exactly the two conditions
+          // the design contrasts. Scaling it fully with the face would instead
+          // shrink the outcome on no-go trials, where it is the only thing to
+          // read. The square root splits the difference: the relative-size gap
+          // narrows from about 2.2x to 1.5x while the coin stays close to its
+          // intended size in both cases.
+          const coinScale = Math.sqrt(scale);
           const dy = chestY - centreY;
           coin.animate(
             [
-              { transform: `translate(-50%, -50%) translateY(${-dy}px) scale(0.3)`, opacity: 0 },
-              { transform: 'translate(-50%, -50%) translateY(0) scale(1)', opacity: 1 },
+              { transform: `translate(-50%, -50%) translateY(${-dy}px) scale(${0.3 * coinScale})`, opacity: 0 },
+              { transform: `translate(-50%, -50%) translateY(0) scale(${coinScale})`, opacity: 1 },
             ],
             {
               duration: simulating ? 20 : trial.coin_fly_duration,

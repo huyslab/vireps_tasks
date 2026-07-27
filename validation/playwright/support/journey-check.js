@@ -356,6 +356,7 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
 
   const faceBox = await face.boundingBox();
   const coinBox = await page.locator('#gng-coin').boundingBox();
+  const goCoinWidth = coinBox.width;
   const heightFraction = (coinBox.y + coinBox.height / 2 - faceBox.y) / faceBox.height;
   expect(heightFraction, 'coin should sit low on the torso, not over the face').toBeGreaterThan(0.85);
   expect(
@@ -378,7 +379,24 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
 
   // NO-GO: let the window elapse.
   await expect(face, 'the next cue should appear').toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(2400);
+  await page.waitForTimeout(2400); // response window (1800) + resize, into feedback
+
+  // The coin scales by the square root of the face's scale, so it is smaller on
+  // a no-go (face 0.65x) than on a go (face 1.4x) - but by much less than the
+  // face itself, which is the point: at constant size the coin's size RELATIVE
+  // to the cue differed 2.2x between the two conditions the design contrasts,
+  // and scaling it fully with the face would shrink the outcome on exactly the
+  // trials where it is the only thing to read.
+  const nogoCoin = await page.locator('#gng-coin').boundingBox();
+  if (nogoCoin && goCoinWidth) {
+    const observed = goCoinWidth / nogoCoin.width;
+    const expected = Math.sqrt(1.4 / 0.65); // grow_scale / shrink_scale
+    expect(
+      Math.abs(observed - expected),
+      `coin should scale by sqrt of the face scale: go/no-go width ratio ${observed.toFixed(2)}, expected ${expected.toFixed(2)}`
+    ).toBeLessThan(0.15);
+  }
+
   await expect.poll(async () => (await trials()).length, { timeout: 10000 }).toBeGreaterThan(1);
   const nogo = (await trials())[1];
   expect(nogo.response, 'letting the window elapse is a no-go').toBe('nogo');
