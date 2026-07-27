@@ -126,8 +126,8 @@ function preKickOutWarning(settings) {
         css_classes: ['instructions'],
         timeline: [
             {
-                stimulus: `<p>You seem to be taking too long to respond on the tasks.</p>
-                    <p>Please try to respond more quickly. Also, please keep your attention on the task window, and don't use other tabs or windows.</p>
+                stimulus: `<p>You seem to be taking too long to respond on the games.</p>
+                    <p>Please try to respond more quickly. Also, please keep your attention on the game window, and don't use other tabs or windows.</p>
                     <p>If you continue to receive too many warnings, we will have to stop your participation in this experiment.</p>
                     <p>Tap the button below to continue.</p>
                 `,
