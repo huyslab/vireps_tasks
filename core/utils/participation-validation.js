@@ -6,6 +6,23 @@ import { saveDataREDCap } from './data-handling.js';
  */
 
 /**
+ * Which context's PARTICIPANT-FACING behaviour to use.
+ *
+ * `window.context` historically selected two unrelated things at once: the
+ * data-submission route, and a set of differences in what participants
+ * experience (fullscreen enforcement, comprehension kick-outs, some instruction
+ * wording). Those are separate concerns, and coupling them meant choosing a data
+ * route silently changed the study.
+ *
+ * They are now split. `window.context` selects the data route only - see
+ * saveDataREDCap in data-handling.js, currently 'prolific'. Everything a
+ * participant sees or is subjected to follows RELMED's variant, which is the
+ * gentler one: no fullscreen enforcement, no removal for failed comprehension.
+ * Change this constant to move the whole participant experience at once.
+ */
+const PARTICIPANT_EXPERIENCE = 'relmed';
+
+/**
  * Prevents page refresh during experiment to maintain data integrity
  * @param {Event} e - The beforeunload event
  */
@@ -38,7 +55,7 @@ function preventParticipantTermination() {
 
   // Function that checks for fullscreen
 function check_fullscreen(){
-    if (window.debug || window.context === "relmed"){
+    if (window.debug || PARTICIPANT_EXPERIENCE === "relmed"){
         return false
     }
 
@@ -184,7 +201,7 @@ function kickOut(settings) {
  */
 
 const createInstructionsKickOut = (task) => {
-    if (window.context == "relmed") {
+    if (PARTICIPANT_EXPERIENCE === "relmed") {
         return undefined;
     } else {
         return {
@@ -231,7 +248,7 @@ const createInstructionsKickOut = (task) => {
  */
 function checkFullscreen(){
     // Skip fullscreen check in debug mode or RELMED context
-    if (window.debug || window.context === "relmed"){
+    if (window.debug || PARTICIPANT_EXPERIENCE === "relmed"){
         return false
     }
 
@@ -263,7 +280,10 @@ function checkFullscreen(){
  *    (default is the last trial, useful for pre-trial computations; change to 2 for post-trial computations). This is determined either by:
  *  a. The last trial's `trialphase` is `"no_choice_warning"` (used for tasks with external warning messages).
  *  b. Checking data field `"response_deadline_warning"` for the last task trial (used for tasks with interal warning messages).
- * 5. If `window.context` is `"prolific"`, a warning is always allowed, overriding other conditions.
+ *
+ * (A previous note here claimed a prolific context always allows a warning. The
+ * implementation has never done that - there is no context check below - so the
+ * note has been removed rather than the behaviour added.)
  *
  * @param {string} task - The name of the task, used to track task-specific warnings.
  * @param {number} [warning_expected_n_back=1] - The number of trials back to check 
@@ -514,6 +534,7 @@ function createReadyTrial(stimulus, trialphase, options = {}) {
 
 // Export functions for use in other modules
 export {
+    PARTICIPANT_EXPERIENCE,
     preventRefresh,
     fullscreen_prompt,
     kickOut,

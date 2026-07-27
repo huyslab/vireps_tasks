@@ -18,6 +18,19 @@ const small_coin_size = 100; // Size of coin images in pixels
 // module load, matching how the plugin decides whether to render tap targets.
 const touchCapable = navigator.maxTouchPoints > 0;
 
+/**
+ * Spells out a response deadline in words, from the configured value in ms.
+ *
+ * This used to be a literal that switched on window.context - "four" seconds for
+ * RELMED and "three" for Prolific - and the Prolific branch had drifted out of
+ * step with the actual deadline, which globalConfig sets to 4000ms. Deriving the
+ * number from the setting means the sentence cannot contradict the task again.
+ */
+function secondsWord(ms) {
+    const seconds = Math.round((ms ?? 4000) / 1000);
+    return ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'][seconds] ?? String(seconds);
+}
+
 /** How the participant selects a card, for use mid-sentence in instruction copy. */
 const chooseCardPhrase = touchCapable
     ? "tapping the card you want"
@@ -62,7 +75,7 @@ function preparePILTInstructions(settings) {
                 <p>Some cards are luckier than others. Your goal is to collect as much game money as possible${window.task == "screening" ? "" : " and avoid losing it"}.</p>
                 ${settings.session !== "screening" ? "<p>At the end of this session, you will be paid a bonus based on the sum of coins you collected.</p>" : ""}`,
             `<p>On each turn of this game, you will see two cards.
-                You have ${window.context === "relmed" ? "four" : "three"} seconds to flip one of the two cards.</p>
+                You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
                 <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
                 <div style='display: grid;'><table style='width: 200px; grid-column: 2;'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
