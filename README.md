@@ -1,56 +1,102 @@
 # RELMED Task Battery
 
 ## Overview
-This repository aims to provide easy to customize code for the RELMED task battery. This system provides a standardized interface for creating and combining experimental timelines, making it easy to build complete experiments from individual task components. The framework is built on top of jsPsych and follows a modular architecture that promotes code reusability and consistency across different experimental paradigms.
+This repository provides easy to customize code for the RELMED task battery. It offers a
+standardized interface for creating and combining experimental timelines, so complete
+experiments can be built from individual task components. It is built on jsPsych and
+follows a modular architecture that promotes reuse and consistency across paradigms.
+
+Tasks are increasingly touch-first: several now accept taps as well as keypresses, and
+declare a preferred device orientation. See [Input modality and devices](#input-modality-and-devices).
 
 ## Available Tasks
 
-The battery currently includes the following experimental tasks:
+Fifteen tasks are registered in `api/task-registry.js`. Registry keys are what
+`createTaskTimeline()` and the launcher take.
 
-### Learning & Decision Making Tasks Based on Card Choosing
-- **PILT** - Probabilistic Instrumental Learning Task: A card-choosing task measuring probabilistic learning with 2-choice decisions
-- **WM** - Working Memory Task: Anne Collins's RLWM task with 3-choice decisions and reward-only feedback
-- **Post Learning Test** - Extinction test phase for evaluating learning performance after card-choosing tasks
-- **Pavlovian Lottery** - Conditioning task creating associations between visual cues and monetary rewards
+### Card choosing (`tasks/card-choosing/`)
+- **`PILT`** — Probabilistic Instrumental Learning Task: two-card probabilistic learning
+- **`WM`** — Anne Collins's RLWM task: one card, three responses
+- **`post_PILT_test`** / **`post_WM_test`** — extinction test phases after each
 
-### Reward & Motivation Tasks Based on Repeated Key Pressing
-- **Max Press Test** - Tests maximum key press speed for calibrating effort-based tasks
-- **Vigour Task** - Measures instrumental action vigour as a function of reward rate
-- **PIT** - Pavlovian-Instrumental Transfer Task: Measures action vigour in extinction with Pavlovian cues
+### Piggy banks (`tasks/piggy-banks/`)
+- **`vigour`** — action vigour as a function of reward rate
+- **`PIT`** — Pavlovian-Instrumental Transfer: vigour in extinction under Pavlovian cues
+- **`vigour_test`** — knowledge test of the stimulus–reward contingencies
 
-### Control & Exploration Tasks
-- **Control Task** - Measures control-seeking, information-seeking, and reward-seeking behavior
+### Learning with faces (`tasks/go-no-go/`)
+- **`go_no_go`** — orthogonalised go/no-go: 2 (win / avoid loss) × 2 (go / no-go) ×
+  2 (positive / negative face affect). See `tasks/go-no-go/README.md`; **its face
+  images are not in this repository** and must be generated before use.
 
-### Miscellaneous Tasks
-- **Delay Discounting** - Measures preferences for smaller-sooner vs larger-later monetary rewards
-- **Open Text** - Collects open-ended text responses with customizable time limits and validation
+### Other
+- **`reversal`** — probabilistic reversal learning, two-squirrel cover story
+- **`control`** — control-, information- and reward-seeking
+- **`delay_discounting`** — smaller-sooner vs larger-later preferences
+- **`max_press_test`** — maximum key-press speed, calibrates the effort tasks
+- **`pavlovian_lottery`** — conditioning cue–reward associations
+- **`open_text`** — open-ended text responses
+- **`acceptability_judgment`** — post-task acceptability ratings
+
+Two modules in `api/module-registry.js` combine these into sittings:
+`full_battery` and `screening`.
+
+## Input modality and devices
+
+The battery is being moved from keyboard-only to touch. Tasks converted so far
+accept a tap **and** keep the keyboard path, deciding at runtime on
+`navigator.maxTouchPoints > 0`:
+
+| Task | Touch input |
+|---|---|
+| `vigour` | tap the piggy bank |
+| `reversal` | tap either squirrel |
+| `PILT`, `WM`, `post_*_test` | tap a card; WM taps one of three response buttons |
+| `go_no_go` | tap the face |
+
+Not yet converted, and keyboard-only: `PIT`, `control`, `max_press_test`,
+`pavlovian_lottery`, `vigour_test`. `delay_discounting`, `open_text` and
+`acceptability_judgment` were already button- or form-based and work on touch.
+
+Tasks may declare `preferredOrientation`. On a touch device held the wrong way a
+rotate overlay blocks the task until it is turned; desktop is exempt. The overlay
+markup lives in the entry HTML and is driven by
+`<body data-preferred-orientation>`, set per task by `api/utils.js`.
+
+Per-trial `pointer_type` is recorded wherever a task accepts both, so touch and
+keyboard sessions can be told apart in analysis.
 
 ## Repository Structure
 
 ```
-relmed_task_battery/
-├── README
-├── api/                          # Task registry and unified interface
+vireps_tasks/
+├── index.html                   # Launcher: participant id + task, redirects to experiment.html
+├── experiment.html              # Single-task entry used in the field
+├── api/                         # Task registry and unified interface
 │   ├── index.js                 # Main API entry point
-│   ├── task-registry.js         # Task definitions and configuration
-│   ├── module-registry.js       # Module definitions for multi-task experiments
+│   ├── task-registry.js         # Task definitions, defaults and config documentation
+│   ├── module-registry.js       # Module definitions for multi-task sittings
 │   ├── messages.js              # Instruction messages for modules
-│   └── utils.js                 # Core API utility functions
-├── tasks/                       # Individual task implementations
-│   ├── card-choosing/           # PILT and WM tasks
+│   └── utils.js                 # createTaskTimeline, CSS/sequence loading, orientation gate
+├── tasks/                       # One directory per task family
+│   ├── card-choosing/           # PILT, WM and their test phases
 │   ├── control/                 # Control task
-│   ├── delay-discounting/       # Delay discounting task
-│   ├── max-press-test/          # Max press speed test
-│   ├── open-text/               # Open text questions
-│   ├── pavlovian-lottery/       # Pavlovian conditioning
-│   └── piggy-banks/             # Vigour and PIT tasks
-├── core/                        # Shared utilities and jsPsych
-│   ├── utils/                   # Common utility functions
+│   ├── delay-discounting/
+│   ├── go-no-go/                # Faces go/no-go (see its own README)
+│   ├── max-press-test/
+│   ├── open-text/
+│   ├── pavlovian-lottery/
+│   ├── acceptability-judgment/  # Post-task acceptability ratings
+│   ├── piggy-banks/             # Vigour and PIT
+│   └── reversal/
+├── core/
+│   ├── utils/                   # Shared helpers: data handling, validation, quiz, setup
 │   └── jspsych/                 # jsPsych library and plugins
-├── assets/                      # Static resources
-│   ├── images/                  # Task images and stimuli
-│   └── sequences/               # Experimental sequences/parameters
-└── examples/                    # Working example HTML files
+├── assets/
+│   ├── images/                  # Task images
+│   └── sounds/                  # Task audio
+├── examples/                    # One runnable HTML page per task
+└── validation/playwright/       # Device-matrix rendering, journey and data-invariant tests
 ```
 
 ## How to Build an Experiment
@@ -305,18 +351,41 @@ const fullTimeline = [
 
 ## Testing
 
-Cross-device checks for the vigour and reversal tasks live under `validation/playwright/`, in two parts:
+Cross-device checks live under `validation/playwright/`, in three parts:
 
-- **Rendering matrix** (`*-rendering.spec.js`, `support/render-check.js`): runs each task (via `examples/vigour.html` / `examples/reversal.html`, driven by jsPsych's simulate mode) across all 21 device projects - common phones, tablets, and desktop browsers - asserting it actually renders (no console errors, no collapsed/overflowing layout, the orientation "please rotate" gate shows only where expected).
-- **Journey checks** (`*-journey.spec.js`, `support/journey-check.js`): drives a real (non-simulate) run - real clicks/taps/keypresses through the actual instructions flow - on a small curated subset of 5 devices, to deterministically capture the static instructions text and an in-task feedback/coin moment (checkpoints simulate mode can't reliably land on, since it auto-advances through everything).
+- **Rendering matrix** (`*-rendering.spec.js`, `support/render-check.js`): runs each
+  covered task from its `examples/` page under jsPsych's simulate mode across all 21
+  device projects — common phones, tablets and desktop browsers — asserting it renders
+  (no console errors, nothing collapsed or overflowing, the rotate gate showing only
+  where expected). Covers vigour, reversal, PILT, WM and go/no-go.
+- **Journey checks** (`*-journey.spec.js`, `support/journey-check.js`): a real,
+  non-simulate run — actual clicks, taps and keypresses through the instructions — on a
+  curated subset of 5 devices, reaching checkpoints simulate mode auto-advances past.
+  These are slow by design and carry their own longer timeout.
+- **Data invariants** (`data-*.spec.js`, plus `go-no-go-audio.spec.js`), on one
+  desktop project: properties that are engine- and viewport-independent, such as the
+  go/no-go stimulus manifest's balance guarantees, and that per-trial data columns are
+  not clobbered by entry-time device logging.
 
-Both save a screenshot per device/checkpoint to `validation/playwright/screenshots/`.
+Both of the first two save a screenshot per device/checkpoint to
+`validation/playwright/screenshots/`.
 
 ```bash
 npm install
 npx playwright install        # first time only, downloads browser binaries
-npm run test:e2e              # run everything (rendering matrix + journeys)
-npm run test:e2e:report       # browse the last run's HTML report (includes screenshots)
+npm run test:e2e              # everything
+npm run test:e2e:report       # last run's HTML report, including screenshots
 ```
 
-Run a subset with `npx playwright test --project="iPhone 14"` or `--project="iPhone 14 (journey)"` (see `playwright.config.js` for the full device list).
+Run a subset with `npx playwright test --project="iPhone 14"`,
+`--project="iPhone 14 (journey)"` or `--project="data invariants"` (see
+`playwright.config.js` for the device list).
+
+Two things worth knowing before trusting a red run:
+
+- The static server is `python3 -m http.server`. Under full parallelism it can be
+  starved, and the failure surfaces as an unrelated task timing out. If something fails
+  only in a full run, re-run it alone or with `--workers=4` before believing it.
+- The go/no-go rendering test passes `skip_instructions=1`, because its instructions and
+  practice take ~20 s to auto-advance under simulate. Its journey deliberately walks
+  them instead.

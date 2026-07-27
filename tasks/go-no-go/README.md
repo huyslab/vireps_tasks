@@ -4,12 +4,72 @@ Orthogonalised go/no-go learning task. Cues are emotional faces, so the design i
 2 (reward valence: win / avoid loss) × 2 (correct response: go / no-go) ×
 2 (face affect: positive / negative) = **8 cells**.
 
-Trial sequence only at this stage — the task itself is not built yet.
+Trial order follows Sam Zorowitz's RobotFactory; the affect factor, the touch
+interaction, the feedback presentation and the stimulus selection are ours.
+
+## Running it
+
+```
+examples/go-no-go.html?participant_id=<id>
+examples/go-no-go.html?participant_id=<id>&skip_instructions=1   # straight to trials
+```
+
+Also selectable from `index.html` (task: *Faces Go/No-Go*), which routes through
+`experiment.html`.
+
+**The face images are not in this repository** — see [Stimuli](#stimuli). Without
+running the selection script first, the task will fail to load its images.
+
+## The trial
+
+1. A face appears mid-screen at full size, **no onset animation**. RobotFactory
+   runs a 1500 ms scanner animation and only then opens its listener; here the
+   response window opens at cue onset, so RT is measured from onset.
+2. **1800 ms** to respond. A tap on the face (touch) or the spacebar (desktop) is
+   GO; letting the window elapse is NO-GO.
+3. The face **grows** on a go response (1.4×) and **shrinks** on a no-go (0.65×),
+   signalling approach vs withdrawal. This tracks the action taken, not whether
+   it was correct, so it fires on error trials too.
+4. Feedback, for **1600 ms**: the whole background tints green (correct) or red
+   (incorrect) at low alpha, a distinct sound plays, and a coin flies out of the
+   face to land low on the torso — £1 for +10, broken £1 for −10, 1p for +1,
+   broken 1p for −1.
+5. 400 ms blank ITI.
+
+Go trials end their response phase as soon as the response arrives, so trial
+length varies with RT, as in RobotFactory.
+
+Timings are registry defaults (`api/task-registry.js`) and can be overridden per
+task instance. Note that the registry value wins over the plugin's own default —
+they were out of step for a while and feedback ran at 1000 ms rather than the
+intended 1600 ms.
+
+### Why the feedback looks the way it does
+
+Each element earns its place, and several were added after testing on a tablet:
+
+- **Coin on the body, not below the face.** At arm's length the face fills much
+  of the screen; a coin underneath it fell outside foveal vision and forced a
+  choice between watching the face and reading the outcome.
+- **Positioned by its top edge**, below 0.94 of the face's displayed height on go
+  trials and 1.04 on no-go — computed from the face's *rendered* geometry, since
+  the scale transform has just changed it. Two values because the coin is about a
+  third of the face's height on a go trial but nearly half on a no-go, so equal
+  placement would cover far more of the smaller face.
+- **Coin scales by the square root of the face's scale.** At constant size its
+  size *relative to the cue* differed 2.2× between the two conditions the design
+  contrasts; scaling it fully with the face would instead shrink the outcome on
+  no-go trials, where it is the only thing to read. The square root halves the
+  gap to 1.5×.
+- **Sound** carries the outcome even if the coin is missed. Four synthesised
+  tones in `assets/sounds/go-no-go/`, ours, ~2 KB each.
+- **Transparent stimuli** are what make the tint work: a white rectangle behind
+  the face would leave feedback looking like a framed picture on a coloured wall.
 
 ## Sequence
 
 One sequence, `sequences/trial1.js`, used by **every session**. Sessions differ
-only in which faces are shown, so any change across sessions cannot be an
+only in which faces are shown, so a change measured across sessions cannot be an
 artefact of a different trial order.
 
 | | |
@@ -22,142 +82,93 @@ artefact of a different trial order.
 | Trials per 2×2 condition | 60 |
 | Feedback validity | 80% per cue |
 
-Trial order is Sam Zorowitz's RobotFactory runsheets (see
-`sequences/generate-sequence.mjs` for provenance and for everything added on top).
-Cues arrive in three overlapping waves so new learning always starts while
+Trial order comes from Zorowitz's runsheets (see
+`sequences/generate-sequence.mjs` for provenance and everything added on top).
+Cues arrive in three overlapping waves, so new learning always begins while
 earlier cues are still being learned.
 
-Both blocks run the same runsheet, so **condition labels are permuted in block 2**
-(`BLOCK2_CONDITION_MAP`). The trial order itself cannot be shuffled — the
-staggered introduction *is* the order, and shuffling scatters the wave structure
-the runsheets were chosen for. Relabelling is a permutation, so cue counts,
-waves, presentations per cue and per-cell totals are preserved exactly, while the
-condition a participant meets at any given trial position differs between blocks:
-17% trial-by-trial agreement on the 2×2 condition against ~25% chance, and no
-trial repeats its full cell. Without this the blocks would be near-identical and a
-strategy formed in block 1 could carry over.
-
-Inspect the sequence with:
+Both blocks run the same runsheet, so **condition labels are permuted in block 2**.
+The order itself cannot be shuffled — the staggered introduction *is* the order —
+but relabelling preserves every property while changing what the participant
+meets at each trial position: 17% agreement on the 2×2 condition against ~25%
+chance, and no trial repeats its full cell.
 
 ```
-node tasks/go-no-go/sequences/plot-sequence.mjs   # writes sequence-plot.txt
-node tasks/go-no-go/sequences/validate-sequence.mjs
+node tasks/go-no-go/sequences/generate-sequence.mjs   # regenerate
+node tasks/go-no-go/sequences/validate-sequence.mjs   # check design properties
+node tasks/go-no-go/sequences/plot-sequence.mjs       # character-grid view
 ```
 
-## Choosing the face stimuli
+## Stimuli
 
-The sequence deliberately carries only `affect` (`negative` / `positive`), never
-an image path. Everything below is about turning that into actual faces.
+**5 sessions × 24 faces = 120 CFD models, each used exactly once**, plus 4
+neutral practice faces per session from 20 further models used nowhere else.
 
-### What is needed
+Every session is exactly balanced: 2 ethnicities × 2 genders × 2 affects × 3
+models. Practice faces are one per gender × ethnicity cell — 2 female / 2 male,
+2 Black / 2 White — drawn preferentially from outside the both-expressions subset
+so models capable of carrying angry and happy are not spent on training.
 
-24 faces per session — 12 negative, 12 positive — with 12 used in each block.
-Over **2 sessions** that is **48 distinct identities**: a face reappearing in a
-later session carries learned value with it, which is exactly the contamination
-repeated sessions exist to avoid.
+Angry uses the `A` image, happy the closed-mouth `HC` image; open-mouth shows
+teeth, a high-contrast feature anger lacks, which would let "affect" partly track
+a low-level image difference. Within each cell, models are ranked by
+z(Threatening) − z(Trustworthy) and the top take angry, the bottom happy, with
+sessions filled serpentine so scores match across them (angry Threatening
+2.71–2.83; happy Trustworthy 3.72–3.81).
 
-### Stimulus set: CFD
-
-`sequences/CFD 3.0 Norming Data and Codebook.xlsx` is in this folder, but note
-what it is *not*: every row is one model rated on their **neutral** image, so the
-`Angry` and `Happy` columns are observers' impressions of a neutral face, not a
-record of who was photographed with those expressions. Expression availability
-lives only in the image directory. Check it with:
-
-```
-node tasks/go-no-go/sequences/check-cfd-stimuli.mjs <path-to-CFD-images>
-```
-
-Result for CFD 3.0 (main set, 597 models):
-
-| | F | M | total |
-|---|---|---|---|
-| Black | 47 | 35 | 82 |
-| White | 37 | 35 | 72 |
-
-**154 models have both an angry and a happy image** — and they are *only Black
-and White*. The CFD-MR (multiracial) and CFD-INDIA extension sets are
-neutral-only, so Asian and Latino models, which are well represented in the
-neutral set, drop out entirely once expressions are required.
-
-**Verdict: comfortably feasible.** Two sessions need 48 models, 12 per
-ethnicity × gender cell; the smallest available cell holds 35. The subset would
-in fact support up to 5 sessions at this balance.
-
-It also divides exactly: **24 cues = 2 ethnicities × 2 genders × 2 affects × 3
-models**, so every participant gets a perfect three-way balance in each session —
-which the 4-ethnicity version could not have delivered (24/16 = 1.5).
-
-The constraint to be aware of is generalisability, not power: any affect effect
-is established over Black and White faces only. That is a property of CFD, not of
-this design, and it should be stated in the write-up. If broader coverage
-matters more than CFD's norming, other sets carry expressions for more groups.
-
-Requiring **both** expressions per model, rather than splitting models into an
-angry pool and a happy pool, is what allows affect to be assigned to identities
-per participant — see step 6 below.
-
-### Selected stimuli
-
-Selection is done: **5 sessions x 24 faces = 120 CFD models, each used exactly
-once.** Regenerate with:
+Faces are bound to cues per participant, seeded by participant id: affect is
+fixed by selection, but which face fills which cue is shuffled so no identity
+sits in the same 2×2 condition for everyone.
 
 ```
-node tasks/go-no-go/sequences/select-cfd-stimuli.mjs \
-  --images "<path>/CFD Version 3.0/Images/CFD"
+node tasks/go-no-go/sequences/check-cfd-stimuli.mjs --images "<path>/Images/CFD"
+node tasks/go-no-go/sequences/select-cfd-stimuli.mjs --images "<path>/Images/CFD"
 ```
 
-Per session, per gender x ethnicity cell: 3 angry + 3 happy, so every session is
-exactly balanced 2 ethnicities x 2 genders x 2 affects x 3 models.
-
-Angry uses the `A` image, happy the closed-mouth `HC` image. Within each cell,
-models are ranked by z(Threatening) - z(Trustworthy) and the top take angry, the
-bottom happy. Because a model can hold only one role this is a joint assignment,
-not two independent top-N lists. Sessions are then filled serpentine down each
-ranked list so scores match across sessions:
-
-| session | angry: Threatening | happy: Trustworthy |
-|---|---|---|
-| 1 | 2.83 | 3.76 |
-| 2 | 2.73 | 3.81 |
-| 3 | 2.72 | 3.76 |
-| 4 | 2.81 | 3.72 |
-| 5 | 2.71 | 3.73 |
-
-Pooled separation: Threatening 2.76 (angry) vs 1.94 (happy); Trustworthy 3.17
-vs 3.76.
-
-**Read those ratings carefully.** CFD norms every model on their *neutral*
-image, so "high Threatening" means the person looks threatening at rest, not
-that their angry photo is especially fierce. Selecting this way stacks a
-threatening-looking face with an angry expression, which should amplify the
-manipulation - but the ratings are not of the images actually shown.
-
-This also means affect is now fixed to identity by design, so it can no longer
-be randomised per participant. Any idiosyncratic face effect sits inside the
-affect contrast for the whole sample. That is the deliberate trade: a stronger
-manipulation for a fixed face-to-affect mapping.
+The second stages 500 px transparent WebP into `assets/images/go-no-go/faces/`
+(2.6 MB) and writes `sequences/stimuli-manifest.json`. White backgrounds are
+keyed out with ffmpeg at similarity 0.10 — an empirical ceiling, since the models
+wear a light grey shirt (#b9bec2) that starts eroding at 0.16.
 
 ### Images are NOT in this repository
 
-The CFD terms forbid redistribution ("shall not be re-distributed to third
-parties") and publication ("shall not be published ... without written
-consent"), and **this repository is public**. Gitignored accordingly:
+CFD's terms forbid redistribution ("shall not be re-distributed to third
+parties") and publication, and **this repository is public**. Gitignored:
 
 - `tasks/go-no-go/sequences/CFD*.xlsx` — the norming workbook
 - `assets/images/go-no-go/faces/` — the staged images
 
-Committed instead is `sequences/stimuli-manifest.json`, which lists filenames,
-model ids and design roles but contains no image data. Any deployment must run
-`select-cfd-stimuli.mjs` against a local CFD copy to populate the images.
+Only `sequences/stimuli-manifest.json` is committed: filenames, model ids and
+design roles, no image data. **Any deployment must run `select-cfd-stimuli.mjs`
+against a local CFD copy.**
 
-The staged set is 120 images at 512px wide, 3.6 MB total, downscaled from CFD's
-2444x1718 originals (1.1 MB each, 354 MB for the full expression subset).
+Two caveats for the write-up: the expression subset covers **only Black and White
+models**, so any affect effect is established over those; and CFD norms each model
+on their *neutral* image, so "high Threatening" means the person looks
+threatening at rest, not that their angry photo is fierce.
 
-### Open decisions
+## Tests
 
-- **Task length.** 240 trials is roughly 14 minutes, on top of an already long
-  battery. Halving to one block would drop cells to 15 trials, which is thin.
-- **Go response.** RobotFactory uses the spacebar. Everything else in this
-  battery is now touch-first, so Go is presumably a tap — worth settling early,
-  since go/no-go RT is a primary measure and tap latency is not keypress latency.
+```
+npx playwright test go-no-go        # rendering + journey
+npx playwright test --project="data invariants"   # manifest + audio invariants
+```
+
+- `go-no-go-rendering.spec.js` — renders across the device matrix.
+- `go-no-go-journey.spec.js` — real taps through a go and a no-go trial, checking
+  the animation, coin placement, the square-root scaling and recorded data.
+- `data-gng-stimuli.spec.js` — manifest balance, and that no practice face is
+  ever reused as a cue.
+- `go-no-go-audio.spec.js` — that sounds replay on *every* trial. jsPsych caches
+  one AudioPlayer per file and a Web Audio source node can only be started once,
+  so this failed silently once already: nothing on screen changes when the audio
+  stops working.
+
+## Open decisions
+
+- **Length.** 240 trials is roughly 16 minutes including feedback and ITI, on top
+  of an already long battery.
+- **Coin legibility on no-go.** The square-root compromise leaves it at 83 px on
+  a tablet; the exponent is a single number to adjust.
+- **Session selection.** `stimulus_session` defaults to 1 and there is no UI for
+  it, so repeat visits need it passing explicitly or every session shows set 1.

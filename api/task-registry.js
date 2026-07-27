@@ -193,7 +193,7 @@ export const TaskRegistry = {
       include_instructions: true,
       response_window: 1800,
       resize_duration: 300,
-      feedback_duration: 1000,
+      feedback_duration: 1600,
       iti: 400,
       preferredOrientation: "landscape"
     },
@@ -220,7 +220,7 @@ export const TaskRegistry = {
       include_instructions: "Whether to run the Faces Game instructions, guided training, and short quiz before block 1. Default is true.",
       response_window: "Time in ms from cue onset to respond. Default is 1800. RobotFactory uses 1300 but opens its window 1500ms after onset; here the window opens immediately.",
       resize_duration: "Duration in ms of the grow (go) / shrink (no-go) animation. Default is 300.",
-      feedback_duration: "How long in ms the coin is shown. Default is 1000.",
+      feedback_duration: "How long in ms the coin and background tint are shown. Default is 1600.",
       iti: "Blank gap in ms after feedback. Default is 400.",
       preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). Default is 'landscape'."
     }
