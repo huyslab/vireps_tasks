@@ -16,3 +16,11 @@ test-results/
 /validation/playwright/screenshots/
 # Ignore vscode files
 launch.json
+
+# Chicago Face Database materials. The CFD terms of use forbid redistribution and
+# public posting ("shall not be re-distributed to third parties"; "shall not be
+# published ... without written consent"), and this repository is public. Keep
+# the norming workbook and the face images local; scripts read them from a path
+# you supply, and only the derived manifest of filenames is committed.
+tasks/go-no-go/sequences/CFD*.xlsx
+assets/images/go-no-go/faces/

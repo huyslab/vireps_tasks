@@ -52,27 +52,50 @@ an image path. Everything below is about turning that into actual faces.
 ### What is needed
 
 24 faces per session — 12 negative, 12 positive — with 12 used in each block.
-Across 5 sessions (wk0, wk2, wk4, wk24, wk28) that is **120 faces**, and they
-should be 120 *distinct identities*: a face reappearing in a later session
-carries learned value with it, which is exactly the contamination repeated
-sessions exist to avoid.
+Over **2 sessions** that is **48 distinct identities**: a face reappearing in a
+later session carries learned value with it, which is exactly the contamination
+repeated sessions exist to avoid.
 
-### Recommended set
+### Stimulus set: CFD
 
-**FACES** (Ebner, Riediger & Lindenberger, 2010) — 171 identities × 6
-expressions, free for research. 171 identities covers 120 with margin, which no
-other common set does: KDEF has 70, NimStim 43. The Chicago Face Database has far
-more identities but expression coverage for only a subset.
+`sequences/CFD 3.0 Norming Data and Codebook.xlsx` is in this folder, but note
+what it is *not*: every row is one model rated on their **neutral** image, so the
+`Angry` and `Happy` columns are observers' impressions of a neutral face, not a
+record of who was photographed with those expressions. Expression availability
+lives only in the image directory. Check it with:
 
-Two decisions to confirm before selection:
+```
+node tasks/go-no-go/sequences/check-cfd-stimuli.mjs <path-to-CFD-images>
+```
 
-1. **Which negative expression.** Recommend **anger** — it is the standard threat
-   counterpart to happiness and gives a clean approach/avoid contrast. Fear is
-   more ambiguous in valence attribution and its go/no-go effects are less
-   consistent. Sadness is lower arousal, which would confound affect with arousal.
-2. **Whether identities are disjoint across sessions.** Recommend yes. If the
-   sample is small enough that reuse is acceptable, reuse should at minimum
-   pair an identity with a *different* expression and a different cell.
+Result for CFD 3.0 (main set, 597 models):
+
+| | F | M | total |
+|---|---|---|---|
+| Black | 47 | 35 | 82 |
+| White | 37 | 35 | 72 |
+
+**154 models have both an angry and a happy image** — and they are *only Black
+and White*. The CFD-MR (multiracial) and CFD-INDIA extension sets are
+neutral-only, so Asian and Latino models, which are well represented in the
+neutral set, drop out entirely once expressions are required.
+
+**Verdict: comfortably feasible.** Two sessions need 48 models, 12 per
+ethnicity × gender cell; the smallest available cell holds 35. The subset would
+in fact support up to 5 sessions at this balance.
+
+It also divides exactly: **24 cues = 2 ethnicities × 2 genders × 2 affects × 3
+models**, so every participant gets a perfect three-way balance in each session —
+which the 4-ethnicity version could not have delivered (24/16 = 1.5).
+
+The constraint to be aware of is generalisability, not power: any affect effect
+is established over Black and White faces only. That is a property of CFD, not of
+this design, and it should be stated in the write-up. If broader coverage
+matters more than CFD's norming, other sets carry expressions for more groups.
+
+Requiring **both** expressions per model, rather than splitting models into an
+angry pool and a happy pool, is what allows affect to be assigned to identities
+per participant — see step 6 below.
 
 ### Selection procedure
 
@@ -84,11 +107,13 @@ Two decisions to confirm before selection:
    dimensions, matched mean luminance and RMS contrast. Cues must be
    discriminable from each other without differing in low-level salience by
    condition, or "affect" partly measures image energy.
-3. **Draw 120 identities**, gender balanced (60 female / 60 male).
-4. **Partition into 5 disjoint session pools of 24**, each 12 female / 12 male.
-5. **Within a pool, split 12 negative / 12 positive**, gender balanced within
-   each affect (6F / 6M). This is the point where affect gets locked to identity,
-   so it is where gender confounds would enter.
+3. **Draw 48 identities** from the both-expressions subset: 12 per
+   ethnicity × gender cell (Black F/M, White F/M).
+4. **Partition into 2 disjoint session pools of 24**, each 6 per
+   ethnicity × gender cell.
+5. **Do not fix affect to identity.** Every model in the subset has both
+   expressions, so which face appears angry and which happy is a per-participant
+   draw: 3 per ethnicity × gender × affect cell, exactly balanced.
 6. **Assign faces to cues at runtime, per participant.** The sequence fixes each
    cue's affect; the specific face filling that cue is drawn randomly from the
    matching affect pool, seeded by participant ID so it survives a resumed
