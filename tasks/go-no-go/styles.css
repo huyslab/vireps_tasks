@@ -19,6 +19,7 @@
    version) reserved far more vertical space than the grown face ever used and
    held the face smaller than it needed to be. */
 .gng-stimulus-slot {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,8 +39,12 @@
      stop at a hard horizontal line. Invisible on white; against the feedback
      tint it reads as a cut-out pasted on the screen. Fading the bottom edge
      lets the shoulders dissolve into the background instead. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 98%);
-  mask-image: linear-gradient(to bottom, #000 78%, transparent 98%);
+  /* Only the last few percent fade. CFD frames end at the upper chest, so the
+     shoulders are a thin band at the bottom - fading it earlier left nothing
+     solid for the coin to sit on, while fading none of it reinstates the hard
+     horizontal cut that looks like a cut-out against the feedback tint. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 94%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 94%, transparent 100%);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
@@ -48,21 +53,27 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Reserved space for the coin, so its appearance does not shift the face. */
-.gng-coin-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: min(14vw, 14vh);
-  height: min(14vw, 14dvh);
-}
+/* The coin lands ON the chest of the face rather than in a row beneath it: at
+   arm's length the face fills much of the screen, and a coin below it sat
+   outside foveal vision, forcing a choice between watching the face and reading
+   the outcome. Position is fixed and set in JS from the face's rendered
+   geometry, because the face has just been scaled by a transform and its layout
+   box no longer says where it actually is.
 
+   Larger than before, too - it has to read at a glance against a photograph
+   rather than against empty background. */
 .gng-coin {
-  width: min(12vw, 12vh);
-  width: min(12vw, 12dvh);
+  position: fixed;
+  z-index: 2;
+  width: min(18vw, 18vh);
+  width: min(18vw, 18dvh);
   height: auto;
-  max-width: 140px;
+  max-width: 170px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
   visibility: hidden;
+  /* Lifts the coin off the photograph underneath it. */
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
 }
 
 .gng-coin-visible {
@@ -87,15 +98,9 @@
     width: min(70vw, 60dvh);
   }
 
-  /* The face is now most of the short axis, so the coin row gives up some
-     height to keep the grown state clear of it. */
-  .gng-wrapper {
-    gap: 1vh;
-  }
-
-  .gng-coin-slot {
-    height: min(12vw, 12vh);
-    height: min(12vw, 12dvh);
+  .gng-coin {
+    width: min(18vw, 16vh);
+    width: min(18vw, 16dvh);
   }
 }
 

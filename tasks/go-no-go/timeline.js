@@ -19,6 +19,13 @@ import { prepareGoNoGoInstructions } from './instructions.js';
 const FACES_PATH = './assets/images/go-no-go/faces/';
 const MANIFEST_PATH = './tasks/go-no-go/sequences/stimuli-manifest.json';
 
+const OUTCOME_SOUNDS = {
+  10: './assets/sounds/go-no-go/win_large.mp3',
+  1: './assets/sounds/go-no-go/win_small.mp3',
+  '-1': './assets/sounds/go-no-go/loss_small.mp3',
+  '-10': './assets/sounds/go-no-go/loss_large.mp3',
+};
+
 const COIN_IMAGES = {
   10: './assets/images/card-choosing/outcomes/1pound.png',
   1: './assets/images/card-choosing/outcomes/1penny.png',
@@ -128,7 +135,8 @@ export async function createGoNoGoTimeline(settings) {
   const timeline = [
     createPreloadTrial(
       [...faceFiles, ...practiceFiles, ...Object.values(COIN_IMAGES)],
-      'go_no_go'
+      'go_no_go',
+      Object.values(OUTCOME_SOUNDS)
     ),
   ];
 
@@ -175,6 +183,7 @@ export async function createGoNoGoTimeline(settings) {
           feedback_duration: settings.feedback_duration,
           iti: settings.iti,
           coin_images: COIN_IMAGES,
+          outcome_sounds: OUTCOME_SOUNDS,
           data: {
             trialphase: 'go_no_go',
             block: blockNumber,

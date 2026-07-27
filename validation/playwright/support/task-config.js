@@ -51,6 +51,9 @@ export const TASKS = {
     // The face is the whole stimulus and is present for the entire response
     // window, so no disambiguating qualifier is needed here.
     readySelector: '#gng-stimulus',
+    // Rendering only: skip the instructions, which auto-advance slowly under
+    // simulate. The journey deliberately walks them.
+    renderQuery: 'skip_instructions=1',
   },
   reversal: {
     url: '/examples/reversal.html',

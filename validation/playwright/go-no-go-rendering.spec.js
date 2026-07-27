@@ -14,7 +14,6 @@ defineTaskRenderingTest('go_no_go', {
     expect(box.width * 1.4, 'grown face should still fit horizontally').toBeLessThanOrEqual(viewport.width);
     expect(box.height * 1.4, 'grown face should still fit vertically').toBeLessThanOrEqual(viewport.height);
 
-    // The coin slot is reserved up front so feedback does not shift the face.
-    expect(await page.locator('#gng-coin').count(), 'coin element should be reserved').toBe(1);
+    expect(await page.locator('#gng-coin').count(), 'coin element should exist').toBe(1);
   },
 });

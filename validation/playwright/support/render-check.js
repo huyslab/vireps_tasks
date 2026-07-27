@@ -26,7 +26,10 @@ export function defineTaskRenderingTest(taskKey, taskConfig) {
 
     await patchWebkitTouchPoints(page);
 
-    await page.goto(`${taskConfig.url}?participant_id=${participantId}`);
+    // Some tasks need a flag to be checkable in reasonable time - go/no-go skips
+    // its instructions, which take ~20s to auto-advance in simulate mode.
+    const extra = taskConfig.renderQuery ? `&${taskConfig.renderQuery}` : '';
+    await page.goto(`${taskConfig.url}?participant_id=${participantId}${extra}`);
 
     const { width, height, maxTouchPoints } = await page.evaluate(() => ({
       width: window.innerWidth,

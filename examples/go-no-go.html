@@ -187,7 +187,14 @@
                 console.log('Task info:', taskInfo);
                 
                 // Create the task timeline with default settings
-                const timeline = await createTaskTimeline('go_no_go', { stimulus_session: 1 });
+                // ?skip_instructions=1 jumps straight to trials. The rendering matrix uses it
+                // (sitting through instructions in simulate mode takes ~20s and swamps the
+                // test budget), and it is handy for eyeballing the task on a device.
+                const skipInstructions = new URLSearchParams(window.location.search).has('skip_instructions');
+                const timeline = await createTaskTimeline('go_no_go', {
+                    stimulus_session: 1,
+                    include_instructions: !skipInstructions,
+                });
                 console.log('Timeline created:', timeline);
                 
                 const exitFullscreen = {

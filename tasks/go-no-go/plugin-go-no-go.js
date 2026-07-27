@@ -13,8 +13,16 @@
  *      This runs on both correct and incorrect trials - it reflects the action
  *      taken, not whether it was right.
  *   4. The whole background tints - green for a correct response, red for an
- *      incorrect one - fading in gently, and a coin appears below the face:
- *      £1 for +10, broken £1 for -10, 1p for +1, broken 1p for -1.
+ *      incorrect one - fading in gently; a distinct sound plays; and a coin
+ *      flies out of the face to land on the chest: £1 for +10, broken £1 for
+ *      -10, 1p for +1, broken 1p for -1.
+ *
+ * The coin sits ON the chest rather than below the face because the face is most
+ * of the screen at arm's length, and a coin underneath it fell outside foveal
+ * vision - participants had to choose between watching the face and watching the
+ * outcome. Placing it on the chest (not the lower face, which would cover the
+ * expression) removes the saccade, the fly-out motion draws the eye to it, and
+ * the sound carries the outcome even if the coin is missed entirely.
  *
  * The tint is why the face stimuli are transparent PNGs rather than CFD's
  * white-background JPEGs: a white rectangle behind the face would block the
@@ -57,6 +65,23 @@ var jsPsychGoNoGo = (function (jspsych) {
       /** Scale factors for the approach / withdrawal animations */
       grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
       shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },
+      /** Where the coin lands, as a fraction of the face's displayed height.
+       *  CFD frames end at the upper chest, so the shoulders occupy only the
+       *  bottom tenth or so of the image: 0.84 still lands on the chin. 0.95
+       *  puts the coin on the shirt, straddling the lower edge. */
+      coin_chest_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.95 },
+      /** Duration of the coin's fly-out from the face */
+      coin_fly_duration: { type: jspsych.ParameterType.INT, default: 350 },
+      /** Sound per outcome value; set to null to run silently */
+      outcome_sounds: {
+        type: jspsych.ParameterType.OBJECT,
+        default: {
+          10: './assets/sounds/go-no-go/win_large.mp3',
+          1: './assets/sounds/go-no-go/win_small.mp3',
+          '-1': './assets/sounds/go-no-go/loss_small.mp3',
+          '-10': './assets/sounds/go-no-go/loss_large.mp3',
+        },
+      },
       /** Coin image per outcome value */
       coin_images: {
         type: jspsych.ParameterType.OBJECT,
@@ -114,8 +139,6 @@ var jsPsychGoNoGo = (function (jspsych) {
         <div class="gng-wrapper">
           <div class="gng-stimulus-slot">
             <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
-          </div>
-          <div class="gng-coin-slot">
             <img id="gng-coin" class="gng-coin" alt="">
           </div>
         </div>`;
@@ -132,6 +155,20 @@ var jsPsychGoNoGo = (function (jspsych) {
       let resizeHandler = null;
       let keyboardListener = null;
       let superListener = null;
+
+      // Both possible outcomes are prefetched now so the sound is ready the
+      // instant feedback starts; the files are already preloaded, so this only
+      // resolves the player.
+      const audioPlayers = {};
+      if (trial.outcome_sounds && !simulating) {
+        for (const value of [trial.outcome_correct, trial.outcome_incorrect]) {
+          const src = trial.outcome_sounds[String(value)];
+          if (!src || audioPlayers[value]) continue;
+          audioPlayers[value] = this.jsPsych.pluginAPI
+            .getAudioPlayer(src)
+            .catch(() => null); // a missing sound must never block the trial
+        }
+      }
 
       const suppressContextMenu = (e) => e.preventDefault();
 
@@ -203,12 +240,44 @@ var jsPsychGoNoGo = (function (jspsych) {
         );
 
         animation.finished.then(() => {
-          // Tint the whole background by correctness, and show the coin. The
-          // tint fades via a CSS transition rather than an animation so it eases
-          // in gently instead of snapping on.
+          // Tint the whole background by correctness. The tint fades via a CSS
+          // transition rather than an animation so it eases in gently.
           tint.classList.add(correct ? 'gng-tint-correct' : 'gng-tint-incorrect');
+
+          // Outcome sound. Independent of the coin, so the outcome still lands
+          // even if the participant happens to be looking away.
+          const player = audioPlayers[outcome];
+          if (player) player.then((p) => p && p.play());
+
+          // Place the coin on the chest of the face AS CURRENTLY DISPLAYED. The
+          // face has just been scaled by a transform, so its rendered geometry -
+          // not its layout box - is what the coin has to track; getBoundingClientRect
+          // reflects the transform, so one read covers both the grown and shrunk
+          // states without needing to know which happened.
+          const faceRect = stimulus.getBoundingClientRect();
+          const chestY = faceRect.top + faceRect.height * trial.coin_chest_fraction;
+          const centreY = faceRect.top + faceRect.height / 2;
+          coin.style.left = `${faceRect.left + faceRect.width / 2}px`;
+          coin.style.top = `${chestY}px`;
+
           coin.src = trial.coin_images[String(outcome)] || trial.coin_images[outcome];
           coin.classList.add('gng-coin-visible');
+
+          // Fly the coin out of the face: it starts small and centred on the
+          // face, then drops to the chest at full size. Transform-only, so it
+          // stays on the compositor.
+          const dy = chestY - centreY;
+          coin.animate(
+            [
+              { transform: `translate(-50%, -50%) translateY(${-dy}px) scale(0.3)`, opacity: 0 },
+              { transform: 'translate(-50%, -50%) translateY(0) scale(1)', opacity: 1 },
+            ],
+            {
+              duration: simulating ? 20 : trial.coin_fly_duration,
+              easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)',
+              fill: 'forwards',
+            }
+          );
 
           this.jsPsych.pluginAPI.setTimeout(() => {
             // Fade the tint back out before the blank gap, so the ITI is neutral

@@ -141,10 +141,11 @@ async function loadCSS(cssPath) {
  * @param {string} task_name - Name of the task for trial identification
  * @returns {Object} jsPsych preload trial configuration object
  */
-function createPreloadTrial(images, task_name) {
+function createPreloadTrial(images, task_name, audio = []) {
     return {
         type: jsPsychPreload,
         images: images,
+        audio: audio,
         post_trial_gap: 800,
         data: {
             trialphase: `${task_name}_preload`,

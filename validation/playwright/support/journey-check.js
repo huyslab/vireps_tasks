@@ -250,12 +250,17 @@ async function piltJourney(page, testInfo, hasTouch) {
     }
     const button = page.locator('.jspsych-btn').first();
     if (await button.isVisible().catch(() => false)) {
-      await button.click();
+      await button.click({ timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(80);
       continue;
     }
     if (await page.locator('#cardChoosingOptionBox').isVisible().catch(() => false)) {
-      if (hasTouch) await page.locator('#left').tap();
+      // Short timeout and swallow failures: card trials carry a response
+      // deadline, so under load the trial can advance and tear down the card
+      // while the tap is still resolving actionability. With the default
+      // timeout that kills the whole test; here the loop simply re-reads what
+      // is on screen and carries on.
+      if (hasTouch) await page.locator('#left').tap({ timeout: 3000 }).catch(() => {});
       else await page.keyboard.press('ArrowLeft');
       await page.waitForTimeout(150);
       continue;
@@ -338,6 +343,26 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   await page.waitForTimeout(200);
   const afterGo = (await face.boundingBox().catch(() => ({ width: 0 }))).width;
   expect(afterGo, 'face should grow on a go response').toBeGreaterThan(beforeGo);
+
+  // The coin lands ON the chest of the face rather than in a row beneath it, so
+  // both are readable without a saccade. Assert it against the face's RENDERED
+  // geometry, which the scale transform has just changed.
+  //
+  // Wait for it to settle first: the coin only appears once the resize finishes
+  // and then flies down from the face's centre, so measuring too early catches
+  // it in mid-flight, well above its resting position.
+  await expect(page.locator('#gng-coin'), 'coin should appear as feedback').toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(600);
+
+  const faceBox = await face.boundingBox();
+  const coinBox = await page.locator('#gng-coin').boundingBox();
+  const heightFraction = (coinBox.y + coinBox.height / 2 - faceBox.y) / faceBox.height;
+  expect(heightFraction, 'coin should sit low on the torso, not over the face').toBeGreaterThan(0.85);
+  expect(
+    Math.abs(coinBox.x + coinBox.width / 2 - (faceBox.x + faceBox.width / 2)),
+    'coin should be horizontally centred on the face'
+  ).toBeLessThan(6);
+
   await captureShot(page, testInfo, 'go_no_go', 'feedback');
 
   // The first trials may come from training or the main task depending on the
