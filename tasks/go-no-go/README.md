@@ -27,6 +27,16 @@ Trial order is Sam Zorowitz's RobotFactory runsheets (see
 Cues arrive in three overlapping waves so new learning always starts while
 earlier cues are still being learned.
 
+Both blocks run the same runsheet, so **condition labels are permuted in block 2**
+(`BLOCK2_CONDITION_MAP`). The trial order itself cannot be shuffled — the
+staggered introduction *is* the order, and shuffling scatters the wave structure
+the runsheets were chosen for. Relabelling is a permutation, so cue counts,
+waves, presentations per cue and per-cell totals are preserved exactly, while the
+condition a participant meets at any given trial position differs between blocks:
+17% trial-by-trial agreement on the 2×2 condition against ~25% chance, and no
+trial repeats its full cell. Without this the blocks would be near-identical and a
+strategy formed in block 1 could carry over.
+
 Inspect the sequence with:
 
 ```

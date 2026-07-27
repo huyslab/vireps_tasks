@@ -182,6 +182,34 @@ function validateSession(file) {
     `session: every cell within 26-34 trials (min ${Math.min(...counts)}, max ${Math.max(...counts)}, target 30)`
   );
 
+  // Both blocks run the same runsheet, so the condition labels are permuted in
+  // block 2 to stop them presenting the same condition at the same trial
+  // position (see BLOCK2_CONDITION_MAP). Guard that the permutation is actually
+  // applied - without it the blocks are near-identical and a participant could
+  // carry a strategy across. Chance agreement for the 2x2 condition is ~25%.
+  const [block1, block2] = blocks;
+  const conditionAgreement =
+    block1.filter(
+      (t, i) => `${t.valence}|${t.correct_response}` === `${block2[i].valence}|${block2[i].correct_response}`
+    ).length / block1.length;
+  check(
+    conditionAgreement < 0.4,
+    `session: blocks present different conditions per trial (${(conditionAgreement * 100).toFixed(0)}% agreement, chance ~25%)`
+  );
+
+  // The staggered introduction must survive that permutation in both blocks.
+  blocks.forEach((block, bi) => {
+    const first = {};
+    block.forEach((t, i) => {
+      if (first[t.cue] === undefined) first[t.cue] = i + 1;
+    });
+    const intro = Object.values(first).sort((a, b) => a - b);
+    check(
+      intro[3] <= 8 && intro[4] >= 25 && intro[8] >= 60,
+      `session: block ${bi + 1} keeps 3 staggered waves (first four by trial ${intro[3]}, wave 2 from ${intro[4]}, wave 3 from ${intro[8]})`
+    );
+  });
+
   // Collapsing affect, each of the 4 core conditions should hold ~60 trials.
   const perCondition = {};
   trials.forEach((t) => {

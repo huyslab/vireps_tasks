@@ -97,6 +97,22 @@ const RUNSHEET_WAVE_BALANCE = { s13: 12, s00: 10, s03: 10, s14: 10, s19: 9, s28:
 // cleaner reliability estimate than two structurally different halves.
 const SEQUENCE = { sheets: ['s13', 's13'], seed: 20260727 };
 
+// Both blocks run the same runsheet, so without this they would present the same
+// condition in the same trial position throughout - and a participant who worked
+// out in block 1 that the first cue is a go-to-win could carry that across.
+//
+// Relabelling which condition each runsheet type maps to fixes that without
+// touching the ordering: it is a permutation of labels, so cue counts, the
+// staggered waves, the 8-12 presentations and the per-cell totals are all
+// preserved exactly, while the valence and response the participant meets at any
+// given trial differ between blocks. Trial ORDER cannot itself be shuffled - the
+// staggered introduction IS the order, and shuffling scatters it.
+//
+// The permutation swaps both factors (win<->avoid loss, go<->no-go) so no
+// condition keeps its position.
+const BLOCK1_CONDITION_MAP = [0, 1, 2, 3];
+const BLOCK2_CONDITION_MAP = [3, 2, 1, 0];
+
 const CONDITIONS = [
   { valence: 'win', correct_response: 'go' },
   { valence: 'win', correct_response: 'nogo' },
@@ -152,8 +168,8 @@ function loadRunsheets() {
  * Describes one runsheet: which condition each cue belongs to, which wave it is
  * introduced in, and how many times it appears.
  */
-function describeSheet(sheet) {
-  const robots = sheet.robots.flat();
+function describeSheet(sheet, conditionMap = [0, 1, 2, 3]) {
+  const robots = sheet.robots.flat().map((t) => conditionMap[t]);
   const stimuli = sheet.stimuli.flat();
 
   const condition = {};
@@ -309,8 +325,8 @@ function assignAffects(describe, heavyAffect) {
   return best.affectOfCue;
 }
 
-function buildBlock(sheet, blockNumber, heavyAffect, rng) {
-  const describe = describeSheet(sheet);
+function buildBlock(sheet, blockNumber, heavyAffect, conditionMap, rng) {
+  const describe = describeSheet(sheet, conditionMap);
   const { condition, wave, nPresentations } = describe;
 
   const affectOfCue = assignAffects(describe, heavyAffect);
@@ -343,7 +359,7 @@ function buildBlock(sheet, blockNumber, heavyAffect, rng) {
 
   return order.map(({ quartet, slot }, trialIndex) => {
     const cue = sheet.stimuli[quartet][slot];
-    const cond = sheet.robots[quartet][slot];
+    const cond = conditionMap[sheet.robots[quartet][slot]];
     const { valence, correct_response } = CONDITIONS[cond];
     const sham = shamTrials.has(trialIndex) ? 1 : 0;
     const outcome = OUTCOMES[valence];
@@ -393,7 +409,13 @@ function generate() {
     if (score !== RUNSHEET_WAVE_BALANCE[name]) {
       throw new Error(`wave balance for ${name} is ${score}, but RUNSHEET_WAVE_BALANCE says ${RUNSHEET_WAVE_BALANCE[name]}`);
     }
-    return buildBlock(sheet, i + 1, i === 0 ? heavyBlock1 : heavyBlock2, rng);
+    return buildBlock(
+      sheet,
+      i + 1,
+      i === 0 ? heavyBlock1 : heavyBlock2,
+      i === 0 ? BLOCK1_CONDITION_MAP : BLOCK2_CONDITION_MAP,
+      rng
+    );
   });
 
   const header =
