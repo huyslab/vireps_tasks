@@ -37,6 +37,7 @@
     <script src="tasks/control/plugins/plugin-reward-ship.js"></script>
     <script src="tasks/control/plugins/plugin-reward-prompt.js"></script>
     <script src="tasks/reversal/plugin-reversal.js"></script>
+    <script src="tasks/go-no-go/plugin-go-no-go.js"></script>
     <script src="tasks/open-text/plugin-open-text.js"></script>
 
     
@@ -195,8 +196,9 @@
         window.simulating = window.participantID.includes("simulate") || false;
         window.context = new URLSearchParams(window.location.search).get('context') || '';
 
-        // Which task to run. Vigour and reversal don't vary by session, so there's no
-        // session/sequence selection here - each task just uses its registry default.
+        // Which task to run. No session/sequence selection here - each task uses its
+        // registry default. That is exact for vigour, reversal and go/no-go, which do not
+        // vary by session; PILT does have per-session sequences and will use wk0.
         const taskName = new URLSearchParams(window.location.search).get('task') || '';
         window.module = taskName;
 

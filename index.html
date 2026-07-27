@@ -129,20 +129,13 @@
             </div>
             
             <div class="form-group">
-                <label for="context">Context:</label>
-                <select id="context" name="context" required>
-                    <option value="">Select context</option>
-                    <option value="relmed">RELMED</option>
-                    <option value="prolific">Prolific</option>
-                </select>
-            </div>
-
-            <div class="form-group">
                 <label for="task">Task:</label>
                 <select id="task" name="task" required>
                     <option value="">Select task</option>
                     <option value="vigour">Vigour</option>
                     <option value="reversal">Reversal</option>
+                    <option value="PILT">PILT (card choosing)</option>
+                    <option value="go_no_go">Faces Go/No-Go</option>
                 </select>
             </div>
 
@@ -157,11 +150,12 @@
     </div>
 
     <script>
+        const CONTEXT = 'prolific';
+
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
             const participantId = document.getElementById('participantId').value.trim();
-            const context = document.getElementById('context').value;
             const task = document.getElementById('task').value;
             const errorMessage = document.getElementById('errorMessage');
 
@@ -182,13 +176,6 @@
                 return;
             }
 
-            // Validate context selection
-            if (!context) {
-                errorMessage.textContent = 'Please select a context';
-                errorMessage.style.display = 'block';
-                return;
-            }
-
             // Validate task selection
             if (!task) {
                 errorMessage.textContent = 'Please select a task';
@@ -196,22 +183,17 @@
                 return;
             }
 
-            // Redirect to experiment.html with participant_id, context, and task parameters
-            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&context=${encodeURIComponent(context)}&task=${encodeURIComponent(task)}`;
+            // Redirect to experiment.html. Context is fixed to prolific: it selects the
+            // data-submission path in core/utils/data-handling.js (the relmed path posts to
+            // a parent window that only exists when embedded in the RELMED app), so it is a
+            // deployment property rather than something an experimenter should pick per run.
+            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&context=${encodeURIComponent(CONTEXT)}&task=${encodeURIComponent(task)}`;
         });
 
         // Enable real-time validation
         document.getElementById('participantId').addEventListener('input', function() {
             const errorMessage = document.getElementById('errorMessage');
             if (this.value.trim()) {
-                errorMessage.style.display = 'none';
-            }
-        });
-
-        // Hide error message when context is selected
-        document.getElementById('context').addEventListener('change', function() {
-            const errorMessage = document.getElementById('errorMessage');
-            if (this.value) {
                 errorMessage.style.display = 'none';
             }
         });
