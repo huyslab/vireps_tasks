@@ -66,13 +66,18 @@ var jsPsychGoNoGo = (function (jspsych) {
       grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
       shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },
       /** How far down the face the coin's TOP EDGE may reach, as a fraction of
-       *  the face's displayed height. The coin is placed below this line rather
-       *  than at a fixed centre point, so the mouth stays visible whatever the
-       *  face and coin happen to be scaled to. Positioning by centre instead let
-       *  the coin ride up over the mouth on no-go trials, where the face shrinks
-       *  to 0.65x but the coin only to sqrt(0.65). Mouths sit around 0.72-0.75
-       *  in CFD framing, so 0.80 leaves a margin. */
-      coin_clear_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.8 },
+       *  the face's displayed height. The coin hangs below this line rather than
+       *  being centred on a fixed point, so the amount of face it covers does
+       *  not change with scale - positioning by centre let it ride up over the
+       *  mouth on no-go trials, where the face shrinks to 0.65x but the coin
+       *  only to sqrt(0.65).
+       *
+       *  Set separately per response, because the coin occupies a much larger
+       *  share of the smaller no-go face (about 48% of its height, against 33%
+       *  on a go) and so has to sit lower to cover no more of it. */
+      coin_clear_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.88 },
+      /** As coin_clear_fraction, for trials where no response was made. */
+      coin_clear_fraction_nogo: { type: jspsych.ParameterType.FLOAT, default: 0.98 },
       /** Duration of the coin's fly-out from the face */
       coin_fly_duration: { type: jspsych.ParameterType.INT, default: 350 },
       /** Sound per outcome value; set to null to run silently */
@@ -298,7 +303,9 @@ var jsPsychGoNoGo = (function (jspsych) {
           // measure the element and account for that scale here.
           const coinScale = Math.sqrt(scale);
           const coinHeight = coin.getBoundingClientRect().height * coinScale;
-          const chestY = faceRect.top + faceRect.height * trial.coin_clear_fraction + coinHeight / 2;
+          const clearFraction =
+            action === 'go' ? trial.coin_clear_fraction : trial.coin_clear_fraction_nogo;
+          const chestY = faceRect.top + faceRect.height * clearFraction + coinHeight / 2;
           coin.style.left = `${faceRect.left + faceRect.width / 2}px`;
           coin.style.top = `${chestY}px`;
 
