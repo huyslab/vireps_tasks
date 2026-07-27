@@ -361,7 +361,7 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
   // face it covers. Mouths sit around 0.72-0.75 of the frame in CFD framing, so
   // the coin hanging below 0.85 leaves the whole face clear.
   const goTopFraction = (coinBox.y - faceBox.y) / faceBox.height;
-  expect(goTopFraction, 'coin should hang low on the torso on a go trial').toBeGreaterThan(0.85);
+  expect(goTopFraction, 'coin should hang low on the torso on a go trial').toBeGreaterThan(0.90);
   expect(
     Math.abs(coinBox.x + coinBox.width / 2 - (faceBox.x + faceBox.width / 2)),
     'coin should be horizontally centred on the face'
@@ -397,7 +397,7 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
     // sqrt(0.65), so a coin positioned by its centre rode up over the mouth.
     // Positioning by the top edge keeps this true at any scale.
     const nogoTopFraction = (nogoCoin.y - nogoFace.y) / nogoFace.height;
-    expect(nogoTopFraction, 'coin should hang lower still on a no-go trial').toBeGreaterThan(0.93);
+    expect(nogoTopFraction, 'coin should hang lower still on a no-go trial').toBeGreaterThan(1.0);
     // The no-go coin sits LOWER than the go coin, deliberately: the face shrinks
     // to 0.65x there while the coin only shrinks to sqrt(0.65), so at equal
     // placement it would cover far more of a smaller face.

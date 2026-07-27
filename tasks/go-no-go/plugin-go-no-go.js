@@ -75,9 +75,9 @@ var jsPsychGoNoGo = (function (jspsych) {
        *  Set separately per response, because the coin occupies a much larger
        *  share of the smaller no-go face (about 48% of its height, against 33%
        *  on a go) and so has to sit lower to cover no more of it. */
-      coin_clear_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.88 },
+      coin_clear_fraction: { type: jspsych.ParameterType.FLOAT, default: 0.94 },
       /** As coin_clear_fraction, for trials where no response was made. */
-      coin_clear_fraction_nogo: { type: jspsych.ParameterType.FLOAT, default: 0.98 },
+      coin_clear_fraction_nogo: { type: jspsych.ParameterType.FLOAT, default: 1.04 },
       /** Duration of the coin's fly-out from the face */
       coin_fly_duration: { type: jspsych.ParameterType.INT, default: 350 },
       /** Sound per outcome value; set to null to run silently */
