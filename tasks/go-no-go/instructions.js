@@ -19,16 +19,28 @@ const TRAINING_MAX_TOTAL = 60;
 /**
  * Final practice: all four faces interleaved, in blocks of 8 (2 appearances each).
  *
- * The order is fixed rather than shuffled per participant, so everyone meets the
- * same sequence - one less thing varying between people during training. It is
- * arranged so no face repeats back to back, which would otherwise let someone
- * answer the second appearance without looking.
+ * One fixed order per block, so every participant meets the same sequence, but a
+ * different one each time a block repeats. Each was generated under three
+ * constraints, all of which matter for what a participant can anticipate:
+ *   - no face repeats back to back, which would let the second appearance be
+ *     answered without looking;
+ *   - the second half of a block is not a repeat of the first, so finishing a
+ *     block is not a matter of replaying its opening;
+ *   - no ABAB run, which is the same problem locally.
+ * The first draft failed the middle two - one block was a 4-cycle repeated
+ * verbatim, another alternated in pairs - which is why they are checked rather
+ * than assumed.
  *
- * A repeated block reuses this same order. That is a deliberate simplification:
- * most participants will not need a second block, and the alternative (cycling
- * several fixed orders) adds machinery for a case that should be rare.
+ * There are exactly as many orders as FINAL_PRACTICE_MAX_BLOCKS, so no
+ * participant ever sees the same order twice.
  */
-const FINAL_PRACTICE_ORDER = [2, 0, 3, 1, 0, 2, 1, 3];
+const FINAL_PRACTICE_ORDERS = [
+  [0, 3, 2, 3, 1, 2, 0, 1],
+  [2, 0, 3, 1, 0, 2, 1, 3],
+  [1, 0, 2, 1, 3, 0, 2, 3],
+  [0, 2, 1, 0, 2, 3, 1, 3],
+];
+const FINAL_PRACTICE_BLOCK_LENGTH = 8;
 /** Correct responses required PER FACE, counted across the whole final practice. */
 const FINAL_PRACTICE_CORRECT_PER_ITEM = 2;
 /** Safety cap, so a participant who cannot reach criterion is not stuck here. */
@@ -86,53 +98,71 @@ function passedFinalPractice(stageIds) {
 }
 
 /**
- * One block of the final practice: the four faces twice each, in FINAL_PRACTICE_ORDER.
+ * The final practice: four faces interleaved, repeating in blocks until every face
+ * has been answered correctly FINAL_PRACTICE_CORRECT_PER_ITEM times.
  *
- * Built as eight explicit trials rather than timeline_variables because the order
- * is fixed anyway, and because each trial then carries its own simulation_options -
- * the correct response differs per face, so a single shared one would be wrong.
+ * Uses timeline_variables with a custom sample rather than eight hard-coded
+ * trials, because the order now differs per block: jsPsych calls sample.fn once
+ * per loop iteration, so it can hand back that block's order.
+ *
+ * Simulated answers come from the plugin's simulate_correct parameter, not from
+ * simulation_options: jsPsych does not resolve jsPsych.timelineVariable() inside
+ * simulation_options.data, so a per-face answer passed that way was silently
+ * ignored and every no-go trial simulated as a go.
  */
-function buildFinalPracticeBlock(settings, trainingFaces, stages) {
-  return FINAL_PRACTICE_ORDER.map((index) => {
-    const stage = stages[index];
-    return {
-      timeline: [
-        kickOut(settings),
-        fullscreen_prompt,
-        {
-          type: jsPsychGoNoGo,
-          stimulus: trainingFaces[index % trainingFaces.length],
-          correct_response: stage.correct_response,
-          outcome_correct: stage.outcome_correct,
-          outcome_incorrect: stage.outcome_incorrect,
-          response_window: settings.response_window,
-          resize_duration: settings.resize_duration,
-          feedback_duration: settings.feedback_duration,
-          iti: settings.iti,
-          simulation_options: {
-            data:
-              stage.correct_response === 'go'
-                ? { response: 'go', rt: 80, pointer_type: 'keyboard' }
-                : { response: 'nogo', rt: null, pointer_type: null },
-          },
-          data: {
-            trialphase: 'go_no_go_training',
-            practice_stage: 'combined',
-            practice_item: stage.id,
-            practice_label: stage.label,
-          },
-        },
-      ],
-    };
-  });
-}
-
 function buildFinalPracticeLoop(settings, trainingFaces, stages) {
   const stageIds = stages.map((stage) => stage.id);
+
+  const variables = stages.map((stage, index) => ({
+    stimulus: trainingFaces[index % trainingFaces.length],
+    correct_response: stage.correct_response,
+    outcome_correct: stage.outcome_correct,
+    outcome_incorrect: stage.outcome_incorrect,
+    item: stage.id,
+    label: stage.label,
+  }));
+
   return {
-    timeline: buildFinalPracticeBlock(settings, trainingFaces, stages),
+    timeline: [
+      {
+        timeline: [
+          kickOut(settings),
+          fullscreen_prompt,
+          {
+            type: jsPsychGoNoGo,
+            stimulus: jsPsych.timelineVariable('stimulus'),
+            correct_response: jsPsych.timelineVariable('correct_response'),
+            outcome_correct: jsPsych.timelineVariable('outcome_correct'),
+            outcome_incorrect: jsPsych.timelineVariable('outcome_incorrect'),
+            response_window: settings.response_window,
+            resize_duration: settings.resize_duration,
+            feedback_duration: settings.feedback_duration,
+            iti: settings.iti,
+            simulate_correct: true,
+            data: {
+              trialphase: 'go_no_go_training',
+              practice_stage: 'combined',
+              practice_item: jsPsych.timelineVariable('item'),
+              practice_label: jsPsych.timelineVariable('label'),
+              practice_block: () =>
+                Math.floor(finalPracticeTrialCount() / FINAL_PRACTICE_BLOCK_LENGTH) + 1,
+            },
+          },
+        ],
+      },
+    ],
+    timeline_variables: variables,
+    sample: {
+      type: 'custom',
+      // Called once per loop iteration, before the block runs, so the completed
+      // trial count identifies which block this is about to be.
+      fn: () => {
+        const blockIndex = Math.floor(finalPracticeTrialCount() / FINAL_PRACTICE_BLOCK_LENGTH);
+        return FINAL_PRACTICE_ORDERS[blockIndex % FINAL_PRACTICE_ORDERS.length];
+      },
+    },
     loop_function: () => {
-      if (finalPracticeTrialCount() >= FINAL_PRACTICE_MAX_BLOCKS * FINAL_PRACTICE_ORDER.length) {
+      if (finalPracticeTrialCount() >= FINAL_PRACTICE_MAX_BLOCKS * FINAL_PRACTICE_BLOCK_LENGTH) {
         return false;
       }
       return !passedFinalPractice(stageIds);
@@ -171,12 +201,7 @@ function buildPracticeLoop(settings, facePath, stage) {
               '-10': COIN_IMAGES.brokenPound,
             },
             // Keep simulate-mode tests deterministic so training exits quickly.
-            simulation_options: {
-              data:
-                stage.correct_response === 'go'
-                  ? { response: 'go', rt: 80, pointer_type: 'keyboard' }
-                  : { response: 'nogo', rt: null, pointer_type: null },
-            },
+            simulate_correct: true,
             data: {
               trialphase: 'go_no_go_training',
               practice_stage: stage.id,

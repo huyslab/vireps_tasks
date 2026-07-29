@@ -102,6 +102,16 @@ var jsPsychGoNoGo = (function (jspsych) {
       },
       /** Keys accepted as a go response on non-touch devices */
       choices: { type: jspsych.ParameterType.KEYS, default: [' '] },
+      /**
+       * Make simulate mode answer CORRECTLY rather than at random. Used by the
+       * practice loops, which need to reach their criterion deterministically.
+       *
+       * This exists because simulation_options cannot carry the answer when the
+       * correct response varies per trial: jsPsych does not resolve
+       * jsPsych.timelineVariable() inside simulation_options.data, so the plugin's
+       * own random response silently stood and every no-go trial was scored wrong.
+       */
+      simulate_correct: { type: jspsych.ParameterType.BOOL, default: false },
     },
     data: {
       /** 'go' or 'nogo' - what the participant actually did */
@@ -405,8 +415,9 @@ var jsPsychGoNoGo = (function (jspsych) {
 
     create_simulation_data(trial, simulation_options) {
       // Go on roughly two thirds of simulated trials, so both the grow and shrink
-      // paths get exercised by the rendering tests.
-      const goes = Math.random() < 0.67;
+      // paths get exercised by the rendering tests - unless the caller asked for
+      // correct answers, as the practice loops do.
+      const goes = trial.simulate_correct ? trial.correct_response === 'go' : Math.random() < 0.67;
       const rt = goes ? 20 + Math.floor(Math.random() * (SIMULATED_MAX_RT - 20)) : null;
       const correct = (goes ? 'go' : 'nogo') === trial.correct_response;
 
