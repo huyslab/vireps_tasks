@@ -16,6 +16,24 @@ const TRAINING_MIN_TRIALS = 4;
 const TRAINING_STREAK = 3;
 const TRAINING_MAX_TOTAL = 60;
 
+/**
+ * Final practice: all four faces interleaved, in blocks of 8 (2 appearances each).
+ *
+ * The order is fixed rather than shuffled per participant, so everyone meets the
+ * same sequence - one less thing varying between people during training. It is
+ * arranged so no face repeats back to back, which would otherwise let someone
+ * answer the second appearance without looking.
+ *
+ * A repeated block reuses this same order. That is a deliberate simplification:
+ * most participants will not need a second block, and the alternative (cycling
+ * several fixed orders) adds machinery for a case that should be rare.
+ */
+const FINAL_PRACTICE_ORDER = [2, 0, 3, 1, 0, 2, 1, 3];
+/** Correct responses required PER FACE, counted across the whole final practice. */
+const FINAL_PRACTICE_CORRECT_PER_ITEM = 2;
+/** Safety cap, so a participant who cannot reach criterion is not stuck here. */
+const FINAL_PRACTICE_MAX_BLOCKS = 4;
+
 const isTouch = () => navigator.maxTouchPoints > 0;
 
 const actionText = () => (isTouch() ? 'touch the picture' : 'press the space bar');
@@ -36,6 +54,90 @@ function getStageAccuracy(stageId) {
 
 function getTotalTrainingTrials() {
   return jsPsych.data.get().filter({ trialphase: 'go_no_go_training' }).count();
+}
+
+/** Correct responses so far in the final practice, keyed by face/stage id. */
+function finalPracticeCorrectByItem() {
+  const counts = {};
+  jsPsych.data
+    .get()
+    .filter({ trialphase: 'go_no_go_training', practice_stage: 'combined' })
+    .values()
+    .forEach((t) => {
+      if (t.correct) counts[t.practice_item] = (counts[t.practice_item] || 0) + 1;
+    });
+  return counts;
+}
+
+function finalPracticeTrialCount() {
+  return jsPsych.data
+    .get()
+    .filter({ trialphase: 'go_no_go_training', practice_stage: 'combined' })
+    .count();
+}
+
+/**
+ * Criterion is per FACE, not overall: someone can be at chance on one contingency
+ * while getting the other three right, and an aggregate score would hide that.
+ */
+function passedFinalPractice(stageIds) {
+  const counts = finalPracticeCorrectByItem();
+  return stageIds.every((id) => (counts[id] || 0) >= FINAL_PRACTICE_CORRECT_PER_ITEM);
+}
+
+/**
+ * One block of the final practice: the four faces twice each, in FINAL_PRACTICE_ORDER.
+ *
+ * Built as eight explicit trials rather than timeline_variables because the order
+ * is fixed anyway, and because each trial then carries its own simulation_options -
+ * the correct response differs per face, so a single shared one would be wrong.
+ */
+function buildFinalPracticeBlock(settings, trainingFaces, stages) {
+  return FINAL_PRACTICE_ORDER.map((index) => {
+    const stage = stages[index];
+    return {
+      timeline: [
+        kickOut(settings),
+        fullscreen_prompt,
+        {
+          type: jsPsychGoNoGo,
+          stimulus: trainingFaces[index % trainingFaces.length],
+          correct_response: stage.correct_response,
+          outcome_correct: stage.outcome_correct,
+          outcome_incorrect: stage.outcome_incorrect,
+          response_window: settings.response_window,
+          resize_duration: settings.resize_duration,
+          feedback_duration: settings.feedback_duration,
+          iti: settings.iti,
+          simulation_options: {
+            data:
+              stage.correct_response === 'go'
+                ? { response: 'go', rt: 80, pointer_type: 'keyboard' }
+                : { response: 'nogo', rt: null, pointer_type: null },
+          },
+          data: {
+            trialphase: 'go_no_go_training',
+            practice_stage: 'combined',
+            practice_item: stage.id,
+            practice_label: stage.label,
+          },
+        },
+      ],
+    };
+  });
+}
+
+function buildFinalPracticeLoop(settings, trainingFaces, stages) {
+  const stageIds = stages.map((stage) => stage.id);
+  return {
+    timeline: buildFinalPracticeBlock(settings, trainingFaces, stages),
+    loop_function: () => {
+      if (finalPracticeTrialCount() >= FINAL_PRACTICE_MAX_BLOCKS * FINAL_PRACTICE_ORDER.length) {
+        return false;
+      }
+      return !passedFinalPractice(stageIds);
+    },
+  };
 }
 
 function passedStage(stageId) {
@@ -189,6 +291,19 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
     trainingBlocks.push(buildPracticeLoop(settings, trainingFaces[index % trainingFaces.length], stage));
   });
+
+  trainingBlocks.push({
+    type: jsPsychInstructions,
+    css_classes: ['instructions'],
+    show_clickable_nav: true,
+    data: { trialphase: 'go_no_go_instruction' },
+    pages: [
+      `<p><b>Now all four together.</b></p>
+       <p>You will see the same four people, mixed up.</p>
+       <p>Each one works the same way as it did just now.</p>`,
+    ],
+  });
+  trainingBlocks.push(buildFinalPracticeLoop(settings, trainingFaces, stages));
 
   const quizQuestions = [
     {
