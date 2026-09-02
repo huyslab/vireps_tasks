@@ -15,5 +15,21 @@ defineTaskRenderingTest('go_no_go', {
     expect(box.height * 1.4, 'grown face should still fit vertically').toBeLessThanOrEqual(viewport.height);
 
     expect(await page.locator('#gng-coin').count(), 'coin element should exist').toBe(1);
+
+    // The valence rim light is a drop-shadow on a wrapper, not on the image, so
+    // that the image's bottom mask cannot clip it. Both parts have to survive
+    // every device's CSS: the wrapper must exist, and it must be carrying
+    // exactly one of the two domain classes.
+    const glow = await page.evaluate(() => {
+      const el = document.querySelector('.gng-glow');
+      if (!el) return null;
+      return {
+        classes: [...el.classList].filter((c) => c.startsWith('gng-glow-')),
+        filter: getComputedStyle(el).filter,
+      };
+    });
+    expect(glow, '.gng-glow wrapper should exist').toBeTruthy();
+    expect(glow.classes, 'exactly one domain class should be applied').toHaveLength(1);
+    expect(glow.filter, 'the domain class should resolve to a drop-shadow').toContain('drop-shadow');
   },
 });

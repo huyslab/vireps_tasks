@@ -2,20 +2,38 @@
  * Orthogonalised go/no-go trial with valenced-face cues.
  *
  * Trial structure:
- *   1. The face appears mid-screen at full size, with no onset animation - unlike
- *      RobotFactory, which runs a 1500 ms scanner animation before opening the
- *      response window. The window opens immediately, so RT is measured from cue
- *      onset rather than from a delayed listener start.
+ *   1. The face appears mid-screen at full size, lit by a coloured rim light -
+ *      blue where there is money to win, amber where there is money to lose.
+ *      This is RobotFactory's scanner light in another form: it names the
+ *      outcome domain before any choice is made. There is no onset animation,
+ *      unlike RobotFactory's 1500 ms scanner sequence; the response window opens
+ *      immediately, so RT is measured from cue onset rather than from a delayed
+ *      listener start, and the light is up for the whole of it.
  *   2. Response window (default 1800 ms). A tap on the face, or the spacebar,
  *      counts as GO. Letting the window elapse is NO-GO.
  *   3. The face resizes to signal what the participant did: it GROWS on a go
  *      response (approach) and SHRINKS when the window elapses (withdrawal).
  *      This runs on both correct and incorrect trials - it reflects the action
  *      taken, not whether it was right.
- *   4. The whole background tints - green for a correct response, red for an
- *      incorrect one - fading in gently; a distinct sound plays; and a coin
- *      flies out of the face to land on the chest: £1 for +10, broken £1 for
- *      -10, 1p for +1, broken 1p for -1.
+ *   4. A distinct sound plays and the outcome flies out of the face to land on
+ *      the chest: £1 for +10, broken £1 for -10, 1p for +1, broken 1p for -1,
+ *      or the signed number in points mode. The rim light stays lit throughout.
+ *
+ * Correctness is deliberately NOT signalled by colour in the default
+ * configuration. An earlier version washed the whole screen green or red at
+ * feedback, which would have left hue meaning one thing at cue onset and a
+ * different thing 300 ms later. The outcome already distinguishes all four cases
+ * on its own - £1 and 1p only occur in the win domain, the broken coins only in
+ * the loss domain, and in points mode the sign says it outright - and each has
+ * its own sound, so dropping the wash costs no information. It remains available
+ * via feedback_tint, which is worth having for the signal_valence: false
+ * configuration, where nothing else is competing for colour.
+ *
+ * Three presentation choices are configuration rather than fixed, because they
+ * trade against each other and the right combination is an empirical question:
+ * signal_valence (colour at cue onset), feedback_tint (colour at feedback) and
+ * play_sounds. outcome_display switches the outcome between coins and Sam's
+ * point values.
  *
  * The coin sits ON the chest rather than below the face because the face is most
  * of the screen at arm's length, and a coin underneath it fell outside foveal
@@ -24,9 +42,10 @@
  * expression) removes the saccade, the fly-out motion draws the eye to it, and
  * the sound carries the outcome even if the coin is missed entirely.
  *
- * The tint is why the face stimuli are transparent PNGs rather than CFD's
- * white-background JPEGs: a white rectangle behind the face would block the
- * colour and leave the feedback looking like a framed picture on a wall.
+ * The rim light is why the face stimuli are transparent PNGs rather than CFD's
+ * white-background JPEGs: it is a drop-shadow filter, which follows the alpha
+ * channel, so on an opaque frame it would outline the rectangle rather than the
+ * person.
  *
  * Go trials end their response phase as soon as the response arrives, so trial
  * length varies with RT - the same as RobotFactory. If fixed-length trials are
@@ -48,6 +67,14 @@ var jsPsychGoNoGo = (function (jspsych) {
     parameters: {
       /** Path to the face image serving as this trial's cue */
       stimulus: { type: jspsych.ParameterType.IMAGE, default: undefined },
+      /** 'win' or 'avoid_loss' - which outcome domain this trial is in. Drives
+       *  the rim light only; the outcomes themselves come from the two
+       *  outcome_* parameters. Anything else leaves the face unlit. */
+      valence: { type: jspsych.ParameterType.STRING, default: null },
+      /** Whether to show the domain at cue onset at all. Turning this off
+       *  restores the unsignalled design, where valence has to be learnt from
+       *  the outcomes along with the action. */
+      signal_valence: { type: jspsych.ParameterType.BOOL, default: true },
       /** 'go' or 'nogo' - the response that earns the good outcome */
       correct_response: { type: jspsych.ParameterType.STRING, default: 'go' },
       /** Outcome delivered for a correct response (10, 1, -1 or -10) */
@@ -62,6 +89,15 @@ var jsPsychGoNoGo = (function (jspsych) {
       feedback_duration: { type: jspsych.ParameterType.INT, default: 1600 },
       /** Blank gap after feedback */
       iti: { type: jspsych.ParameterType.INT, default: 400 },
+      /** Wash the whole screen green (correct) or red (incorrect) at feedback.
+       *  Off by default: hue marks the outcome domain at cue onset instead, and
+       *  the same dimension should not mean two things in one trial. */
+      feedback_tint: { type: jspsych.ParameterType.BOOL, default: false },
+      /** Whether the outcome sound plays. Off makes the task silent. */
+      play_sounds: { type: jspsych.ParameterType.BOOL, default: true },
+      /** 'coins' shows the £1 / 1p / broken-coin images; 'points' shows the
+       *  signed value instead, as RobotFactory does (+10, +1, -1, -10). */
+      outcome_display: { type: jspsych.ParameterType.STRING, default: 'coins' },
       /** Scale factors for the approach / withdrawal animations */
       grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
       shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },
@@ -122,6 +158,8 @@ var jsPsychGoNoGo = (function (jspsych) {
       correct: { type: jspsych.ParameterType.BOOL },
       /** Points delivered on this trial */
       outcome: { type: jspsych.ParameterType.INT },
+      /** Whether the domain was shown by the rim light on this trial */
+      valence_signalled: { type: jspsych.ParameterType.BOOL },
       /** Input modality of the go response (touch, mouse, pen, keyboard, null) */
       pointer_type: { type: jspsych.ParameterType.STRING },
       /** Presses made before the cue appeared or after the window closed */
@@ -152,12 +190,28 @@ var jsPsychGoNoGo = (function (jspsych) {
       const gateVisible = () => !!rotateOverlay && getComputedStyle(rotateOverlay).display !== 'none';
       let wrongOrientation = gateVisible();
 
+      // The rim light is applied from the first paint, not faded in: unlike
+      // RobotFactory there is no pre-response animation to fade it during, and
+      // the response window opens at once, so any ramp would eat into the time
+      // the participant has to use it.
+      const glowClass = { win: 'gng-glow-win', avoid_loss: 'gng-glow-avoid-loss' }[trial.valence];
+      const signalled = trial.signal_valence && !!glowClass;
+
+      // Points and coins share one element, one position and one fly-out, so
+      // only the content differs between the two modes.
+      const showPoints = trial.outcome_display === 'points';
+      const outcomeMarkup = showPoints
+        ? '<div id="gng-coin" class="gng-coin gng-points"></div>'
+        : '<img id="gng-coin" class="gng-coin" alt="">';
+
       display_element.innerHTML = `
-        <div class="gng-tint" id="gng-tint"></div>
+        ${trial.feedback_tint ? '<div class="gng-tint" id="gng-tint"></div>' : ''}
         <div class="gng-wrapper">
           <div class="gng-stimulus-slot">
-            <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
-            <img id="gng-coin" class="gng-coin" alt="">
+            <div class="gng-glow${signalled ? ' ' + glowClass : ''}">
+              <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
+            </div>
+            ${outcomeMarkup}
           </div>
         </div>`;
 
@@ -179,7 +233,7 @@ var jsPsychGoNoGo = (function (jspsych) {
       // instant feedback starts; the files are already preloaded, so this only
       // resolves the player.
       const audioPlayers = {};
-      if (trial.outcome_sounds && !simulating) {
+      if (trial.outcome_sounds && trial.play_sounds && !simulating) {
         for (const value of [trial.outcome_correct, trial.outcome_incorrect]) {
           const src = trial.outcome_sounds[String(value)];
           if (!src || audioPlayers[value]) continue;
@@ -253,6 +307,7 @@ var jsPsychGoNoGo = (function (jspsych) {
           rt: rt,
           correct: correct,
           outcome: outcome,
+          valence_signalled: signalled,
           pointer_type: pointerType,
           premature_presses: prematurePresses,
           wrong_orientation: wrongOrientation,
@@ -270,9 +325,9 @@ var jsPsychGoNoGo = (function (jspsych) {
         );
 
         animation.finished.then(() => {
-          // Tint the whole background by correctness. The tint fades via a CSS
-          // transition rather than an animation so it eases in gently.
-          tint.classList.add(correct ? 'gng-tint-correct' : 'gng-tint-incorrect');
+          // Optional correctness wash. Fades via a CSS transition rather than an
+          // animation so it eases in gently.
+          if (tint) tint.classList.add(correct ? 'gng-tint-correct' : 'gng-tint-incorrect');
 
           // Outcome sound. Independent of the coin, so the outcome still lands
           // even if the participant happens to be looking away.
@@ -304,7 +359,11 @@ var jsPsychGoNoGo = (function (jspsych) {
           const faceRect = stimulus.getBoundingClientRect();
           const centreY = faceRect.top + faceRect.height / 2;
 
-          coin.src = trial.coin_images[String(outcome)] || trial.coin_images[outcome];
+          if (showPoints) {
+            coin.textContent = `${outcome > 0 ? '+' : ''}${outcome}`;
+          } else {
+            coin.src = trial.coin_images[String(outcome)] || trial.coin_images[outcome];
+          }
           coin.classList.add('gng-coin-visible');
 
           // Position by the coin's TOP edge, not its centre: the coin is placed
@@ -346,9 +405,9 @@ var jsPsychGoNoGo = (function (jspsych) {
           );
 
           this.jsPsych.pluginAPI.setTimeout(() => {
-            // Fade the tint back out before the blank gap, so the ITI is neutral
+            // Fade the wash back out before the blank gap, so the ITI is neutral
             // and the next cue does not arrive on a coloured screen.
-            tint.classList.remove('gng-tint-correct', 'gng-tint-incorrect');
+            if (tint) tint.classList.remove('gng-tint-correct', 'gng-tint-incorrect');
             coin.classList.remove('gng-coin-visible');
             stimulus.style.visibility = 'hidden';
             this.jsPsych.pluginAPI.setTimeout(endTrial, simulating ? 20 : trial.iti);
@@ -426,6 +485,8 @@ var jsPsychGoNoGo = (function (jspsych) {
         rt: rt,
         correct: correct,
         outcome: correct ? trial.outcome_correct : trial.outcome_incorrect,
+        valence_signalled:
+          !!trial.signal_valence && (trial.valence === 'win' || trial.valence === 'avoid_loss'),
         pointer_type: goes ? 'keyboard' : null,
         premature_presses: 0,
         wrong_orientation: false,

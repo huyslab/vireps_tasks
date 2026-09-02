@@ -190,10 +190,32 @@
                 // ?skip_instructions=1 jumps straight to trials. The rendering matrix uses it
                 // (sitting through instructions in simulate mode takes ~20s and swamps the
                 // test budget), and it is handy for eyeballing the task on a device.
-                const skipInstructions = new URLSearchParams(window.location.search).has('skip_instructions');
+                const params = new URLSearchParams(window.location.search);
+                const skipInstructions = params.has('skip_instructions');
+
+                // The four presentation settings are exposed on the URL so the
+                // combinations can be compared on a real tablet without editing
+                // code. Anything not given falls back to the registry default.
+                //   ?outcome_display=points   values instead of coin images
+                //   ?signal_valence=0         no rim light at cue onset
+                //   ?feedback_tint=1          green/red wash at feedback
+                //   ?play_sounds=0            silent
+                const flag = (name) => (params.has(name) ? params.get(name) !== '0' : undefined);
+                const overrides = {
+                    signal_valence: flag('signal_valence'),
+                    feedback_tint: flag('feedback_tint'),
+                    play_sounds: flag('play_sounds'),
+                    outcome_display: params.get('outcome_display') ?? undefined,
+                };
+                for (const key of Object.keys(overrides)) {
+                    if (overrides[key] === undefined) delete overrides[key];
+                }
+                console.log('Presentation overrides:', overrides);
+
                 const timeline = await createTaskTimeline('go_no_go', {
                     stimulus_session: 1,
                     include_instructions: !skipInstructions,
+                    ...overrides,
                 });
                 console.log('Timeline created:', timeline);
                 

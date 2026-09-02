@@ -28,6 +28,20 @@
   height: min(52vw, 52dvh);
 }
 
+/* Carries the valence rim light. A separate element from the image because the
+   glow is a `drop-shadow` filter, and the image is MASKED at the bottom: masking
+   is applied after filtering and clips to the element's border box, so a
+   drop-shadow put directly on the image would be cut off wherever it spread past
+   the frame. Filters on this wrapper are applied to the image's rendered output
+   AFTER its own mask, so the glow follows the faded silhouette but is free to
+   spread. It also scales with the face for free - an ancestor's filter applies to
+   the transformed rendering of its descendants. */
+.gng-glow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Sized on the short axis as well as the long one - on a landscape phone the
    viewport is far wider than it is tall, and width-only sizing overflows. */
 .gng-stimulus {
@@ -39,12 +53,15 @@
      stop at a hard horizontal line. Invisible on white; against the feedback
      tint it reads as a cut-out pasted on the screen. Fading the bottom edge
      lets the shoulders dissolve into the background instead. */
-  /* Only the last few percent fade. CFD frames end at the upper chest, so the
-     shoulders are a thin band at the bottom - fading it earlier left nothing
-     solid for the coin to sit on, while fading none of it reinstates the hard
-     horizontal cut that looks like a cut-out against the feedback tint. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 94%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 94%, transparent 100%);
+  /* The fade has to be gradual, not just present: the rim light is a drop-shadow
+     computed from this masked alpha, so it traces whatever edge the mask leaves.
+     At 94% the remaining step was sharp enough for the glow to draw a lit
+     horizontal bar under the shoulders - the cut-out edge the mask exists to
+     hide, outlined in colour. Starting at 84% dissolves it. The outcome still
+     has something solid to sit on: it is placed at 94% of the face's height and
+     hangs below that, mostly clear of the faded band. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
@@ -80,6 +97,34 @@
   visibility: visible;
 }
 
+/* Points variant of the outcome: the same element, in the same place, with the
+   same fly-out - only the content differs, so nothing about the geometry has to
+   know which mode is running. Width is auto because the text sizes itself; the
+   positioning code measures the rendered box either way.
+
+   White on a heavy dark outline rather than a colour, because it has to read
+   over a photograph AND because hue is spoken for by the rim light. */
+.gng-points {
+  width: auto;
+  max-width: none;
+  /* Same HEIGHT as the coin, deliberately: the positioning code places the
+     outcome by its top edge and then measures the box to centre it, so a short
+     text box would settle lower on the chest than the coin does. Matching the
+     height makes both modes land identically. */
+  height: min(18vw, 18vh);
+  height: min(18vw, 18dvh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: min(13vw, 13dvh);
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+  white-space: nowrap;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.85),
+    0 2px 3px rgba(0, 0, 0, 0.9);
+}
+
 /* Tablets: the task is run at arm's length in an in-person setting, so the face
    is scaled up the way the card-choosing stimuli are. Matched to that rule -
    coarse pointer plus a 600px minimum on both axes catches tablets in either
@@ -102,15 +147,31 @@
     width: min(18vw, 16vh);
     width: min(18vw, 16dvh);
   }
+
+  .gng-points {
+    width: auto;
+    height: min(18vw, 16vh);
+    height: min(18vw, 16dvh);
+    font-size: min(14vw, 12dvh);
+  }
 }
 
-/* --- Feedback background tint ---------------------------------------------
-   Covers the viewport behind the face and coin, which sit above it via the
-   wrapper's stacking order. Deliberately low-alpha: this is a peripheral cue
-   confirming what the coin already says, and a saturated full-screen flash 240
-   times would be punishing. It transitions rather than animates so it eases in
-   and back out, and the face reads normally because the stimuli are transparent
-   PNGs with the white CFD background keyed out. */
+.gng-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Feedback background tint (optional, off by default) -------------------
+   The original correctness signal: a low-alpha green/red wash over the whole
+   viewport, behind the face and coin. It is retired in the default
+   configuration because hue now marks the outcome DOMAIN at cue onset, and one
+   dimension cannot carry two meanings in the same trial without being learnt
+   twice. Kept, and switchable via feedback_tint, for the unsignalled
+   configuration (signal_valence: false), where nothing competes for colour.
+
+   Low alpha is deliberate: this only confirms what the coin and sound already
+   say, and a saturated full-screen flash 240 times would be punishing. It
+   transitions rather than animates so it eases in and back out. */
 .gng-tint {
   position: fixed;
   inset: 0;
@@ -118,11 +179,6 @@
   pointer-events: none;
   background-color: rgba(0, 0, 0, 0);
   transition: background-color 260ms ease-in-out;
-}
-
-.gng-wrapper {
-  position: relative;
-  z-index: 1;
 }
 
 .gng-tint-correct {
@@ -138,4 +194,41 @@
   .gng-tint {
     transition: none;
   }
+}
+
+/* --- Valence rim light -----------------------------------------------------
+   The analogue of RobotFactory's scanner light: it says which outcome domain
+   this trial is in - money to win, or money to lose - and it is up from cue
+   onset, so it is available for the whole decision rather than flashed once.
+
+   Hue carries EXACTLY ONE meaning in this task. It used to mark correctness
+   (a green/red wash over the whole screen at feedback); using it for domain as
+   well would have made the same dimension mean two different things at two
+   moments of the same trial. The wash is off by default, and correctness is
+   carried by the coin, its fly-out and the outcome sound - which already stated it
+   unambiguously, since the four coins distinguish both correctness and domain.
+
+   The light hugs the silhouette rather than washing over the face. Our cues are
+   angry and happy faces and the colour is perfectly correlated with reward
+   valence, so tinting the skin itself could shift how the expression reads and
+   the shift would be indistinguishable from a valence x affect interaction.
+   Lighting the outline leaves every face pixel untouched.
+
+   Two stacked shadows per colour: a tight, near-opaque rim that reads as edge
+   lighting, and a wide, faint halo that makes it visible in peripheral vision
+   without a saccade. Blue for win, amber for avoid-loss - far enough apart in
+   hue to be told apart at a glance, and neither is the green or red that used to
+   mean right and wrong. The mapping is fixed for everyone, not counterbalanced.
+
+   These are why the face stimuli are transparent PNGs and not CFD's
+   white-background JPEGs: drop-shadow follows the alpha channel, so on the
+   original frames the "silhouette" would be the rectangle. */
+.gng-glow-win {
+  filter: drop-shadow(0 0 14px rgba(56, 128, 255, 0.95))
+    drop-shadow(0 0 40px rgba(56, 128, 255, 0.55));
+}
+
+.gng-glow-avoid-loss {
+  filter: drop-shadow(0 0 14px rgba(255, 160, 20, 0.95))
+    drop-shadow(0 0 40px rgba(255, 160, 20, 0.55));
 }

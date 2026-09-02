@@ -50,6 +50,23 @@ Neither ends the session. **Nothing in the battery terminates a session.**
 
 ## 1. Faces Go/No-Go
 
+### What is on screen, besides the words
+
+Every face is lit by a coloured **rim light** from the moment it appears, and it
+stays lit for the whole trial: **blue** where there is money to win, **amber**
+where there is money to lose. This is the only place the outcome domain is
+stated, and the mapping is never labelled on screen — it is taught by the
+instruction screen below, where "money to win" is printed in blue and "money to
+lose" in amber.
+
+Nothing else uses colour. Whether the choice was right or wrong is carried by the
+coin and its sound, not by a green or red screen.
+
+*A points variant exists (`outcome_display: 'points'`), which replaces £1 with
+**10 points** and 1p with **1 point** throughout — including the practice screens
+and the comprehension check — and shows the signed value (+10, +1, −1, −10)
+instead of a coin. The wording below is the default, coins.*
+
 ### Instructions
 
 **1.**

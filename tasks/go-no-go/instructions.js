@@ -49,11 +49,45 @@ const FINAL_PRACTICE_MAX_BLOCKS = 4;
 const isTouch = () => navigator.maxTouchPoints > 0;
 
 const actionText = () => (isTouch() ? 'touch the picture' : 'press the space bar');
-const FEEDBACK_GREEN = '#2e7d32';
-const FEEDBACK_RED = '#c62828';
+
+/* Text versions of the two rim-light colours, darkened for contrast against the
+   white instruction background. The words "money to win" and "money to lose" are
+   set in the colour of the light the participant is about to see, so the mapping
+   is stated once in the only place it can be stated - the light itself is never
+   labelled on screen. Previously green and red, which now mean nothing in this
+   task and would have taught the wrong pairing. */
+const GLOW_BLUE = '#2a63cc';
+const GLOW_AMBER = '#b87400';
 
 function coinInline(src, alt) {
   return `<img src="${src}" alt="${alt}" style="width:68px; height:68px; vertical-align:middle; margin-left:8px;">`;
+}
+
+/**
+ * How outcomes are named, in coins or in Sam Zorowitz's point values.
+ *
+ * Points mode replaces £1 with 10 points and 1p with 1 point, and drops the coin
+ * images entirely - a picture of a coin next to "10 points" would be telling the
+ * participant two different things about the same outcome.
+ */
+function outcomeLabels(settings) {
+  const points = settings.outcome_display === 'points';
+  return {
+    points,
+    big: points ? '10 points' : '£1',
+    small: points ? '1 point' : '1p',
+    /** Inline coin image, or nothing at all in points mode. */
+    icon: (key, alt) => (points ? '' : coinInline(COIN_IMAGES[key], alt)),
+    /** The two ways a better choice can still go badly. */
+    minorWin: points ? 'only 1 point' : 'only a penny',
+    majorLoss: points ? 'lose 10 points' : 'break a £1 coin',
+    /** What a bad outcome looks like, for the comprehension check. */
+    lossCue: points ? 'A minus number means I have lost points.' : 'A broken coin means I have lost money.',
+    /** What is at stake, as a noun phrase - "money" reads oddly next to points.
+     *  Includes the verb, because the number changes with it. */
+    stakeWin: points ? 'there are <b>points to win</b>' : 'there is <b>money to win</b>',
+    stakeLose: points ? 'there are <b>points to lose</b>' : 'there is <b>money to lose</b>',
+  };
 }
 
 function getStageAccuracy(stageId) {
@@ -118,6 +152,7 @@ function buildFinalPracticeLoop(settings, trainingFaces, stages) {
     correct_response: stage.correct_response,
     outcome_correct: stage.outcome_correct,
     outcome_incorrect: stage.outcome_incorrect,
+    valence: stage.valence,
     item: stage.id,
     label: stage.label,
   }));
@@ -134,14 +169,20 @@ function buildFinalPracticeLoop(settings, trainingFaces, stages) {
             correct_response: jsPsych.timelineVariable('correct_response'),
             outcome_correct: jsPsych.timelineVariable('outcome_correct'),
             outcome_incorrect: jsPsych.timelineVariable('outcome_incorrect'),
+            valence: jsPsych.timelineVariable('valence'),
+            signal_valence: settings.signal_valence,
             response_window: settings.response_window,
             resize_duration: settings.resize_duration,
             feedback_duration: settings.feedback_duration,
             iti: settings.iti,
+            feedback_tint: settings.feedback_tint,
+            play_sounds: settings.play_sounds,
+            outcome_display: settings.outcome_display,
             simulate_correct: true,
             data: {
               trialphase: 'go_no_go_training',
               practice_stage: 'combined',
+              valence: jsPsych.timelineVariable('valence'),
               practice_item: jsPsych.timelineVariable('item'),
               practice_label: jsPsych.timelineVariable('label'),
               practice_block: () =>
@@ -190,10 +231,15 @@ function buildPracticeLoop(settings, facePath, stage) {
             correct_response: stage.correct_response,
             outcome_correct: stage.outcome_correct,
             outcome_incorrect: stage.outcome_incorrect,
+            valence: stage.valence,
+            signal_valence: settings.signal_valence,
             response_window: settings.response_window,
             resize_duration: settings.resize_duration,
             feedback_duration: settings.feedback_duration,
             iti: settings.iti,
+            feedback_tint: settings.feedback_tint,
+            play_sounds: settings.play_sounds,
+            outcome_display: settings.outcome_display,
             coin_images: {
               10: COIN_IMAGES.pound,
               1: COIN_IMAGES.penny,
@@ -206,6 +252,7 @@ function buildPracticeLoop(settings, facePath, stage) {
               trialphase: 'go_no_go_training',
               practice_stage: stage.id,
               practice_label: stage.label,
+              valence: stage.valence,
             },
           },
         ],
@@ -225,6 +272,8 @@ function checkQuizFailed() {
 }
 
 export function prepareGoNoGoInstructions(settings, trainingFaces) {
+  const L = outcomeLabels(settings);
+
   const mainInstructions = {
     type: jsPsychInstructions,
     css_classes: ['instructions'],
@@ -241,12 +290,12 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
        <p><b>To not tap:</b> just wait, and the picture will go away on its own.</p>
        <p>Choose quickly - you do not have long.</p>`,
 
-      `<p>With some people, there is <b style="color:${FEEDBACK_GREEN};">money to win</b>.</p>
-       <p>Get it right and you win <b>£1</b>. ${coinInline(COIN_IMAGES.pound, '1 pound coin')}</p>
-       <p>Get it wrong and you win only <b>1p</b>. ${coinInline(COIN_IMAGES.penny, '1 penny coin')}</p>
-       <p>With others, there is <b style="color:${FEEDBACK_RED};">money to lose</b>.</p>
-       <p>Get it right and you lose only <b>1p</b>. ${coinInline(COIN_IMAGES.brokenPenny, 'broken 1 penny coin')}</p>
-       <p>Get it wrong and you lose <b>£1</b>. ${coinInline(COIN_IMAGES.brokenPound, 'broken 1 pound coin')}</p>`,
+      `<p>With some people, <span style="color:${GLOW_BLUE};">${L.stakeWin}</span>.</p>
+       <p>Get it right and you win <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
+       <p>Get it wrong and you win only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>
+       <p>With others, <span style="color:${GLOW_AMBER};">${L.stakeLose}</span>.</p>
+       <p>Get it right and you lose only <b>${L.small}</b>. ${L.icon('brokenPenny', 'broken 1 penny coin')}</p>
+       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>`,
 
       `<p>The same people come back again and again.</p>
        <p>Some are best tapped. Others are best left alone. You cannot tell by looking - you have to find out by trying.</p>
@@ -256,7 +305,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       // still see the worse coin. Phrased after PILT's "even the best cards may
       // sometimes give only a penny": it names the exception in terms of the coins
       // themselves, rather than telling anyone what to do about it.
-      `<p>Even when you make the better choice, you may sometimes get only a penny, or occasionally break a £1 coin.</p>
+      `<p>Even when you make the better choice, you may sometimes get ${L.minorWin}, or occasionally ${L.majorLoss}.</p>
        <p>First, let's try a few.</p>`,
     ],
   };
@@ -264,43 +313,47 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
   const stages = [
     {
       id: 'press_win',
+      valence: 'win',
       label: 'press for £1',
       correct_response: 'go',
       outcome_correct: 10,
       outcome_incorrect: 1,
       intro: `<p><b>Let's try tapping.</b> (1 of 4)</p>
               <p>Tap this person's picture and see what happens.</p>
-              <p>When you get it right, you win <b>£1</b>.</p>`,
+              <p>When you get it right, you win <b>${L.big}</b>.</p>`,
     },
     {
       id: 'wait_win',
+      valence: 'win',
       label: 'wait for £1',
       correct_response: 'nogo',
       outcome_correct: 10,
       outcome_incorrect: 1,
       intro: `<p><b>Now let's try waiting.</b> (2 of 4)</p>
               <p>This time, do not tap. Just wait.</p>
-              <p>When you get it right, you win <b>£1</b>.</p>`,
+              <p>When you get it right, you win <b>${L.big}</b>.</p>`,
     },
     {
       id: 'press_lose_less',
+      valence: 'avoid_loss',
       label: 'press to lose less',
       correct_response: 'go',
       outcome_correct: -1,
       outcome_incorrect: -10,
-      intro: `<p><b>Sometimes there is money to lose.</b> (3 of 4)</p>
+      intro: `<p><b>Sometimes ${L.points ? 'there are points to lose' : 'there is money to lose'}.</b> (3 of 4)</p>
               <p>Here, tapping is the better choice.</p>
-              <p>Get it right and you lose only <b>1p</b>. Get it wrong and you lose <b>£1</b>.</p>`,
+              <p>Get it right and you lose only <b>${L.small}</b>. Get it wrong and you lose <b>${L.big}</b>.</p>`,
     },
     {
       id: 'wait_lose_less',
+      valence: 'avoid_loss',
       label: 'wait to lose less',
       correct_response: 'nogo',
       outcome_correct: -1,
       outcome_incorrect: -10,
       intro: `<p><b>One more.</b> (4 of 4)</p>
               <p>Here, waiting is the better choice.</p>
-              <p>Get it right and you lose only <b>1p</b>. Get it wrong and you lose <b>£1</b>.</p>`,
+              <p>Get it right and you lose only <b>${L.small}</b>. Get it wrong and you lose <b>${L.big}</b>.</p>`,
     },
   ];
 
@@ -336,7 +389,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct: 'True',
     },
     {
-      prompt: `A broken coin means I have lost money.`,
+      prompt: L.lossCue,
       correct: 'True',
     },
     {

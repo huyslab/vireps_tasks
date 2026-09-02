@@ -132,11 +132,16 @@ export async function createGoNoGoTimeline(settings) {
     );
   }
 
+  // Only preload what this configuration will actually show: in points mode the
+  // coin images are never drawn, and with sounds off the audio is never played.
+  const usePoints = settings.outcome_display === 'points';
+  const useSounds = settings.play_sounds !== false;
+
   const timeline = [
     createPreloadTrial(
-      [...faceFiles, ...practiceFiles, ...Object.values(COIN_IMAGES)],
+      [...faceFiles, ...practiceFiles, ...(usePoints ? [] : Object.values(COIN_IMAGES))],
       'go_no_go',
-      Object.values(OUTCOME_SOUNDS)
+      useSounds ? Object.values(OUTCOME_SOUNDS) : []
     ),
   ];
 
@@ -178,10 +183,18 @@ export async function createGoNoGoTimeline(settings) {
           correct_response: jsPsych.timelineVariable('correct_response'),
           outcome_correct: jsPsych.timelineVariable('outcome_correct'),
           outcome_incorrect: jsPsych.timelineVariable('outcome_incorrect'),
+          // Lights the cue by outcome domain, RobotFactory's scanner light in
+          // another form. Signalling it makes the task action learning only;
+          // set signal_valence false to put valence back into the problem.
+          valence: jsPsych.timelineVariable('valence'),
+          signal_valence: settings.signal_valence,
           response_window: settings.response_window,
           resize_duration: settings.resize_duration,
           feedback_duration: settings.feedback_duration,
           iti: settings.iti,
+          feedback_tint: settings.feedback_tint,
+          play_sounds: settings.play_sounds,
+          outcome_display: settings.outcome_display,
           coin_images: COIN_IMAGES,
           outcome_sounds: OUTCOME_SOUNDS,
           data: {
