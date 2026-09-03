@@ -183,7 +183,18 @@ async function listQueuedRecords() {
  * @returns {Promise<number>}
  */
 async function getPendingCount() {
-    return (await listQueuedRecords()).length;
+    try {
+        const db = await openDB();
+        return await new Promise((resolve, reject) => {
+            const request = db.transaction(STORE_NAME, 'readonly')
+                .objectStore(STORE_NAME)
+                .count();
+            request.onsuccess = () => resolve(request.result || 0);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (error) {
+        return 0;
+    }
 }
 
 // Exposed for a quick devtools check on a tablet ("is this device carrying a backlog?"),

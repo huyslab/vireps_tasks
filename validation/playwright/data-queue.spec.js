@@ -206,4 +206,33 @@ test.describe('data-queue', () => {
     , recordId);
     expect(queued).toBe(false);
   });
+
+  test('pending count uses the IndexedDB count operation without loading payloads', async ({ page }) => {
+    await mockRedcapEndpoint(page);
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('count');
+    await page.evaluate(
+      ({ id }) => new Promise((resolve) => {
+        window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
+      }),
+      { id: recordId }
+    );
+
+    const pendingCount = await page.evaluate(async () => {
+      const originalGetAll = IDBObjectStore.prototype.getAll;
+      IDBObjectStore.prototype.getAll = () => {
+        throw new Error('getAll should not be called when counting records');
+      };
+      try {
+        return await window.__dataQueue.getPendingCount();
+      } finally {
+        IDBObjectStore.prototype.getAll = originalGetAll;
+      }
+    });
+
+    expect(pendingCount).toBe(1);
+  });
 });
