@@ -155,6 +155,45 @@
             body[data-preferred-orientation="landscape"] .phone-rotate-icon { display: block; }
             body[data-preferred-orientation="landscape"] .phone-rotate-icon svg { animation: rotate-to-landscape 2.5s ease-in-out infinite; }
         }
+
+        /* Shown before a new session starts if this device is still carrying unsent data
+           from a previous session (see the pending-data gate in the module script below).
+           Toggled via JS (display:none by default), not CSS - it depends on an async
+           IndexedDB read, not on a static device property like the orientation gate. */
+        #pending-data-overlay {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100000;
+            background: #ffffff;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        #pending-data-overlay p {
+            font-size: clamp(16px, 4vw, 20px);
+            color: #182b4b;
+            line-height: 1.4;
+            max-width: min(600px, 90vw);
+            margin: 0;
+        }
+        #pending-data-continue {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -172,7 +211,12 @@
         <p class="rotate-msg-portrait">Please rotate your device to <strong>portrait</strong> mode to continue.</p>
         <p class="rotate-msg-landscape">Please rotate your device to <strong>landscape</strong> mode to continue.</p>
     </div>
-    
+
+    <div id="pending-data-overlay">
+        <p id="pending-data-message"></p>
+        <button id="pending-data-continue">Continue</button>
+    </div>
+
     <script>
         (function () {
             function setOrientationAngle() {
@@ -189,12 +233,11 @@
     <script type="module">
         // Import task registry functions
         import { createTaskTimeline, getTaskInfo } from '@api/index.js';
-        import { enterExperiment } from '@utils/index.js';
+        import { enterExperiment, getPendingCount } from '@utils/index.js';
 
         // Get parameters from URL (populated by index.html's setup form redirect)
         window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
         window.simulating = window.participantID.includes("simulate") || false;
-        window.context = new URLSearchParams(window.location.search).get('context') || '';
 
         // Which task to run. No session/sequence selection here - each task uses its
         // registry default. That is exact for vigour, reversal and go/no-go, which do not
@@ -216,13 +259,9 @@
             try {
                 // Fail fast if this page was reached without what index.html's setup form
                 // provides - otherwise createTaskTimeline throws deep in the call stack for a
-                // missing task, and an unrecognized context fails silently later (saveDataREDCap
-                // only saves data for "relmed"/"prolific" contexts).
+                // missing task.
                 if (!taskName) {
                     throw new Error('Missing "task" URL parameter. Launch this page via index.html rather than directly.');
-                }
-                if (window.context !== 'relmed' && window.context !== 'prolific') {
-                    throw new Error(`Missing or unrecognized "context" URL parameter ("${window.context}"). Data will not be saved to REDCap unless context is "relmed" or "prolific". Launch this page via index.html rather than directly.`);
                 }
 
                 // Get task information
@@ -277,8 +316,38 @@
             }
         }
 
+        // Before starting a new session, check whether this tablet is still carrying
+        // unsent data from a previous one (core/utils/data-queue.js already started
+        // retrying it in the background as soon as this page loaded - this is a visibility
+        // check plus an explicit go-ahead, not a way of triggering that retry).
+        async function startSession() {
+            let pendingCount = 0;
+            try {
+                pendingCount = await getPendingCount();
+            } catch (error) {
+                console.warn('Could not check for unsent data:', error);
+            }
+
+            if (pendingCount === 0) {
+                runExperiment();
+                return;
+            }
+
+            const overlay = document.getElementById('pending-data-overlay');
+            const message = document.getElementById('pending-data-message');
+            message.textContent = pendingCount === 1
+                ? "There is 1 unsent session still stored on this device. It will keep being retried in the background. Tap Continue to start this participant's session."
+                : `There are ${pendingCount} unsent sessions still stored on this device. They will keep being retried in the background. Tap Continue to start this participant's session.`;
+            overlay.style.display = 'flex';
+
+            document.getElementById('pending-data-continue').addEventListener('click', () => {
+                overlay.style.display = 'none';
+                runExperiment();
+            }, { once: true });
+        }
+
         // Start the experiment when the page loads
-        window.addEventListener('load', runExperiment);
+        window.addEventListener('load', startSession);
     </script>
 </body>
 </html>

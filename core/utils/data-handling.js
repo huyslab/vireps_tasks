@@ -1,4 +1,5 @@
 import { preventRefresh} from "./participation-validation.js"
+import { submitRecord } from "./data-queue.js"
 
 /**
  * Data handling and communication utilities
@@ -71,10 +72,13 @@ function updateState(state, save_data = true) {
 }
 
 /**
- * Saves experimental data to REDCap database with retry mechanism
- * Handles both RELMED and Prolific data submission contexts
- * @param {number} retry - Number of retry attempts remaining (default: 1)
- * @param {Object} extra_fields - Additional fields to include in data submission
+ * Saves experimental data to REDCap via the AWS Lambda endpoint, buffering locally
+ * (see data-queue.js) so a record is never lost to a dropped connection - it stays queued
+ * and keeps being retried in the background until the endpoint confirms receipt.
+ * @param {number} retry - Number of immediate/synchronous retry attempts before falling
+ *   back to the background queue (default: 1). Exhausting these does not discard the data.
+ * @param {Object} extra_fields - Additional fields (currently unused - kept for callers
+ *   that still pass one, e.g. endExperiment's {message: "endTask"}; not sent to REDCap)
  * @param {Function} callback - Callback function to execute after successful submission
  */
 function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
@@ -95,92 +99,19 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
         }
     ]);
 
-    const data_message = {
-        data: {
-            record_id: window.participantID + "_" + window.module_start_time,
-            participant_id: window.participantID,
-            sitting_start_time: window.module_start_time,
-            module: window.module,
-            data: combined_data
-        },
-        ...extra_fields
-    };
+    const record_id = window.participantID + "_" + window.module_start_time;
 
-    console.log("Data to be sent:", data_message);
+    const redcap_record = JSON.stringify([{
+        record_id: record_id,
+        participant_id: window.participantID,
+        sitting_start_time: window.module_start_time,
+        module: window.module,
+        data: combined_data
+    }]);
 
-    if (window.context === "relmed") {
-        // Check if we're in a development environment
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            console.log("Development mode: skipping data save to parent");
-            callback();
-            return;
-        }
+    console.log("Data to be sent:", redcap_record);
 
-        postToParent(
-            data_message,
-            () => {
-                if (retry > 0) {
-                    console.warn(`Failed to save data, retrying... (${retry} attempts left)`);
-                    // Exponential backoff: 1s, 2s, 4s, etc.
-                    const delay = Math.pow(2, (3 - retry)) * 1000;
-                    setTimeout(function () {
-                        saveDataREDCap(retry - 1);
-                    }, delay);
-                } else {
-                    console.error('Failed to submit data after retrying.');
-                }
-                
-            }
-        );
-
-        callback();
-
-    } else if (window.context === "prolific") {
-
-        // Prepare REDCap record for Prolific context
-        var redcap_record = JSON.stringify([{
-            record_id: window.participantID + "_" + window.module_start_time,
-            participant_id: window.participantID,
-            sitting_start_time: window.module_start_time,
-            module: window.module,
-            data: combined_data
-        }])
-    
-        // Submit data via AWS Lambda endpoint for Prolific studies
-        fetch('https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot', { 
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: redcap_record
-        })
-        .then(data => {
-            if (data.status === 200) {
-                console.log('Data successfully submitted to REDCap');
-            } else {
-                console.error('Error submitting data:', data.message);
-            }
-            return data.json()
-        })
-        .then(data => {
-            console.log(data)
-            callback(); // Call the callback function if submission is successful
-        }
-        )
-        .catch(error => {
-            console.error('Error:', error);
-            if (retry > 0) {
-                console.log('Retrying to submit data...');
-                setTimeout(function(){
-                    saveDataREDCap(retry - 1);
-                }, 1000);
-            } else {
-                console.error('Failed to submit data after retrying.');
-                callback(error); // Call the callback function with the error if retries are exhausted
-            }
-        });
-    }
-
+    submitRecord(record_id, redcap_record, retry, callback);
 }
 
 /**
@@ -195,7 +126,8 @@ function endExperiment() {
     // Remove beforeunload event listener to allow page navigation
     window.removeEventListener('beforeunload', preventRefresh);
 
-    // Save data with end task message for RELMED context
+    // Final save gets more immediate retries than interim saves; extra_fields is passed
+    // for continuity but is currently unused (see saveDataREDCap's JSDoc).
     saveDataREDCap(10, {
         message: "endTask"
     });

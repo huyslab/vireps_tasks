@@ -19,7 +19,7 @@ defineTaskRenderingTest('reversal', {
 test('reversal preloads stimuli before showing the orientation hint', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'Pixel 7 landscape', 'one touch project is sufficient for timeline ordering');
 
-  await page.goto('/experiment.html?participant_id=timeline-order-check&context=relmed&task=reversal');
+  await page.goto('/experiment.html?participant_id=timeline-order-check&task=reversal');
 
   const firstTwoTrials = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');

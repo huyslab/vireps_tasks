@@ -150,8 +150,6 @@
     </div>
 
     <script>
-        const CONTEXT = 'prolific';
-
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -183,11 +181,10 @@
                 return;
             }
 
-            // Redirect to experiment.html. Context is fixed to prolific: it selects the
-            // data-submission path in core/utils/data-handling.js (the relmed path posts to
-            // a parent window that only exists when embedded in the RELMED app), so it is a
-            // deployment property rather than something an experimenter should pick per run.
-            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&context=${encodeURIComponent(CONTEXT)}&task=${encodeURIComponent(task)}`;
+            // Redirect to experiment.html. There is a single data-submission route
+            // (core/utils/data-handling.js posts to REDCap via an AWS Lambda endpoint), so
+            // no per-run context selection is needed here.
+            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&task=${encodeURIComponent(task)}`;
         });
 
         // Enable real-time validation
