@@ -124,4 +124,86 @@ test.describe('data-queue', () => {
       )
       .toBe(false);
   });
+
+  test('newer snapshots for one record are sent in order and are not deleted by older sends', async ({ page }) => {
+    const requestBodies = [];
+    const releaseRequest = [];
+
+    // Hold each response until the test releases it. This makes the older request remain
+    // in flight while a newer cumulative snapshot is queued for the same REDCap row.
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await new Promise((resolve) => {
+        releaseRequest.push(async () => {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+          resolve();
+        });
+      });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('versions');
+    await page.evaluate(
+      ({ id }) => window.__dataQueue.submitRecord(
+        id,
+        JSON.stringify([{ record_id: id, snapshot: 'older' }]),
+        0,
+        () => {}
+      ),
+      { id: recordId }
+    );
+    await expect.poll(() => requestBodies.length).toBe(1);
+
+    await page.evaluate(
+      ({ id }) => window.__dataQueue.submitRecord(
+        id,
+        JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
+        0,
+        () => {}
+      ),
+      { id: recordId }
+    );
+
+    // A second request must not start until the first completes; otherwise a slow older
+    // response can overwrite the newer REDCap value or delete its queued snapshot.
+    await page.waitForTimeout(100);
+    expect(requestBodies).toHaveLength(1);
+    expect(requestBodies[0][0].snapshot).toBe('older');
+
+    await releaseRequest[0]();
+    await expect.poll(() => requestBodies.length).toBe(2);
+    expect(requestBodies[1][0].snapshot).toBe('newer');
+
+    await releaseRequest[1]();
+    await expect.poll(
+      () => page.evaluate((id) =>
+        window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
+      , recordId)
+    ).toBe(false);
+  });
+
+  test('development-mode saves do not create an unflushable local backlog', async ({ page }) => {
+    let requestCount = 0;
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestCount += 1;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('dev-host');
+    await page.evaluate(async ({ id }) => {
+      window.__forceOnlineRedcapForTesting = false;
+      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => {});
+    }, { id: recordId });
+
+    expect(requestCount).toBe(0);
+    const queued = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
+    , recordId);
+    expect(queued).toBe(false);
+  });
 });

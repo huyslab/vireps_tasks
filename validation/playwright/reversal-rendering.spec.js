@@ -20,6 +20,10 @@ test('reversal preloads stimuli before showing the orientation hint', async ({ p
   test.skip(testInfo.project.name !== 'Pixel 7 landscape', 'one touch project is sufficient for timeline ordering');
 
   await page.goto('/experiment.html?participant_id=timeline-order-check&task=reversal');
+  // experiment.html creates this same timeline on load. Wait until its classic sequence
+  // script has evaluated before asking for a second timeline, otherwise loadSequence() can
+  // see the still-loading script element and return before reversal_json exists.
+  await page.waitForFunction(() => typeof reversal_json === 'string');
 
   const firstTwoTrials = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');

@@ -27,6 +27,13 @@ const FLUSH_INTERVAL_MS = 45000;
 
 let dbPromise = null;
 let flushInFlight = false;
+let recordVersionCounter = 0;
+const recordSendChains = new Map();
+
+function createRecordVersion() {
+    recordVersionCounter += 1;
+    return `${Date.now()}-${recordVersionCounter}-${Math.random().toString(36).slice(2)}`;
+}
 
 /**
  * Whether network sends should be skipped (development/test mode).
@@ -76,45 +83,86 @@ function openDB() {
  * caller can still attempt a direct send.
  * @param {string} record_id
  * @param {string} payload - Already-serialized JSON body to POST.
- * @returns {Promise<void>}
+ * @returns {Promise<Object|null>} The stored queue entry, or null if persistence failed.
  */
 async function enqueueRecord(record_id, payload) {
+    const entry = {
+        record_id,
+        payload,
+        queued_at: new Date().toISOString(),
+        version: createRecordVersion()
+    };
     try {
         const db = await openDB();
         await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put({ record_id, payload, queued_at: new Date().toISOString() });
+            tx.objectStore(STORE_NAME).put(entry);
             tx.oncomplete = resolve;
             tx.onerror = () => reject(tx.error);
         });
+        return entry;
     } catch (error) {
         console.warn('data-queue: could not persist record for later retry (IndexedDB unavailable?); falling back to best-effort send only:', error);
+        return null;
     }
 }
 
 /**
- * Removes a record from the queue (call only once its submission is confirmed).
- * @param {string} record_id
+ * Checks whether an entry is still the newest queued snapshot for its record.
+ * Older in-flight snapshots must not be sent again after a newer save supersedes them.
+ * @param {{record_id: string, version?: string}} entry
+ * @returns {Promise<boolean>}
+ */
+async function isCurrentEntry(entry) {
+    try {
+        const db = await openDB();
+        const current = await new Promise((resolve, reject) => {
+            const request = db.transaction(STORE_NAME, 'readonly')
+                .objectStore(STORE_NAME)
+                .get(entry.record_id);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+        return current !== null && current.version === entry.version;
+    } catch (error) {
+        // If the queue cannot be inspected, allow the best-effort network attempt. This is
+        // preferable to silently suppressing a record when IndexedDB becomes unavailable.
+        return true;
+    }
+}
+
+/**
+ * Removes an entry only if it is still the newest queued snapshot for that record. The
+ * comparison and delete share one transaction, so a successful older request can never
+ * delete a newer snapshot that was queued while it was in flight.
+ * @param {{record_id: string, version?: string}} entry
  * @returns {Promise<void>}
  */
-async function dequeueRecord(record_id) {
+async function dequeueIfCurrent(entry) {
     try {
         const db = await openDB();
         await new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).delete(record_id);
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get(entry.record_id);
+            request.onsuccess = () => {
+                if (request.result && request.result.version === entry.version) {
+                    store.delete(entry.record_id);
+                }
+            };
+            request.onerror = () => reject(request.error);
             tx.oncomplete = resolve;
             tx.onerror = () => reject(tx.error);
         });
     } catch (error) {
-        console.warn(`data-queue: could not remove ${record_id} from the queue after a successful send:`, error);
+        console.warn(`data-queue: could not remove ${entry.record_id} from the queue after a successful send:`, error);
     }
 }
 
 /**
  * Lists every record currently queued. Never throws: returns an empty array if IndexedDB
  * is unavailable or the read fails.
- * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string}>>}
+ * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string, version?: string}>>}
  */
 async function listQueuedRecords() {
     try {
@@ -166,32 +214,86 @@ async function sendOnce(payload) {
 }
 
 /**
+ * Serializes sends for one REDCap record. Interim saves are cumulative snapshots that all
+ * target the same REDCap row, so allowing two versions to arrive out of order could leave
+ * the server with the older snapshot even if both requests succeed.
+ * @param {string} record_id
+ * @param {Function} work
+ * @returns {Promise<*>}
+ */
+function serializeRecordSend(record_id, work) {
+    const previous = recordSendChains.get(record_id) || Promise.resolve();
+    const current = previous.catch(() => {}).then(work);
+    recordSendChains.set(record_id, current);
+
+    const cleanup = () => {
+        if (recordSendChains.get(record_id) === current) {
+            recordSendChains.delete(record_id);
+        }
+    };
+    current.then(cleanup, cleanup);
+    return current;
+}
+
+function invokeCallback(callback, error) {
+    try {
+        callback(error);
+    } catch (callbackError) {
+        // A consumer callback must not turn a confirmed submission into a network retry.
+        console.error('data-queue: submission callback threw:', callbackError);
+    }
+}
+
+function wait(delay) {
+    return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+/**
  * Immediate retry loop for a single record, used right after it's built (short backoff,
  * bounded by retriesLeft). Exhausting retriesLeft does NOT drop the record - it stays
  * queued in IndexedDB for flushQueue() to keep retrying in the background.
- * @param {string} record_id
- * @param {string} payload
+ * @param {{record_id: string, payload: string, version?: string}} entry
  * @param {number} retriesLeft
  * @param {Function} callback
  */
-function attemptWithRetries(record_id, payload, retriesLeft, callback) {
-    sendOnce(payload)
-        .then(async (body) => {
-            console.log('Data successfully submitted to REDCap:', body);
-            await dequeueRecord(record_id);
-            callback();
-            // Network is clearly working - opportunistically drain any other backlog now.
-            flushQueue();
-        })
-        .catch((error) => {
-            console.warn(`data-queue: submit attempt failed for ${record_id}:`, error);
-            if (retriesLeft > 0) {
-                setTimeout(() => attemptWithRetries(record_id, payload, retriesLeft - 1, callback), 1000);
-            } else {
-                console.warn(`data-queue: exhausted immediate retries for ${record_id}; left queued for background flush (page reload / reconnect / periodic retry).`);
-                callback(error);
+function attemptWithRetries(entry, retriesLeft, callback) {
+    serializeRecordSend(entry.record_id, async () => {
+        let remaining = Math.max(0, Number(retriesLeft) || 0);
+
+        while (true) {
+            if (entry.version && !(await isCurrentEntry(entry))) {
+                // A newer cumulative snapshot contains everything in this one. Let that
+                // snapshot send next instead of delaying it or later overwriting it.
+                invokeCallback(callback);
+                return;
             }
-        });
+
+            try {
+                const body = await sendOnce(entry.payload);
+                console.log('Data successfully submitted to REDCap:', body);
+                if (entry.version) {
+                    await dequeueIfCurrent(entry);
+                }
+                invokeCallback(callback);
+                // Network is clearly working - opportunistically drain any other backlog.
+                flushQueue();
+                return;
+            } catch (error) {
+                console.warn(`data-queue: submit attempt failed for ${entry.record_id}:`, error);
+                if (remaining > 0) {
+                    remaining -= 1;
+                    await wait(1000);
+                    continue;
+                }
+                console.warn(`data-queue: exhausted immediate retries for ${entry.record_id}; left queued for background flush (page reload / reconnect / periodic retry).`);
+                invokeCallback(callback, error);
+                return;
+            }
+        }
+    }).catch((error) => {
+        console.error(`data-queue: unexpected submission failure for ${entry.record_id}:`, error);
+        invokeCallback(callback, error);
+    });
 }
 
 /**
@@ -204,17 +306,20 @@ function attemptWithRetries(record_id, payload, retriesLeft, callback) {
  *   back to the background queue.
  * @param {Function} callback - Called with no arguments on success, or an Error once
  *   immediate retries are exhausted (the record remains queued regardless).
+ * @returns {Promise<{persisted: boolean, skipped: boolean}>} Resolves once the write-ahead
+ *   persistence step is complete and the network attempt has been scheduled.
  */
-async function submitRecord(record_id, payload, immediateRetries, callback) {
-    await enqueueRecord(record_id, payload);
-
+async function submitRecord(record_id, payload, immediateRetries, callback = () => {}) {
     if (isDevHost()) {
         console.log('Development mode: skipping REDCap network save.');
-        callback();
-        return;
+        invokeCallback(callback);
+        return { persisted: false, skipped: true };
     }
 
-    attemptWithRetries(record_id, payload, immediateRetries, callback);
+    const queuedEntry = await enqueueRecord(record_id, payload);
+    const entry = queuedEntry || { record_id, payload };
+    attemptWithRetries(entry, immediateRetries, callback);
+    return { persisted: queuedEntry !== null, skipped: false };
 }
 
 /**
@@ -234,15 +339,22 @@ async function flushQueue() {
             return;
         }
         console.log(`data-queue: attempting to flush ${records.length} pending record(s)`);
-        for (const { record_id, payload } of records) {
-            try {
-                await sendOnce(payload);
-                await dequeueRecord(record_id);
-                console.log(`data-queue: flushed pending record ${record_id}`);
-            } catch (error) {
-                console.warn(`data-queue: still unable to send ${record_id}; will retry later:`, error);
-                // Left in place - never deleted on failure.
-            }
+        for (const entry of records) {
+            await serializeRecordSend(entry.record_id, async () => {
+                // The snapshot returned by getAll() may have been replaced while earlier
+                // records were flushing. Never send that stale copy after its replacement.
+                if (!(await isCurrentEntry(entry))) {
+                    return;
+                }
+                try {
+                    await sendOnce(entry.payload);
+                    await dequeueIfCurrent(entry);
+                    console.log(`data-queue: flushed pending record ${entry.record_id}`);
+                } catch (error) {
+                    console.warn(`data-queue: still unable to send ${entry.record_id}; will retry later:`, error);
+                    // Left in place - never deleted on failure.
+                }
+            });
         }
     } finally {
         flushInFlight = false;

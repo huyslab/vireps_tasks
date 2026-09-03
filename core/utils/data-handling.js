@@ -1,6 +1,8 @@
 import { preventRefresh} from "./participation-validation.js"
 import { submitRecord } from "./data-queue.js"
 
+let finalSaveGeneration = 0;
+
 /**
  * Data handling and communication utilities
  * Manages data saving, state updates, and communication with parent windows/servers
@@ -80,6 +82,8 @@ function updateState(state, save_data = true) {
  * @param {Object} extra_fields - Additional fields (currently unused - kept for callers
  *   that still pass one, e.g. endExperiment's {message: "endTask"}; not sent to REDCap)
  * @param {Function} callback - Callback function to execute after successful submission
+ * @returns {Promise<{persisted: boolean, skipped: boolean}>} Resolves after the local
+ *   write-ahead attempt and reports whether the record was persisted or intentionally skipped.
  */
 function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
 
@@ -111,7 +115,7 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
 
     console.log("Data to be sent:", redcap_record);
 
-    submitRecord(record_id, redcap_record, retry, callback);
+    return submitRecord(record_id, redcap_record, retry, callback);
 }
 
 /**
@@ -123,14 +127,41 @@ function endExperiment() {
     // Print end experiment message
     console.log("Experiment finished. Sending final data...");
 
-    // Remove beforeunload event listener to allow page navigation
-    window.removeEventListener('beforeunload', preventRefresh);
+    // Some module timelines invoke endExperiment more than once near completion (for
+    // example, on bonus finish and again on the final message). Re-arm the guard and only
+    // let the newest final snapshot release it.
+    const saveGeneration = ++finalSaveGeneration;
+    window.addEventListener('beforeunload', preventRefresh);
+    const allowUnloadIfLatest = () => {
+        if (saveGeneration === finalSaveGeneration) {
+            window.removeEventListener('beforeunload', preventRefresh);
+        }
+    };
 
     // Final save gets more immediate retries than interim saves; extra_fields is passed
     // for continuity but is currently unused (see saveDataREDCap's JSDoc).
-    saveDataREDCap(10, {
+    const persistence = saveDataREDCap(10, {
         message: "endTask"
+    }, (error) => {
+        // If IndexedDB was unavailable, only a confirmed network send makes it safe to
+        // leave. On exhausted retries, retain the unload warning rather than silently
+        // allowing the only copy of the final snapshot to disappear.
+        if (!error) {
+            allowUnloadIfLatest();
+        }
     });
+
+    // Normally the write-ahead queue is enough to make navigation safe; do not make the
+    // participant wait for the network once IndexedDB has committed the final snapshot.
+    persistence.then(({ persisted, skipped }) => {
+        if (persisted || skipped) {
+            allowUnloadIfLatest();
+        }
+    }).catch((error) => {
+        console.error('Failed to persist final data before completion:', error);
+    });
+
+    return persistence;
 }
 
 // Export functions for use in other modules
@@ -140,5 +171,3 @@ export {
     saveDataREDCap,
     endExperiment
 };
-
-
