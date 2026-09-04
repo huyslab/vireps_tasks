@@ -1,10 +1,12 @@
 import base64
+import binascii
 import hashlib
 import json
 import re
 import time
 from os import environ
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
@@ -17,6 +19,10 @@ NONCE_PREFIX = "NONCE#"
 STATUS_RECORD_ID = "__device_status__"
 DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 NONCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
+
+
+class AuthorizationDenied(Exception):
+    """A caller-controlled authorization failure that API Gateway should return as 401."""
 
 
 def get_table():
@@ -187,13 +193,13 @@ def public_key_from_device(device):
     return ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
 
 
-def verify_signature(device, message, encoded_signature):
+def verify_signature(public_key, message, encoded_signature):
     raw_signature = base64url_decode(encoded_signature)
     if len(raw_signature) != 64:
         raise ValueError("Invalid P-256 signature length")
     r = int.from_bytes(raw_signature[:32], "big")
     s = int.from_bytes(raw_signature[32:], "big")
-    public_key_from_device(device).verify(
+    public_key.verify(
         encode_dss_signature(r, s),
         message,
         ec.ECDSA(hashes.SHA256()),
@@ -229,26 +235,40 @@ def allow_policy(device_id, method_arn, record_id):
 
 def authorizer_handler(event, context):
     try:
-        headers = normalized_headers(event)
-        device_id = headers["x-device-id"]
-        record_id = headers["x-record-id"]
-        timestamp_text = headers["x-request-timestamp"]
-        nonce = headers["x-request-nonce"]
-        signature = headers["x-device-signature"]
-        method_arn = event["methodArn"]
+        try:
+            headers = normalized_headers(event)
+            device_id = headers["x-device-id"]
+            record_id = headers["x-record-id"]
+            timestamp_text = headers["x-request-timestamp"]
+            nonce = headers["x-request-nonce"]
+            signature = headers["x-device-signature"]
+            method_arn = event["methodArn"]
 
-        if not DEVICE_ID_PATTERN.fullmatch(device_id):
-            raise ValueError("Invalid device ID")
-        if not isinstance(record_id, str) or not 1 <= len(record_id) <= 256:
-            raise ValueError("Invalid record ID")
-        if not NONCE_PATTERN.fullmatch(nonce):
-            raise ValueError("Invalid nonce")
+            if not isinstance(device_id, str) or not DEVICE_ID_PATTERN.fullmatch(device_id):
+                raise ValueError("Invalid device ID")
+            if not isinstance(record_id, str) or not 1 <= len(record_id) <= 256:
+                raise ValueError("Invalid record ID")
+            if not isinstance(nonce, str) or not NONCE_PATTERN.fullmatch(nonce):
+                raise ValueError("Invalid nonce")
+            if not isinstance(signature, str):
+                raise ValueError("Invalid signature")
+            timestamp = int(timestamp_text)
+            message = canonical_request(
+                device_id, record_id, timestamp_text, nonce
+            )
+        except (AttributeError, KeyError, TypeError, ValueError) as error:
+            raise AuthorizationDenied("Malformed request credentials") from error
 
-        timestamp = int(timestamp_text)
+        try:
+            max_age = int(environ.get("REQUEST_MAX_AGE_SECONDS", "300"))
+        except ValueError as error:
+            raise RuntimeError("REQUEST_MAX_AGE_SECONDS must be an integer") from error
+        if max_age <= 0:
+            raise RuntimeError("REQUEST_MAX_AGE_SECONDS must be positive")
+
         now = int(time.time())
-        max_age = int(environ.get("REQUEST_MAX_AGE_SECONDS", "300"))
         if abs(now - timestamp) > max_age:
-            raise ValueError("Stale request")
+            raise AuthorizationDenied("Stale request")
 
         table = get_table()
         device = table.get_item(
@@ -256,21 +276,31 @@ def authorizer_handler(event, context):
             ConsistentRead=True,
         ).get("Item")
         if not device or device.get("status") != "approved":
-            raise ValueError("Device is not approved")
+            raise AuthorizationDenied("Device is not approved")
 
-        message = canonical_request(device_id, record_id, timestamp_text, nonce)
-        verify_signature(device, message, signature)
+        # A malformed stored public key indicates corrupted server-side state, not bad
+        # caller credentials, so construct it outside the credential-error conversion.
+        public_key = public_key_from_device(device)
+        try:
+            verify_signature(public_key, message, signature)
+        except (binascii.Error, InvalidSignature, TypeError, ValueError) as error:
+            raise AuthorizationDenied("Invalid device signature") from error
 
-        table.put_item(
-            Item={
-                "pk": f"{NONCE_PREFIX}{device_id}#{nonce}",
-                "kind": "nonce",
-                "expires_at": now + (max_age * 2),
-            },
-            ConditionExpression="attribute_not_exists(pk)",
-        )
+        try:
+            table.put_item(
+                Item={
+                    "pk": f"{NONCE_PREFIX}{device_id}#{nonce}",
+                    "kind": "nonce",
+                    "expires_at": now + (max_age * 2),
+                },
+                ConditionExpression="attribute_not_exists(pk)",
+            )
+        except Exception as error:
+            if is_conditional_failure(error):
+                raise AuthorizationDenied("Replayed nonce") from error
+            raise
         return allow_policy(device_id, method_arn, record_id)
-    except Exception as error:
+    except AuthorizationDenied as error:
         # API Gateway converts this exact authorizer error into a 401. Do not expose which
         # credential component failed, and never log signatures or enrollment codes.
         print(f"Device authorization denied: {type(error).__name__}")

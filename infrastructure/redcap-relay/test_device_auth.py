@@ -136,6 +136,25 @@ class DeviceAuthorizationTest(unittest.TestCase):
                 device_auth.authorizer_handler(self.authorizer_event(), None)
 
     @patch("device_auth.time.time", return_value=NOW)
+    def test_authorizer_surfaces_dynamodb_read_failure(self, current_time):
+        table = Mock()
+        table.get_item.side_effect = RuntimeError("DynamoDB unavailable")
+
+        with patch("device_auth.get_table", return_value=table):
+            with self.assertRaisesRegex(RuntimeError, "DynamoDB unavailable"):
+                device_auth.authorizer_handler(self.authorizer_event(), None)
+
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_authorizer_surfaces_dynamodb_nonce_write_failure(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {"Item": self.device}
+        table.put_item.side_effect = RuntimeError("DynamoDB unavailable")
+
+        with patch("device_auth.get_table", return_value=table):
+            with self.assertRaisesRegex(RuntimeError, "DynamoDB unavailable"):
+                device_auth.authorizer_handler(self.authorizer_event(), None)
+
+    @patch("device_auth.time.time", return_value=NOW)
     def test_enrollment_consumes_code_and_registers_public_key(self, current_time):
         table = Mock()
         table.name = "DeviceAuthTable"

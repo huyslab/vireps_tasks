@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
 const ENROLLMENT_ENDPOINT = `${REDCAP_ENDPOINT}/enroll`;
+const STATUS_ENDPOINT = `${REDCAP_ENDPOINT}/device-status`;
 
 function decodeBase64url(value) {
   const padding = '='.repeat((4 - (value.length % 4)) % 4);
@@ -70,6 +71,29 @@ test('enrollment stores a non-exportable key that signs the exact record ID afte
   }, { jwk: enrolledPublicKey, message: canonical, signature: signed.headers['X-Device-Signature'] });
   expect(signatureIsValid).toBe(true);
   expect(decodeBase64url(signed.headers['X-Request-Nonce'])).toHaveLength(16);
+});
+
+test('an enrolled device treats a status-service failure as offline, not demo mode', async ({ page }) => {
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'Offline tablet', status: 'approved' })
+    });
+  });
+  await page.route(STATUS_ENDPOINT, async (route) => {
+    await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"unavailable"}' });
+  });
+
+  await page.goto('/validation/fixtures/device-auth.html');
+  await page.waitForFunction(() => window.__DEVICE_AUTH_FIXTURE_READY === true);
+  const status = await page.evaluate(async () => {
+    await window.__deviceAuth.enrollDevice('single-use-enrollment-code-for-test');
+    return window.__deviceAuth.getDeviceAuthorizationStatus();
+  });
+
+  expect(status).toEqual({ approved: true, verified: false });
 });
 
 test('an unapproved device gets a demo notice and its data is not saved', async ({ page }) => {
