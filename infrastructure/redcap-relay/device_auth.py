@@ -75,6 +75,16 @@ def is_conditional_failure(error):
     )
 
 
+def transaction_conditional_failure_index(error):
+    response = getattr(error, "response", {})
+    if response.get("Error", {}).get("Code") != "TransactionCanceledException":
+        return None
+    for index, reason in enumerate(response.get("CancellationReasons", [])):
+        if reason.get("Code") == "ConditionalCheckFailed":
+            return index
+    return None
+
+
 def enrollment_handler(event, context):
     try:
         body = json.loads(event.get("body") or "")
@@ -99,44 +109,61 @@ def enrollment_handler(event, context):
     now = int(time.time())
     code_hash = hashlib.sha256(enrollment_code.encode("utf-8")).hexdigest()
     table = get_table()
+    enrollment_key = f"{ENROLLMENT_PREFIX}{code_hash}"
+    device_key = f"{DEVICE_PREFIX}{device_id}"
+
+    # DynamoDB transactions cannot copy an attribute from the enrollment item into the
+    # new device item. Read the human-readable label first; the transaction below still
+    # revalidates the code's state and expiry before committing either write.
+    enrollment = table.get_item(
+        Key={"pk": enrollment_key},
+        ConsistentRead=True,
+    ).get("Item")
+    label = (enrollment or {}).get("label", "Unlabelled device")
+    serialized_public_key = json.dumps(public_key, separators=(",", ":"))
 
     try:
-        claimed_code = table.update_item(
-            Key={"pk": f"{ENROLLMENT_PREFIX}{code_hash}"},
-            UpdateExpression="SET used_at = :now, used_by = :device_id",
-            ConditionExpression=(
-                "#kind = :kind AND expires_at >= :now "
-                "AND attribute_not_exists(used_at)"
-            ),
-            ExpressionAttributeNames={"#kind": "kind"},
-            ExpressionAttributeValues={
-                ":kind": "enrollment",
-                ":now": now,
-                ":device_id": device_id,
-            },
-            ReturnValues="ALL_NEW",
+        table.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": table.name,
+                        "Key": {"pk": {"S": enrollment_key}},
+                        "UpdateExpression": "SET used_at = :now, used_by = :device_id",
+                        "ConditionExpression": (
+                            "#kind = :kind AND expires_at >= :now "
+                            "AND attribute_not_exists(used_at)"
+                        ),
+                        "ExpressionAttributeNames": {"#kind": "kind"},
+                        "ExpressionAttributeValues": {
+                            ":kind": {"S": "enrollment"},
+                            ":now": {"N": str(now)},
+                            ":device_id": {"S": device_id},
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": table.name,
+                        "Item": {
+                            "pk": {"S": device_key},
+                            "kind": {"S": "device"},
+                            "device_id": {"S": device_id},
+                            "label": {"S": label},
+                            "status": {"S": "approved"},
+                            "public_key": {"S": serialized_public_key},
+                            "enrolled_at": {"N": str(now)},
+                        },
+                        "ConditionExpression": "attribute_not_exists(pk)",
+                    }
+                },
+            ]
         )
     except Exception as error:
-        if is_conditional_failure(error):
+        failed_operation = transaction_conditional_failure_index(error)
+        if failed_operation == 0:
             return api_response(401, {"error": "Enrollment code is invalid or expired"})
-        raise
-
-    label = claimed_code.get("Attributes", {}).get("label", "Unlabelled device")
-    try:
-        table.put_item(
-            Item={
-                "pk": f"{DEVICE_PREFIX}{device_id}",
-                "kind": "device",
-                "device_id": device_id,
-                "label": label,
-                "status": "approved",
-                "public_key": json.dumps(public_key, separators=(",", ":")),
-                "enrolled_at": now,
-            },
-            ConditionExpression="attribute_not_exists(pk)",
-        )
-    except Exception as error:
-        if is_conditional_failure(error):
+        if failed_operation == 1:
             return api_response(409, {"error": "Device ID is already registered"})
         raise
 

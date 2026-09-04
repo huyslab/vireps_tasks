@@ -21,6 +21,16 @@ class ConditionalFailure(Exception):
     response = {"Error": {"Code": "ConditionalCheckFailedException"}}
 
 
+class TransactionFailure(Exception):
+    def __init__(self, failed_operation):
+        reasons = [{"Code": "None"}, {"Code": "None"}]
+        reasons[failed_operation] = {"Code": "ConditionalCheckFailed"}
+        self.response = {
+            "Error": {"Code": "TransactionCanceledException"},
+            "CancellationReasons": reasons,
+        }
+
+
 def base64url(value):
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -128,8 +138,9 @@ class DeviceAuthorizationTest(unittest.TestCase):
     @patch("device_auth.time.time", return_value=NOW)
     def test_enrollment_consumes_code_and_registers_public_key(self, current_time):
         table = Mock()
-        table.update_item.return_value = {
-            "Attributes": {"label": "Pharmacy tablet 1"}
+        table.name = "DeviceAuthTable"
+        table.get_item.return_value = {
+            "Item": {"kind": "enrollment", "label": "Pharmacy tablet 1"}
         }
         event = {
             "body": json.dumps(
@@ -145,15 +156,20 @@ class DeviceAuthorizationTest(unittest.TestCase):
             result = device_auth.enrollment_handler(event, None)
 
         self.assertEqual(result["statusCode"], 201)
-        registered = table.put_item.call_args.kwargs["Item"]
-        self.assertEqual(registered["status"], "approved")
-        self.assertEqual(registered["label"], "Pharmacy tablet 1")
-        self.assertEqual(json.loads(registered["public_key"])["crv"], "P-256")
+        transaction = table.meta.client.transact_write_items.call_args.kwargs
+        self.assertEqual(len(transaction["TransactItems"]), 2)
+        registered = transaction["TransactItems"][1]["Put"]["Item"]
+        self.assertEqual(registered["status"], {"S": "approved"})
+        self.assertEqual(registered["label"], {"S": "Pharmacy tablet 1"})
+        self.assertEqual(json.loads(registered["public_key"]["S"])["crv"], "P-256")
+        table.update_item.assert_not_called()
+        table.put_item.assert_not_called()
 
     @patch("device_auth.time.time", return_value=NOW)
     def test_enrollment_rejects_used_or_expired_code(self, current_time):
         table = Mock()
-        table.update_item.side_effect = ConditionalFailure()
+        table.name = "DeviceAuthTable"
+        table.meta.client.transact_write_items.side_effect = TransactionFailure(0)
         event = {
             "body": json.dumps(
                 {
@@ -168,6 +184,33 @@ class DeviceAuthorizationTest(unittest.TestCase):
             result = device_auth.enrollment_handler(event, None)
 
         self.assertEqual(result["statusCode"], 401)
+        table.update_item.assert_not_called()
+        table.put_item.assert_not_called()
+
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_enrollment_device_conflict_rolls_back_code_claim(self, current_time):
+        table = Mock()
+        table.name = "DeviceAuthTable"
+        table.get_item.return_value = {
+            "Item": {"kind": "enrollment", "label": "Pharmacy tablet 1"}
+        }
+        table.meta.client.transact_write_items.side_effect = TransactionFailure(1)
+        event = {
+            "body": json.dumps(
+                {
+                    "enrollment_code": "a-valid-single-use-enrollment-code",
+                    "device_id": DEVICE_ID,
+                    "public_key": public_jwk(self.private_key),
+                }
+            )
+        }
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.enrollment_handler(event, None)
+
+        self.assertEqual(result["statusCode"], 409)
+        table.meta.client.transact_write_items.assert_called_once()
+        table.update_item.assert_not_called()
         table.put_item.assert_not_called()
 
 

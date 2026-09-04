@@ -114,8 +114,8 @@ Resources:
           Statement:
             - Effect: Allow
               Action:
-                - dynamodb:PutItem
-                - dynamodb:UpdateItem
+                - dynamodb:GetItem
+                - dynamodb:TransactWriteItems
               Resource: !GetAtt DeviceAuthTable.Arn
       Events:
         Api:
