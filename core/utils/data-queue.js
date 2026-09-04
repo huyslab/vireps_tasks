@@ -20,6 +20,7 @@ const DB_NAME = 'redcap_pending_queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'records';
 const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
+const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 
 // Frequent enough to drain a backlog reasonably soon after connectivity returns,
 // infrequent enough not to hammer a flaky-but-not-fully-offline connection.
@@ -206,22 +207,44 @@ if (typeof window !== 'undefined') {
 /**
  * Performs a single POST to the REDCap Lambda endpoint. Treats a non-2xx response as a
  * failure (the previous implementation only checked the response's parsed JSON body for a
- * status field, which meant an HTTP-level error was never actually retried).
+ * status field, which meant an HTTP-level error was never actually retried). The request is
+ * also bounded so a half-open connection cannot hold the serialized queue indefinitely.
  * @param {string} payload
  * @returns {Promise<*>} Parsed JSON response body, or null if the body wasn't JSON.
  */
 async function sendOnce(payload) {
-    const response = await fetch(REDCAP_ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: payload
-    });
-    if (!response.ok) {
-        throw new Error(`REDCap endpoint responded with HTTP ${response.status}`);
+    const testingTimeout = Number(window.__redcapRequestTimeoutMsForTesting);
+    const timeoutMs = Number.isFinite(testingTimeout) && testingTimeout > 0
+        ? testingTimeout
+        : REDCAP_REQUEST_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, timeoutMs);
+
+    try {
+        const response = await fetch(REDCAP_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: payload,
+            signal: controller.signal
+        });
+        if (!response.ok) {
+            throw new Error(`REDCap endpoint responded with HTTP ${response.status}`);
+        }
+        return response.json().catch(() => null);
+    } catch (error) {
+        if (timedOut) {
+            throw new Error(`REDCap request timed out after ${timeoutMs} ms`);
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
-    return response.json().catch(() => null);
 }
 
 /**

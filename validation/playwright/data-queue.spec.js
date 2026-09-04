@@ -235,4 +235,59 @@ test.describe('data-queue', () => {
 
     expect(pendingCount).toBe(1);
   });
+
+  test('a timed-out request does not prevent later queued records from flushing', async ({ page }) => {
+    let phase = 'queue';
+    const flushAttempts = [];
+    const recordPrefix = uniqueRecordId('timeout');
+    const stalledRecordId = `${recordPrefix}_a-stalled`;
+    const laterRecordId = `${recordPrefix}_b-later`;
+
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      const [{ record_id: recordId }] = JSON.parse(route.request().postData());
+      if (phase === 'queue') {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mocked failure"}' });
+        return;
+      }
+
+      flushAttempts.push(recordId);
+      if (recordId === stalledRecordId) {
+        // Leave this request half-open well beyond the short test timeout. The production
+        // timeout remains 30 seconds; the override only keeps this regression test fast.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+        } catch (error) {
+          // Expected: AbortController has already cancelled the intercepted request.
+        }
+        return;
+      }
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    for (const recordId of [stalledRecordId, laterRecordId]) {
+      await page.evaluate(
+        ({ id }) => new Promise((resolve) => {
+          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
+        }),
+        { id: recordId }
+      );
+    }
+
+    phase = 'flush';
+    await page.evaluate(async () => {
+      window.__redcapRequestTimeoutMsForTesting = 50;
+      await window.__dataQueue.flushQueue();
+    });
+
+    expect(flushAttempts).toEqual([stalledRecordId, laterRecordId]);
+    const queuedRecordIds = await page.evaluate(() =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.map((record) => record.record_id))
+    );
+    expect(queuedRecordIds).toEqual([stalledRecordId]);
+  });
 });

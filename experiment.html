@@ -156,8 +156,10 @@
             body[data-preferred-orientation="landscape"] .phone-rotate-icon svg { animation: rotate-to-landscape 2.5s ease-in-out infinite; }
         }
 
-        /* Shown before a new session starts if this device is still carrying unsent data
-           from a previous session (see the pending-data gate in the module script below).
+        /* Shown once before a new session starts if this device is still carrying unsent
+           data from a previous session (see the pending-data notice in the module script).
+           This is an acknowledgement, not a gate: staff can continue while background
+           retries run, and the notice is not shown again during the active experiment.
            Toggled via JS (display:none by default), not CSS - it depends on an async
            IndexedDB read, not on a static device property like the orientation gate. */
         #pending-data-overlay {
@@ -318,8 +320,9 @@
 
         // Before starting a new session, check whether this tablet is still carrying
         // unsent data from a previous one (core/utils/data-queue.js already started
-        // retrying it in the background as soon as this page loaded - this is a visibility
-        // check plus an explicit go-ahead, not a way of triggering that retry).
+        // retrying it in the background as soon as this page loaded). This is deliberately
+        // a one-time acknowledgement plus an explicit go-ahead, not a blocking gate or a
+        // live queue monitor during the experiment.
         async function startSession() {
             let pendingCount = 0;
             try {
