@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <base href="../../">
+    <title>Fixture: device authentication</title>
+</head>
+<body>
+    <script type="module">
+        import {
+            createSignedRequestHeaders,
+            enrollDevice,
+            getDeviceAuthorizationStatus,
+            getDeviceIdentity
+        } from './core/utils/device-auth.js';
+
+        window.__deviceAuth = {
+            createSignedRequestHeaders,
+            enrollDevice,
+            getDeviceAuthorizationStatus,
+            getDeviceIdentity
+        };
+        window.__DEVICE_AUTH_FIXTURE_READY = true;
+    </script>
+</body>
+</html>

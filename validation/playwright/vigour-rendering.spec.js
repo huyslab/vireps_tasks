@@ -2,6 +2,12 @@ import { expect, test } from '@playwright/test';
 import { defineTaskRenderingTest } from './support/render-check.js';
 import { TASKS } from './support/task-config.js';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
+  });
+});
+
 defineTaskRenderingTest('vigour', {
   ...TASKS.vigour,
   extraChecks: async (page) => {

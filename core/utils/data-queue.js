@@ -1,3 +1,9 @@
+import {
+    REDCAP_ENDPOINT,
+    createSignedRequestHeaders,
+    hasDeviceIdentity
+} from './device-auth.js';
+
 /**
  * Durable local queue for REDCap submissions.
  *
@@ -21,7 +27,6 @@ const DB_VERSION = 2;
 const STORE_NAME = 'records';
 const METADATA_STORE_NAME = 'metadata';
 const VERSION_COUNTER_KEY = 'snapshot_version';
-const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
 const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 
 let dbPromise = null;
@@ -259,10 +264,11 @@ if (typeof window !== 'undefined') {
  * failure (the previous implementation only checked the response's parsed JSON body for a
  * status field, which meant an HTTP-level error was never actually retried). The request is
  * also bounded so a half-open connection cannot hold the serialized queue indefinitely.
+ * @param {string} record_id
  * @param {string} payload
  * @returns {Promise<*>} Parsed JSON response body, or null if the body wasn't JSON.
  */
-async function sendOnce(payload) {
+async function sendOnce(record_id, payload) {
     const testingTimeout = Number(window.__redcapRequestTimeoutMsForTesting);
     const timeoutMs = Number.isFinite(testingTimeout) && testingTimeout > 0
         ? testingTimeout
@@ -275,10 +281,12 @@ async function sendOnce(payload) {
     }, timeoutMs);
 
     try {
+        const signedHeaders = await createSignedRequestHeaders(record_id);
         const response = await fetch(REDCAP_ENDPOINT, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...signedHeaders
             },
             body: payload,
             signal: controller.signal
@@ -354,7 +362,7 @@ function attemptWithRetries(entry, retriesLeft, callback) {
             }
 
             try {
-                const body = await sendOnce(entry.payload);
+                const body = await sendOnce(entry.record_id, entry.payload);
                 console.log('Data successfully submitted to REDCap:', body);
                 if (entry.version != null) {
                     // A fallback entry can still supersede an older snapshot that remains
@@ -402,6 +410,12 @@ async function submitRecord(record_id, payload, immediateRetries, callback = () 
         return { persisted: false, skipped: true };
     }
 
+    if (window.__redcapDemoMode === true || !(await hasDeviceIdentity())) {
+        console.log('Demo mode: this device is not approved; skipping REDCap data save.');
+        invokeCallback(callback);
+        return { persisted: false, skipped: true };
+    }
+
     const entry = await enqueueRecord(record_id, payload);
     attemptWithRetries(entry, immediateRetries, callback);
     return { persisted: entry.persisted, skipped: false };
@@ -419,6 +433,9 @@ async function flushQueue() {
     }
     flushInFlight = true;
     try {
+        if (!(await hasDeviceIdentity())) {
+            return;
+        }
         const records = await listQueuedRecords();
         if (records.length === 0) {
             return;
@@ -432,7 +449,7 @@ async function flushQueue() {
                     return;
                 }
                 try {
-                    await sendOnce(entry.payload);
+                    await sendOnce(entry.record_id, entry.payload);
                     await dequeueIfNotNewer(entry);
                     console.log(`data-queue: flushed pending record ${entry.record_id}`);
                 } catch (error) {

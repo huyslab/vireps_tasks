@@ -43,14 +43,74 @@ async function mockRedcapEndpoint(page) {
 }
 
 test.describe('data-queue', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ context }) => {
     // Forces isDevHost() to false so submitRecord()/flushQueue() attempt real fetch()es
     // against the (mocked) endpoint even though the page is served from 127.0.0.1.
     // addInitScript re-runs on every navigation within this page, so it also covers the
     // reload in the third test below.
-    await page.addInitScript(() => {
+    await context.addInitScript(() => {
       window.__forceOnlineRedcapForTesting = true;
+      window.__redcapDeviceSignerForTesting = async (recordId) => ({
+        'X-Device-Id': 'test-approved-device',
+        'X-Record-Id': recordId,
+        'X-Request-Timestamp': '1788523200',
+        'X-Request-Nonce': 'AAAAAAAAAAAAAAAAAAAAAA',
+        'X-Device-Signature': 'test-signature',
+      });
     });
+  });
+
+  test('an unapproved demo device neither transmits nor queues data', async ({ page }) => {
+    let requestCount = 0;
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestCount += 1;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('demo');
+    const result = await page.evaluate(async ({ id }) => {
+      delete window.__redcapDeviceSignerForTesting;
+      window.__redcapDemoMode = true;
+      return window.__dataQueue.submitRecord(
+        id,
+        JSON.stringify([{ record_id: id }]),
+        0,
+        () => {}
+      );
+    }, { id: recordId });
+
+    expect(result).toEqual({ persisted: false, skipped: true });
+    expect(requestCount).toBe(0);
+    const queued = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
+    , recordId);
+    expect(queued).toBe(false);
+  });
+
+  test('an approved submission sends authorization bound to its record ID', async ({ page }) => {
+    let requestHeaders;
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestHeaders = route.request().headers();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('authorized');
+    await page.evaluate(
+      ({ id }) => new Promise((resolve) => {
+        window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
+      }),
+      { id: recordId }
+    );
+
+    expect(requestHeaders['x-device-id']).toBe('test-approved-device');
+    expect(requestHeaders['x-record-id']).toBe(recordId);
+    expect(requestHeaders['x-device-signature']).toBe('test-signature');
   });
 
   test('a failed send leaves the record queued, and a later flush drains it', async ({ page }) => {

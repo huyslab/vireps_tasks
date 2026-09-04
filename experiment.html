@@ -156,13 +156,11 @@
             body[data-preferred-orientation="landscape"] .phone-rotate-icon svg { animation: rotate-to-landscape 2.5s ease-in-out infinite; }
         }
 
-        /* Shown once before a new session starts if this device is still carrying unsent
-           data from a previous session (see the pending-data notice in the module script).
-           This is an acknowledgement, not a gate: staff can continue while the record
-           remains safely stored, and the notice is not shown again during the experiment.
-           Toggled via JS (display:none by default), not CSS - it depends on an async
-           IndexedDB read, not on a static device property like the orientation gate. */
-        #pending-data-overlay {
+        /* Startup notices for a previous-session backlog or an unapproved demo device.
+           Both are acknowledgements rather than experiment gates and are toggled after
+           asynchronous IndexedDB/device checks rather than by static media queries. */
+        #pending-data-overlay,
+        #demo-mode-overlay {
             display: none;
             flex-direction: column;
             gap: 20px;
@@ -179,14 +177,16 @@
             padding: 24px;
             box-sizing: border-box;
         }
-        #pending-data-overlay p {
+        #pending-data-overlay p,
+        #demo-mode-overlay p {
             font-size: clamp(16px, 4vw, 20px);
             color: #182b4b;
             line-height: 1.4;
             max-width: min(600px, 90vw);
             margin: 0;
         }
-        #pending-data-continue {
+        #pending-data-continue,
+        #demo-mode-continue {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -219,6 +219,12 @@
         <button id="pending-data-continue">Continue</button>
     </div>
 
+    <div id="demo-mode-overlay">
+        <p><strong>Demo mode</strong></p>
+        <p>This device is not approved for data collection. The experiment can continue, but no data will be saved.</p>
+        <button id="demo-mode-continue">Continue in demo mode</button>
+    </div>
+
     <script>
         (function () {
             function setOrientationAngle() {
@@ -235,7 +241,7 @@
     <script type="module">
         // Import task registry functions
         import { createTaskTimeline, getTaskInfo } from '@api/index.js';
-        import { enterExperiment, getPendingCount } from '@utils/index.js';
+        import { enterExperiment, getDeviceAuthorizationStatus, getPendingCount } from '@utils/index.js';
 
         // Get parameters from URL (populated by index.html's setup form redirect)
         window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
@@ -324,6 +330,18 @@
         // a one-time acknowledgement plus an explicit go-ahead, not a blocking gate or a
         // live queue monitor during the experiment.
         async function startSession() {
+            const deviceStatus = await getDeviceAuthorizationStatus();
+            window.__redcapDemoMode = !deviceStatus.approved;
+            if (!deviceStatus.approved) {
+                const demoOverlay = document.getElementById('demo-mode-overlay');
+                demoOverlay.style.display = 'flex';
+                document.getElementById('demo-mode-continue').addEventListener('click', () => {
+                    demoOverlay.style.display = 'none';
+                    runExperiment();
+                }, { once: true });
+                return;
+            }
+
             let pendingCount = 0;
             try {
                 pendingCount = await getPendingCount();

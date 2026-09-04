@@ -62,6 +62,14 @@ def lambda_handler(event, context):
 
     record = body_data[0]
 
+    authorized_record_id = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("authorized_record_id")
+    )
+    if authorized_record_id != record.get("record_id"):
+        return lambda_response(403, {"error": "Record is not authorized"})
+
     def select_keys(record, keys):
         return {key: record[key] for key in keys if key in record}
 

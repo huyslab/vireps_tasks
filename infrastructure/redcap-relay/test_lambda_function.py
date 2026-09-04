@@ -21,6 +21,9 @@ class FakeResponse:
 class LambdaHandlerTest(unittest.TestCase):
     def valid_event(self):
         return {
+            "requestContext": {
+                "authorizer": {"authorized_record_id": "participant_session"}
+            },
             "body": json.dumps(
                 [
                     {
@@ -62,6 +65,17 @@ class LambdaHandlerTest(unittest.TestCase):
                     {"error": "Request body must contain exactly one record object"},
                 )
                 post.assert_not_called()
+
+    @patch("lambda_function.requests.post")
+    def test_rejects_record_that_does_not_match_authorizer_context(self, post):
+        event = self.valid_event()
+        event["requestContext"]["authorizer"]["authorized_record_id"] = "other"
+
+        result = lambda_function.lambda_handler(event, None)
+
+        self.assertEqual(result["statusCode"], 403)
+        self.assertEqual(json.loads(result["body"]), {"error": "Record is not authorized"})
+        post.assert_not_called()
 
     @patch.dict(
         os.environ,

@@ -1,0 +1,258 @@
+import base64
+import hashlib
+import json
+import re
+import time
+from os import environ
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
+
+REQUEST_VERSION = "v1"
+DEVICE_PREFIX = "DEVICE#"
+ENROLLMENT_PREFIX = "ENROLL#"
+NONCE_PREFIX = "NONCE#"
+STATUS_RECORD_ID = "__device_status__"
+DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+NONCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
+
+
+def get_table():
+    # boto3 is provided by the Lambda runtime. Import lazily so the cryptographic unit
+    # tests can run in the repository's lightweight local Python environment.
+    import boto3
+
+    return boto3.resource("dynamodb").Table(environ["DEVICE_AUTH_TABLE"])
+
+
+def api_response(status_code, body):
+    return {
+        "isBase64Encoded": False,
+        "statusCode": status_code,
+        "headers": {"Access-Control-Allow-Origin": "*"},
+        "body": json.dumps(body),
+    }
+
+
+def base64url_decode(value):
+    if not isinstance(value, str):
+        raise ValueError("Expected a base64url string")
+    padding = "=" * (-len(value) % 4)
+    return base64.b64decode(value + padding, altchars=b"-_", validate=True)
+
+
+def validate_public_key(public_key):
+    if not isinstance(public_key, dict):
+        raise ValueError("Public key must be an object")
+    if public_key.get("kty") != "EC" or public_key.get("crv") != "P-256":
+        raise ValueError("Only P-256 EC public keys are supported")
+
+    x = base64url_decode(public_key.get("x"))
+    y = base64url_decode(public_key.get("y"))
+    if len(x) != 32 or len(y) != 32:
+        raise ValueError("Invalid P-256 public key coordinates")
+
+    # Constructing the key validates that the coordinates lie on P-256.
+    ec.EllipticCurvePublicNumbers(
+        int.from_bytes(x, "big"),
+        int.from_bytes(y, "big"),
+        ec.SECP256R1(),
+    ).public_key()
+    return {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": public_key["x"],
+        "y": public_key["y"],
+    }
+
+
+def is_conditional_failure(error):
+    return (
+        getattr(error, "response", {}).get("Error", {}).get("Code")
+        == "ConditionalCheckFailedException"
+    )
+
+
+def enrollment_handler(event, context):
+    try:
+        body = json.loads(event.get("body") or "")
+    except (TypeError, json.JSONDecodeError):
+        return api_response(400, {"error": "Request body must be valid JSON"})
+
+    if not isinstance(body, dict):
+        return api_response(400, {"error": "Request body must be an object"})
+
+    enrollment_code = body.get("enrollment_code")
+    device_id = body.get("device_id")
+    if not isinstance(enrollment_code, str) or len(enrollment_code) < 20:
+        return api_response(400, {"error": "Invalid enrollment code"})
+    if not isinstance(device_id, str) or not DEVICE_ID_PATTERN.fullmatch(device_id):
+        return api_response(400, {"error": "Invalid device ID"})
+
+    try:
+        public_key = validate_public_key(body.get("public_key"))
+    except (TypeError, ValueError):
+        return api_response(400, {"error": "Invalid device public key"})
+
+    now = int(time.time())
+    code_hash = hashlib.sha256(enrollment_code.encode("utf-8")).hexdigest()
+    table = get_table()
+
+    try:
+        claimed_code = table.update_item(
+            Key={"pk": f"{ENROLLMENT_PREFIX}{code_hash}"},
+            UpdateExpression="SET used_at = :now, used_by = :device_id",
+            ConditionExpression=(
+                "#kind = :kind AND expires_at >= :now "
+                "AND attribute_not_exists(used_at)"
+            ),
+            ExpressionAttributeNames={"#kind": "kind"},
+            ExpressionAttributeValues={
+                ":kind": "enrollment",
+                ":now": now,
+                ":device_id": device_id,
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except Exception as error:
+        if is_conditional_failure(error):
+            return api_response(401, {"error": "Enrollment code is invalid or expired"})
+        raise
+
+    label = claimed_code.get("Attributes", {}).get("label", "Unlabelled device")
+    try:
+        table.put_item(
+            Item={
+                "pk": f"{DEVICE_PREFIX}{device_id}",
+                "kind": "device",
+                "device_id": device_id,
+                "label": label,
+                "status": "approved",
+                "public_key": json.dumps(public_key, separators=(",", ":")),
+                "enrolled_at": now,
+            },
+            ConditionExpression="attribute_not_exists(pk)",
+        )
+    except Exception as error:
+        if is_conditional_failure(error):
+            return api_response(409, {"error": "Device ID is already registered"})
+        raise
+
+    return api_response(
+        201,
+        {"device_id": device_id, "label": label, "status": "approved"},
+    )
+
+
+def canonical_request(device_id, record_id, timestamp, nonce):
+    values = [REQUEST_VERSION, device_id, record_id, str(timestamp), nonce]
+    if any("\n" in value or "\r" in value for value in values):
+        raise ValueError("Signed values cannot contain newlines")
+    return "\n".join(values).encode("utf-8")
+
+
+def public_key_from_device(device):
+    public_key = validate_public_key(json.loads(device["public_key"]))
+    x = int.from_bytes(base64url_decode(public_key["x"]), "big")
+    y = int.from_bytes(base64url_decode(public_key["y"]), "big")
+    return ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
+
+
+def verify_signature(device, message, encoded_signature):
+    raw_signature = base64url_decode(encoded_signature)
+    if len(raw_signature) != 64:
+        raise ValueError("Invalid P-256 signature length")
+    r = int.from_bytes(raw_signature[:32], "big")
+    s = int.from_bytes(raw_signature[32:], "big")
+    public_key_from_device(device).verify(
+        encode_dss_signature(r, s),
+        message,
+        ec.ECDSA(hashes.SHA256()),
+    )
+
+
+def normalized_headers(event):
+    return {
+        str(key).lower(): value
+        for key, value in (event.get("headers") or {}).items()
+    }
+
+
+def allow_policy(device_id, method_arn, record_id):
+    return {
+        "principalId": device_id,
+        "policyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "execute-api:Invoke",
+                    "Effect": "Allow",
+                    "Resource": method_arn,
+                }
+            ],
+        },
+        "context": {
+            "device_id": device_id,
+            "authorized_record_id": record_id,
+        },
+    }
+
+
+def authorizer_handler(event, context):
+    try:
+        headers = normalized_headers(event)
+        device_id = headers["x-device-id"]
+        record_id = headers["x-record-id"]
+        timestamp_text = headers["x-request-timestamp"]
+        nonce = headers["x-request-nonce"]
+        signature = headers["x-device-signature"]
+        method_arn = event["methodArn"]
+
+        if not DEVICE_ID_PATTERN.fullmatch(device_id):
+            raise ValueError("Invalid device ID")
+        if not isinstance(record_id, str) or not 1 <= len(record_id) <= 256:
+            raise ValueError("Invalid record ID")
+        if not NONCE_PATTERN.fullmatch(nonce):
+            raise ValueError("Invalid nonce")
+
+        timestamp = int(timestamp_text)
+        now = int(time.time())
+        max_age = int(environ.get("REQUEST_MAX_AGE_SECONDS", "300"))
+        if abs(now - timestamp) > max_age:
+            raise ValueError("Stale request")
+
+        table = get_table()
+        device = table.get_item(
+            Key={"pk": f"{DEVICE_PREFIX}{device_id}"},
+            ConsistentRead=True,
+        ).get("Item")
+        if not device or device.get("status") != "approved":
+            raise ValueError("Device is not approved")
+
+        message = canonical_request(device_id, record_id, timestamp_text, nonce)
+        verify_signature(device, message, signature)
+
+        table.put_item(
+            Item={
+                "pk": f"{NONCE_PREFIX}{device_id}#{nonce}",
+                "kind": "nonce",
+                "expires_at": now + (max_age * 2),
+            },
+            ConditionExpression="attribute_not_exists(pk)",
+        )
+        return allow_policy(device_id, method_arn, record_id)
+    except Exception as error:
+        # API Gateway converts this exact authorizer error into a 401. Do not expose which
+        # credential component failed, and never log signatures or enrollment codes.
+        print(f"Device authorization denied: {type(error).__name__}")
+        raise Exception("Unauthorized") from None
+
+
+def status_handler(event, context):
+    authorizer = event.get("requestContext", {}).get("authorizer", {})
+    return api_response(
+        200,
+        {"status": "approved", "device_id": authorizer.get("device_id")},
+    )
