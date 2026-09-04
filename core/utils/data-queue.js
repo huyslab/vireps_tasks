@@ -356,7 +356,10 @@ function attemptWithRetries(entry, retriesLeft, callback) {
             try {
                 const body = await sendOnce(entry.payload);
                 console.log('Data successfully submitted to REDCap:', body);
-                if (entry.persisted !== false && entry.version != null) {
+                if (entry.version != null) {
+                    // A fallback entry can still supersede an older snapshot that remains
+                    // queued after a transient write failure. Cleanup is best-effort when
+                    // IndexedDB is unavailable, so always attempt the version-aware delete.
                     await dequeueIfNotNewer(entry);
                 }
                 invokeCallback(callback);

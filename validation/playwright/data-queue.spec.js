@@ -240,6 +240,80 @@ test.describe('data-queue', () => {
     expect(queued).toBe(false);
   });
 
+  test('a successful fallback send removes an older snapshot left by a transient write failure', async ({ page }) => {
+    let failing = true;
+    const requestBodies = [];
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await route.fulfill({
+        status: failing ? 500 : 200,
+        contentType: 'application/json',
+        body: failing ? '{"error":"mocked failure"}' : '{"ok":true}'
+      });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('fallback-cleanup');
+    await page.evaluate(
+      ({ id }) => new Promise((resolve) => {
+        window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'older' }]),
+          0,
+          () => resolve()
+        );
+      }),
+      { id: recordId }
+    );
+
+    failing = false;
+    const fallbackResult = await page.evaluate(async ({ id }) => {
+      const originalPut = IDBObjectStore.prototype.put;
+      let failedQueueWrite = false;
+      IDBObjectStore.prototype.put = function (...args) {
+        if (!failedQueueWrite && this.name === 'records') {
+          failedQueueWrite = true;
+          this.transaction.abort();
+          return undefined;
+        }
+        return originalPut.apply(this, args);
+      };
+
+      try {
+        let resolveCallback;
+        const callbackFinished = new Promise((resolve) => {
+          resolveCallback = resolve;
+        });
+        const persistence = await window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
+          0,
+          (error) => resolveCallback(error ? error.message : null)
+        );
+        const callbackError = await callbackFinished;
+        return { ...persistence, callbackError, failedQueueWrite };
+      } finally {
+        IDBObjectStore.prototype.put = originalPut;
+      }
+    }, { id: recordId });
+
+    expect(fallbackResult).toEqual({
+      persisted: false,
+      skipped: false,
+      callbackError: null,
+      failedQueueWrite: true
+    });
+    expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['older', 'newer']);
+    expect(requestBodies[1][0].snapshot_version).toBeGreaterThan(requestBodies[0][0].snapshot_version);
+
+    const queued = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
+    , recordId);
+    expect(queued, 'the older queued snapshot must not survive the newer successful fallback send').toBe(false);
+  });
+
   test('snapshot versions continue increasing after successful sends clear the queue', async ({ page }) => {
     const requestBodies = [];
     await page.route(REDCAP_ENDPOINT, async (route) => {
