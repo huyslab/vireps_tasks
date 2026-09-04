@@ -29,6 +29,24 @@ def lambda_handler(event, context):
     redcap_url = environ.get("REDCAP_URL")
     body_data = json.loads(event["body"])
 
+    if (
+        not isinstance(body_data, list)
+        or len(body_data) != 1
+        or not isinstance(body_data[0], dict)
+    ):
+        return {
+            "isBase64Encoded": False,
+            "statusCode": 400,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps(
+                {"error": "Request body must contain exactly one record object"}
+            ),
+        }
+
+    record = body_data[0]
+
     def select_keys(record, keys):
         return {key: record[key] for key in keys if key in record}
 
@@ -43,8 +61,7 @@ def lambda_handler(event, context):
         "module",
         "snapshot_version",
     ]
-    data_stripped = body_data.copy()
-    data_stripped[0] = select_keys(data_stripped[0], record_keys)
+    data_stripped = [select_keys(record, record_keys)]
 
     data = {
         "token": token,
@@ -61,8 +78,8 @@ def lambda_handler(event, context):
     print(f"Record status: {record_response.status_code}")
     print(f"Record response: {record_response.text}")
 
-    record_id = body_data[0]["record_id"]
-    jspsych_data = body_data[0]["data"]
+    record_id = record["record_id"]
+    jspsych_data = record["data"]
     file_upload_response = upload_file_to_redcap(record_id, jspsych_data)
     print(f"File upload status: {file_upload_response.status_code}")
     print(f"File upload response: {file_upload_response.text}")

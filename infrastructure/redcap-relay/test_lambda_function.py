@@ -19,6 +19,33 @@ class FakeResponse:
 
 
 class LambdaHandlerTest(unittest.TestCase):
+    @patch("lambda_function.requests.post")
+    def test_rejects_payloads_that_do_not_contain_exactly_one_record_object(self, post):
+        valid_record = {
+            "record_id": "participant_session",
+            "data": "{\"trials\":[]}",
+        }
+        invalid_payloads = {
+            "empty array": [],
+            "multiple records": [valid_record, {**valid_record, "record_id": "other"}],
+            "non-object record": ["not a record"],
+            "non-array body": valid_record,
+        }
+
+        for label, payload in invalid_payloads.items():
+            with self.subTest(label=label):
+                post.reset_mock()
+                result = lambda_function.lambda_handler(
+                    {"body": json.dumps(payload)}, None
+                )
+
+                self.assertEqual(result["statusCode"], 400)
+                self.assertEqual(
+                    json.loads(result["body"]),
+                    {"error": "Request body must contain exactly one record object"},
+                )
+                post.assert_not_called()
+
     @patch.dict(
         os.environ,
         {
