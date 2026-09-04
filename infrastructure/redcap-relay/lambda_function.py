@@ -5,6 +5,28 @@ from os import environ
 import requests
 
 
+def lambda_response(status_code, body):
+    return {
+        "isBase64Encoded": False,
+        "statusCode": status_code,
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": json.dumps(body),
+    }
+
+
+def response_body(response):
+    try:
+        return response.json()
+    except ValueError:
+        return response.text
+
+
+def response_succeeded(response):
+    return 200 <= response.status_code < 300
+
+
 def upload_file_to_redcap(record, file_content):
     token = environ.get("REDCAP_API_TOKEN")
     redcap_url = environ.get("REDCAP_URL")
@@ -34,16 +56,9 @@ def lambda_handler(event, context):
         or len(body_data) != 1
         or not isinstance(body_data[0], dict)
     ):
-        return {
-            "isBase64Encoded": False,
-            "statusCode": 400,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-            },
-            "body": json.dumps(
-                {"error": "Request body must contain exactly one record object"}
-            ),
-        }
+        return lambda_response(
+            400, {"error": "Request body must contain exactly one record object"}
+        )
 
     record = body_data[0]
 
@@ -78,22 +93,30 @@ def lambda_handler(event, context):
     print(f"Record status: {record_response.status_code}")
     print(f"Record response: {record_response.text}")
 
+    if not response_succeeded(record_response):
+        return lambda_response(
+            record_response.status_code,
+            {
+                "record_import_response": response_body(record_response),
+                "file_upload_response": None,
+            },
+        )
+
     record_id = record["record_id"]
     jspsych_data = record["data"]
     file_upload_response = upload_file_to_redcap(record_id, jspsych_data)
     print(f"File upload status: {file_upload_response.status_code}")
     print(f"File upload response: {file_upload_response.text}")
 
-    return {
-        "isBase64Encoded": False,
-        "statusCode": record_response.status_code,
-        "headers": {
-            "Access-Control-Allow-Origin": "*",
+    status_code = (
+        record_response.status_code
+        if response_succeeded(file_upload_response)
+        else file_upload_response.status_code
+    )
+    return lambda_response(
+        status_code,
+        {
+            "record_import_response": response_body(record_response),
+            "file_upload_response": file_upload_response.status_code,
         },
-        "body": json.dumps(
-            {
-                "record_import_response": record_response.json(),
-                "file_upload_response": file_upload_response.status_code,
-            }
-        ),
-    }
+    )
