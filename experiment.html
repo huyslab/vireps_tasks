@@ -158,8 +158,8 @@
 
         /* Shown once before a new session starts if this device is still carrying unsent
            data from a previous session (see the pending-data notice in the module script).
-           This is an acknowledgement, not a gate: staff can continue while background
-           retries run, and the notice is not shown again during the active experiment.
+           This is an acknowledgement, not a gate: staff can continue while the record
+           remains safely stored, and the notice is not shown again during the experiment.
            Toggled via JS (display:none by default), not CSS - it depends on an async
            IndexedDB read, not on a static device property like the orientation gate. */
         #pending-data-overlay {
@@ -319,8 +319,8 @@
         }
 
         // Before starting a new session, check whether this tablet is still carrying
-        // unsent data from a previous one (core/utils/data-queue.js already started
-        // retrying it in the background as soon as this page loaded). This is deliberately
+        // unsent data from a previous one (core/utils/data-queue.js makes one retry attempt
+        // as soon as this page loads). This is deliberately
         // a one-time acknowledgement plus an explicit go-ahead, not a blocking gate or a
         // live queue monitor during the experiment.
         async function startSession() {
@@ -339,8 +339,8 @@
             const overlay = document.getElementById('pending-data-overlay');
             const message = document.getElementById('pending-data-message');
             message.textContent = pendingCount === 1
-                ? "There is 1 unsent session still stored on this device. It will keep being retried in the background. Tap Continue to start this participant's session."
-                : `There are ${pendingCount} unsent sessions still stored on this device. They will keep being retried in the background. Tap Continue to start this participant's session.`;
+                ? "There is 1 unsent session still stored on this device. A retry was started when this page loaded; if it still cannot be sent, it will remain stored for the next session. Tap Continue to start this participant's session."
+                : `There are ${pendingCount} unsent sessions still stored on this device. A retry was started when this page loaded; any that still cannot be sent will remain stored for the next session. Tap Continue to start this participant's session.`;
             overlay.style.display = 'flex';
 
             document.getElementById('pending-data-continue').addEventListener('click', () => {

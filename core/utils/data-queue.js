@@ -6,8 +6,8 @@
  * queue backed by IndexedDB. The queue exists because the study runs on tablets with a
  * potentially unreliable internet connection: a record is written to IndexedDB before any
  * network attempt is made, and it is only ever removed once the endpoint confirms receipt.
- * A failed attempt - however many times it fails, across however many page loads - never
- * discards the record; it stays queued for the next flush.
+ * A failed attempt never discards the record. A later cumulative snapshot replaces it, and
+ * queued data is retried by the final save or when the next session loads.
  *
  * IndexedDB rather than localStorage: payloads are full per-module jsPsych trial data
  * (potentially several hundred KB), and localStorage is synchronous (blocks the main thread
@@ -17,23 +17,40 @@
  */
 
 const DB_NAME = 'redcap_pending_queue';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'records';
+const METADATA_STORE_NAME = 'metadata';
+const VERSION_COUNTER_KEY = 'snapshot_version';
 const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
 const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 
-// Frequent enough to drain a backlog reasonably soon after connectivity returns,
-// infrequent enough not to hammer a flaky-but-not-fully-offline connection.
-const FLUSH_INTERVAL_MS = 45000;
-
 let dbPromise = null;
 let flushInFlight = false;
-let recordVersionCounter = 0;
+let fallbackVersionCounter = 0;
 const recordSendChains = new Map();
 
-function createRecordVersion() {
-    recordVersionCounter += 1;
-    return `${Date.now()}-${recordVersionCounter}-${Math.random().toString(36).slice(2)}`;
+function createFallbackVersion() {
+    fallbackVersionCounter += 1;
+    return (Date.now() * 1000) + fallbackVersionCounter;
+}
+
+/**
+ * Adds the locally assigned snapshot version to every REDCap record in the request. Keeping
+ * it beside the data makes the rare ambiguous/out-of-order network case easy to diagnose in
+ * REDCap's record history without making the server responsible for version enforcement.
+ * @param {string} payload
+ * @param {number} version
+ * @returns {string}
+ */
+function addSnapshotVersion(payload, version) {
+    const records = JSON.parse(payload);
+    if (!Array.isArray(records) || records.length === 0) {
+        throw new Error('REDCap payload must be a non-empty array');
+    }
+    return JSON.stringify(records.map((record) => ({
+        ...record,
+        snapshot_version: version
+    })));
 }
 
 /**
@@ -70,6 +87,9 @@ function openDB() {
             if (!request.result.objectStoreNames.contains(STORE_NAME)) {
                 request.result.createObjectStore(STORE_NAME, { keyPath: 'record_id' });
             }
+            if (!request.result.objectStoreNames.contains(METADATA_STORE_NAME)) {
+                request.result.createObjectStore(METADATA_STORE_NAME, { keyPath: 'key' });
+            }
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
@@ -84,34 +104,59 @@ function openDB() {
  * caller can still attempt a direct send.
  * @param {string} record_id
  * @param {string} payload - Already-serialized JSON body to POST.
- * @returns {Promise<Object|null>} The stored queue entry, or null if persistence failed.
+ * Version allocation and queue replacement share one IndexedDB transaction, making the
+ * single origin-wide counter monotonic across records, reloads, and tabs without retaining
+ * one metadata row for every completed session.
+ * @returns {Promise<Object>} The versioned entry, with persisted=false only when IndexedDB
+ *   was unavailable and the caller must fall back to a best-effort direct send.
  */
 async function enqueueRecord(record_id, payload) {
-    const entry = {
-        record_id,
-        payload,
-        queued_at: new Date().toISOString(),
-        version: createRecordVersion()
-    };
     try {
         const db = await openDB();
-        await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put(entry);
-            tx.oncomplete = resolve;
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+            const queueStore = tx.objectStore(STORE_NAME);
+            const metadataStore = tx.objectStore(METADATA_STORE_NAME);
+            const versionRequest = metadataStore.get(VERSION_COUNTER_KEY);
+            let entry = null;
+
+            versionRequest.onsuccess = () => {
+                const storedVersion = Number.isSafeInteger(versionRequest.result?.last_version)
+                    ? versionRequest.result.last_version
+                    : 0;
+                const version = storedVersion + 1;
+                entry = {
+                    record_id,
+                    payload: addSnapshotVersion(payload, version),
+                    queued_at: new Date().toISOString(),
+                    version,
+                    persisted: true
+                };
+                metadataStore.put({ key: VERSION_COUNTER_KEY, last_version: version });
+                queueStore.put(entry);
+            };
+
+            tx.oncomplete = () => resolve(entry);
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error('Snapshot transaction aborted'));
         });
-        return entry;
     } catch (error) {
         console.warn('data-queue: could not persist record for later retry (IndexedDB unavailable?); falling back to best-effort send only:', error);
-        return null;
+        const version = createFallbackVersion();
+        return {
+            record_id,
+            payload: addSnapshotVersion(payload, version),
+            queued_at: new Date().toISOString(),
+            version,
+            persisted: false
+        };
     }
 }
 
 /**
  * Checks whether an entry is still the newest queued snapshot for its record.
  * Older in-flight snapshots must not be sent again after a newer save supersedes them.
- * @param {{record_id: string, version?: string}} entry
+ * @param {{record_id: string, version?: number|string}} entry
  * @returns {Promise<boolean>}
  */
 async function isCurrentEntry(entry) {
@@ -133,13 +178,13 @@ async function isCurrentEntry(entry) {
 }
 
 /**
- * Removes an entry only if it is still the newest queued snapshot for that record. The
- * comparison and delete share one transaction, so a successful older request can never
- * delete a newer snapshot that was queued while it was in flight.
- * @param {{record_id: string, version?: string}} entry
+ * Removes the queued snapshot when a successful send contains the same or newer cumulative
+ * data. The comparison and delete share one transaction, so success for an older request
+ * can never delete a newer snapshot queued while it was in flight.
+ * @param {{record_id: string, version?: number|string}} entry
  * @returns {Promise<void>}
  */
-async function dequeueIfCurrent(entry) {
+async function dequeueIfNotNewer(entry) {
     try {
         const db = await openDB();
         await new Promise((resolve, reject) => {
@@ -147,7 +192,12 @@ async function dequeueIfCurrent(entry) {
             const store = tx.objectStore(STORE_NAME);
             const request = store.get(entry.record_id);
             request.onsuccess = () => {
-                if (request.result && request.result.version === entry.version) {
+                const queuedVersion = request.result?.version;
+                const exactMatch = queuedVersion === entry.version;
+                const comparableAndOlder = Number.isSafeInteger(queuedVersion)
+                    && Number.isSafeInteger(entry.version)
+                    && queuedVersion < entry.version;
+                if (request.result && (exactMatch || comparableAndOlder)) {
                     store.delete(entry.record_id);
                 }
             };
@@ -163,7 +213,7 @@ async function dequeueIfCurrent(entry) {
 /**
  * Lists every record currently queued. Never throws: returns an empty array if IndexedDB
  * is unavailable or the read fails.
- * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string, version?: string}>>}
+ * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string, version?: number|string}>>}
  */
 async function listQueuedRecords() {
     try {
@@ -199,7 +249,7 @@ async function getPendingCount() {
 }
 
 // Exposed for a quick devtools check on a tablet ("is this device carrying a backlog?"),
-// independent of the on-page gate in experiment.html.
+// independent of the one-time on-page notice in experiment.html.
 if (typeof window !== 'undefined') {
     window.getPendingSubmissionsCount = getPendingCount;
 }
@@ -285,8 +335,9 @@ function wait(delay) {
 /**
  * Immediate retry loop for a single record, used right after it's built (short backoff,
  * bounded by retriesLeft). Exhausting retriesLeft does NOT drop the record - it stays
- * queued in IndexedDB for flushQueue() to keep retrying in the background.
- * @param {{record_id: string, payload: string, version?: string}} entry
+ * queued until a newer cumulative save succeeds or a later session performs its startup
+ * flush.
+ * @param {{record_id: string, payload: string, version?: number|string, persisted?: boolean}} entry
  * @param {number} retriesLeft
  * @param {Function} callback
  */
@@ -295,7 +346,7 @@ function attemptWithRetries(entry, retriesLeft, callback) {
         let remaining = Math.max(0, Number(retriesLeft) || 0);
 
         while (true) {
-            if (entry.version && !(await isCurrentEntry(entry))) {
+            if (entry.persisted !== false && entry.version != null && !(await isCurrentEntry(entry))) {
                 // A newer cumulative snapshot contains everything in this one. Let that
                 // snapshot send next instead of delaying it or later overwriting it.
                 invokeCallback(callback);
@@ -305,12 +356,10 @@ function attemptWithRetries(entry, retriesLeft, callback) {
             try {
                 const body = await sendOnce(entry.payload);
                 console.log('Data successfully submitted to REDCap:', body);
-                if (entry.version) {
-                    await dequeueIfCurrent(entry);
+                if (entry.persisted !== false && entry.version != null) {
+                    await dequeueIfNotNewer(entry);
                 }
                 invokeCallback(callback);
-                // Network is clearly working - opportunistically drain any other backlog.
-                flushQueue();
                 return;
             } catch (error) {
                 console.warn(`data-queue: submit attempt failed for ${entry.record_id}:`, error);
@@ -319,7 +368,7 @@ function attemptWithRetries(entry, retriesLeft, callback) {
                     await wait(1000);
                     continue;
                 }
-                console.warn(`data-queue: exhausted immediate retries for ${entry.record_id}; left queued for background flush (page reload / reconnect / periodic retry).`);
+                console.warn(`data-queue: exhausted immediate retries for ${entry.record_id}; left queued for a newer save or the next startup flush.`);
                 invokeCallback(callback, error);
                 return;
             }
@@ -336,8 +385,8 @@ function attemptWithRetries(entry, retriesLeft, callback) {
  * survives a crash or reload mid-attempt.
  * @param {string} record_id
  * @param {string} payload - Already-serialized JSON body to POST.
- * @param {number} immediateRetries - Immediate/synchronous retry attempts before falling
- *   back to the background queue.
+ * @param {number} immediateRetries - Immediate/synchronous retry attempts before leaving
+ *   the latest snapshot queued locally.
  * @param {Function} callback - Called with no arguments on success, or an Error once
  *   immediate retries are exhausted (the record remains queued regardless).
  * @returns {Promise<{persisted: boolean, skipped: boolean}>} Resolves once the write-ahead
@@ -350,16 +399,15 @@ async function submitRecord(record_id, payload, immediateRetries, callback = () 
         return { persisted: false, skipped: true };
     }
 
-    const queuedEntry = await enqueueRecord(record_id, payload);
-    const entry = queuedEntry || { record_id, payload };
+    const entry = await enqueueRecord(record_id, payload);
     attemptWithRetries(entry, immediateRetries, callback);
-    return { persisted: queuedEntry !== null, skipped: false };
+    return { persisted: entry.persisted, skipped: false };
 }
 
 /**
  * Attempts to send every currently-queued record. Records that send successfully are
  * removed; records that fail are left in place for the next flush. Guarded against
- * overlapping runs (e.g. an 'online' event firing during a periodic tick).
+ * overlapping startup or explicit/manual runs.
  * @returns {Promise<void>}
  */
 async function flushQueue() {
@@ -382,7 +430,7 @@ async function flushQueue() {
                 }
                 try {
                     await sendOnce(entry.payload);
-                    await dequeueIfCurrent(entry);
+                    await dequeueIfNotNewer(entry);
                     console.log(`data-queue: flushed pending record ${entry.record_id}`);
                 } catch (error) {
                     console.warn(`data-queue: still unable to send ${entry.record_id}; will retry later:`, error);
@@ -395,13 +443,11 @@ async function flushQueue() {
     }
 }
 
-// Wire up background flush triggers once per page load. This file is only evaluated once
-// per page regardless of how many modules import it (ES module caching), so this runs a
-// single time.
+// Retry records left by completed earlier sessions once at startup. During the active
+// experiment, each cumulative save replaces its own queued entry and makes a direct attempt;
+// no periodic/reconnect flush can re-send an older local snapshot behind a newer one.
 if (typeof window !== 'undefined') {
-    flushQueue(); // catches anything stranded by a previous session/task on this tablet
-    window.addEventListener('online', () => flushQueue());
-    setInterval(() => flushQueue(), FLUSH_INTERVAL_MS);
+    flushQueue();
 }
 
 export {

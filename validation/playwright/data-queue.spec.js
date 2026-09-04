@@ -77,8 +77,8 @@ test.describe('data-queue', () => {
     );
     expect(queuedAfterFailure, 'record should remain queued after exhausting immediate retries').toBe(true);
 
-    // Endpoint recovers; an explicit flush (mirrors the 'online' event / periodic timer
-    // triggers wired up in data-queue.js) should drain it.
+    // Endpoint recovers; an explicit flush exercises the same path used once when the next
+    // session loads and should drain it.
     setFailing(false);
     await page.evaluate(() => window.__dataQueue.flushQueue());
 
@@ -175,6 +175,7 @@ test.describe('data-queue', () => {
     await releaseRequest[0]();
     await expect.poll(() => requestBodies.length).toBe(2);
     expect(requestBodies[1][0].snapshot).toBe('newer');
+    expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
 
     await releaseRequest[1]();
     await expect.poll(
@@ -182,6 +183,130 @@ test.describe('data-queue', () => {
         window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
       , recordId)
     ).toBe(false);
+  });
+
+  test('a newer successful save replaces a failed snapshot without re-sending the older payload', async ({ page }) => {
+    let failing = true;
+    const requestBodies = [];
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await route.fulfill({
+        status: failing ? 500 : 200,
+        contentType: 'application/json',
+        body: failing ? '{"error":"mocked failure"}' : '{"ok":true}'
+      });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('replace');
+    await page.evaluate(
+      ({ id }) => new Promise((resolve) => {
+        window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'older' }]),
+          0,
+          () => resolve()
+        );
+      }),
+      { id: recordId }
+    );
+
+    // Reconnects do not drain the local queue under the coalescing strategy. The next
+    // cumulative save replaces the failed snapshot and gets its own direct attempt.
+    failing = false;
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await page.waitForTimeout(100);
+    expect(requestBodies).toHaveLength(1);
+
+    await page.evaluate(
+      ({ id }) => new Promise((resolve) => {
+        window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
+          0,
+          () => resolve()
+        );
+      }),
+      { id: recordId }
+    );
+
+    expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['older', 'newer']);
+    expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
+    const queued = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
+    , recordId);
+    expect(queued).toBe(false);
+  });
+
+  test('snapshot versions continue increasing after successful sends clear the queue', async ({ page }) => {
+    const requestBodies = [];
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const recordId = uniqueRecordId('versions-after-success');
+    for (const snapshot of ['first', 'second']) {
+      await page.evaluate(
+        ({ id, value }) => new Promise((resolve) => {
+          window.__dataQueue.submitRecord(
+            id,
+            JSON.stringify([{ record_id: id, snapshot: value }]),
+            0,
+            () => resolve()
+          );
+        }),
+        { id: recordId, value: snapshot }
+      );
+    }
+
+    expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
+  });
+
+  test('snapshot versions are allocated atomically across tabs', async ({ context, page }) => {
+    await context.route(REDCAP_ENDPOINT, async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mocked failure"}' });
+    });
+
+    const secondPage = await context.newPage();
+    await secondPage.addInitScript(() => {
+      window.__forceOnlineRedcapForTesting = true;
+    });
+    await Promise.all([
+      page.goto('/validation/fixtures/data-queue.html'),
+      secondPage.goto('/validation/fixtures/data-queue.html')
+    ]);
+    await Promise.all([
+      page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true),
+      secondPage.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true)
+    ]);
+
+    const recordId = uniqueRecordId('cross-tab-version');
+    await Promise.all([
+      page.evaluate(
+        ({ id }) => new Promise((resolve) => {
+          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'first' }]), 0, () => resolve());
+        }),
+        { id: recordId }
+      ),
+      secondPage.evaluate(
+        ({ id }) => new Promise((resolve) => {
+          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'second' }]), 0, () => resolve());
+        }),
+        { id: recordId }
+      )
+    ]);
+
+    const [queuedEntry] = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => records.filter((record) => record.record_id === id))
+    , recordId);
+    expect(queuedEntry.version).toBe(2);
+    expect(JSON.parse(queuedEntry.payload)[0].snapshot_version).toBe(2);
   });
 
   test('development-mode saves do not create an unflushable local backlog', async ({ page }) => {

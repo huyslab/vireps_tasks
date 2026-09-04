@@ -76,9 +76,9 @@ function updateState(state, save_data = true) {
 /**
  * Saves experimental data to REDCap via the AWS Lambda endpoint, buffering locally
  * (see data-queue.js) so a record is never lost to a dropped connection - it stays queued
- * and keeps being retried in the background until the endpoint confirms receipt.
+ * until a newer cumulative save succeeds or a later session retries it at startup.
  * @param {number} retry - Number of immediate/synchronous retry attempts before falling
- *   back to the background queue (default: 1). Exhausting these does not discard the data.
+ *   back to the local queue (default: 1). Exhausting these does not discard the data.
  * @param {Object} extra_fields - Additional fields (currently unused - kept for callers
  *   that still pass one, e.g. endExperiment's {message: "endTask"}; not sent to REDCap)
  * @param {Function} callback - Callback function to execute after successful submission
