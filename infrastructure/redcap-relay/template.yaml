@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: REDCap relay Lambda for the pharmacies pilot tasks
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 128
+    Architectures:
+      - x86_64
+  Api:
+    Cors:
+      AllowMethods: "'POST,OPTIONS'"
+      AllowHeaders: "'Content-Type'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  REDCapUrl:
+    Type: String
+    Description: REDCap API URL
+
+  REDCapApiToken:
+    Type: String
+    NoEcho: true
+    Description: REDCap project API token
+
+Resources:
+  WriteToREDCapPharmaciesPilot:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: writeToREDCapPharmaciesPilot
+      CodeUri: .
+      Handler: lambda_function.lambda_handler
+      Description: Relay pharmacies pilot task data to REDCap
+      Environment:
+        Variables:
+          REDCAP_URL: !Ref REDCapUrl
+          REDCAP_API_TOKEN: !Ref REDCapApiToken
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /pharmaciespilot
+            Method: post
+
+Outputs:
+  REDCapRelayEndpoint:
+    Description: Browser POST endpoint for the REDCap relay
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/pharmaciespilot"
