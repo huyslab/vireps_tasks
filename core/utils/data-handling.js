@@ -1,5 +1,6 @@
 import { preventRefresh} from "./participation-validation.js"
 import { submitRecord } from "./data-queue.js"
+import { createREDCapRecordId } from "./participant-id.js"
 
 let finalSaveGeneration = 0;
 
@@ -103,7 +104,7 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
         }
     ]);
 
-    const record_id = window.participantID + "_" + window.module_start_time;
+    const record_id = createREDCapRecordId(window.participantID, window.module_start_time);
 
     const redcap_record = JSON.stringify([{
         record_id: record_id,

@@ -241,7 +241,12 @@
     <script type="module">
         // Import task registry functions
         import { createTaskTimeline, getTaskInfo } from '@api/index.js';
-        import { enterExperiment, getDeviceAuthorizationStatus, getPendingCount } from '@utils/index.js';
+        import {
+            enterExperiment,
+            getDeviceAuthorizationStatus,
+            getPendingCount,
+            participantIdValidationError
+        } from '@utils/index.js';
 
         // Get parameters from URL (populated by index.html's setup form redirect)
         window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
@@ -252,6 +257,19 @@
         // vary by session; PILT does have per-session sequences and will use wk0.
         const taskName = new URLSearchParams(window.location.search).get('task') || '';
         window.module = taskName;
+
+        function showExperimentError(error) {
+            console.error('Error running experiment:', error);
+            const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
+            errorContainer.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>Error Loading Experiment</h2>
+                    <p>There was an error loading the ${taskName || 'requested'} task:</p>
+                    <p><strong>${error.message}</strong></p>
+                    <p>Please check the console for more details.</p>
+                </div>
+            `;
+        }
 
         // Initialize jsPsych
         window.jsPsych = initJsPsych({
@@ -308,19 +326,9 @@
                 }
 
             } catch (error) {
-                console.error('Error running experiment:', error);
-                // jsPsych.getDisplayElement() is only populated once jsPsych.run()/simulate()
-                // has started (inside prepareDom()) - errors thrown before that point (e.g. the
-                // guard above, or createTaskTimeline for an unknown task) need the raw container.
-                const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
-                errorContainer.innerHTML = `
-                    <div style="text-align: center; padding: 50px;">
-                        <h2>Error Loading Experiment</h2>
-                        <p>There was an error loading the ${taskName || 'requested'} task:</p>
-                        <p><strong>${error.message}</strong></p>
-                        <p>Please check the console for more details.</p>
-                    </div>
-                `;
+                // jsPsych's display element is populated only after run()/simulate() starts;
+                // showExperimentError also handles failures detected before that point.
+                showExperimentError(error);
             }
         }
 
@@ -330,6 +338,12 @@
         // a one-time acknowledgement plus an explicit go-ahead, not a blocking gate or a
         // live queue monitor during the experiment.
         async function startSession() {
+            const participantError = participantIdValidationError(window.participantID);
+            if (participantError) {
+                showExperimentError(new Error(participantError));
+                return;
+            }
+
             const deviceStatus = await getDeviceAuthorizationStatus();
             window.__redcapDemoMode = !deviceStatus.approved;
             if (!deviceStatus.approved) {

@@ -9,6 +9,7 @@ export * from './calculations.js';
 export * from './data-handling.js';
 export * from './data-queue.js';
 export * from './device-auth.js';
+export * from './participant-id.js';
 export * from './participation-validation.js';
 export * from './setup.js';
 export * from './resumption.js';
