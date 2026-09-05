@@ -49,7 +49,10 @@ def upload_file_to_redcap(record, file_content):
 def lambda_handler(event, context):
     token = environ.get("REDCAP_API_TOKEN")
     redcap_url = environ.get("REDCAP_URL")
-    body_data = json.loads(event["body"])
+    try:
+        body_data = json.loads(event["body"])
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return lambda_response(400, {"error": "Request body must be valid JSON"})
 
     if (
         not isinstance(body_data, list)

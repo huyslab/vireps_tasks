@@ -40,6 +40,29 @@ class LambdaHandlerTest(unittest.TestCase):
         }
 
     @patch("lambda_function.requests.post")
+    def test_rejects_missing_empty_non_string_or_malformed_request_bodies(self, post):
+        invalid_events = {
+            "missing": {},
+            "empty": {"body": ""},
+            "non-string": {"body": []},
+            "malformed": {"body": "not-json"},
+        }
+
+        for label, event in invalid_events.items():
+            with self.subTest(label=label):
+                post.reset_mock()
+
+                result = lambda_function.lambda_handler(event, None)
+
+                self.assertEqual(result["statusCode"], 400)
+                self.assertEqual(
+                    json.loads(result["body"]),
+                    {"error": "Request body must be valid JSON"},
+                )
+                self.assertEqual(result["headers"]["Access-Control-Allow-Origin"], "*")
+                post.assert_not_called()
+
+    @patch("lambda_function.requests.post")
     def test_rejects_payloads_that_do_not_contain_exactly_one_record_object(self, post):
         valid_record = {
             "record_id": "participant_session",
