@@ -104,10 +104,15 @@ Resources:
         - Version: "2012-10-17"
           Statement:
             - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
+              Action: dynamodb:GetItem
               Resource: !GetAtt DeviceAuthTable.Arn
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+              Condition:
+                "ForAllValues:StringLike":
+                  "dynamodb:LeadingKeys":
+                    - "NONCE#*"
 
   EnrollREDCapPharmaciesPilotDevice:
     Type: AWS::Serverless::Function
