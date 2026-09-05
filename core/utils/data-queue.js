@@ -28,6 +28,7 @@ const STORE_NAME = 'records';
 const METADATA_STORE_NAME = 'metadata';
 const VERSION_COUNTER_KEY = 'snapshot_version';
 const REDCAP_REQUEST_TIMEOUT_MS = 30000;
+const FLUSH_CONCURRENCY = 4;
 
 let dbPromise = null;
 let flushInFlight = false;
@@ -459,7 +460,8 @@ async function submitRecord(record_id, payload, immediateRetries, callback = () 
 /**
  * Attempts to send every currently-queued record. Records that send successfully are
  * removed; records that fail are left in place for the next flush. Guarded against
- * overlapping startup or explicit/manual runs.
+ * overlapping startup or explicit/manual runs. Independent record IDs use a small worker
+ * pool so one stalled request does not block the backlog or create an unbounded burst.
  * @returns {Promise<void>}
  */
 async function flushQueue() {
@@ -476,22 +478,35 @@ async function flushQueue() {
             return;
         }
         console.log(`data-queue: attempting to flush ${records.length} pending record(s)`);
-        for (const entry of records) {
-            await serializeRecordSend(entry.record_id, async () => {
-                // The snapshot returned by getAll() may have been replaced while earlier
-                // records were flushing. Never send that stale copy after its replacement.
-                if (!(await isCurrentEntry(entry))) {
-                    return;
-                }
-                try {
-                    await sendOnce(entry.record_id, entry.payload);
-                    await dequeueIfNotNewer(entry);
-                    console.log(`data-queue: flushed pending record ${entry.record_id}`);
-                } catch (error) {
-                    console.warn(`data-queue: still unable to send ${entry.record_id}; will retry later:`, error);
-                    // Left in place - never deleted on failure.
-                }
-            });
+        let nextRecordIndex = 0;
+        const flushNextRecord = async () => {
+            while (nextRecordIndex < records.length) {
+                const entry = records[nextRecordIndex];
+                nextRecordIndex += 1;
+                await serializeRecordSend(entry.record_id, async () => {
+                    // The snapshot returned by getAll() may have been replaced while other
+                    // records were flushing. Never send that stale copy after replacement.
+                    if (!(await isCurrentEntry(entry))) {
+                        return;
+                    }
+                    try {
+                        await sendOnce(entry.record_id, entry.payload);
+                        await dequeueIfNotNewer(entry);
+                        console.log(`data-queue: flushed pending record ${entry.record_id}`);
+                    } catch (error) {
+                        console.warn(`data-queue: still unable to send ${entry.record_id}; will retry later:`, error);
+                        // Left in place - never deleted on failure.
+                    }
+                });
+            }
+        };
+        const workerCount = Math.min(FLUSH_CONCURRENCY, records.length);
+        const workerResults = await Promise.allSettled(
+            Array.from({ length: workerCount }, () => flushNextRecord())
+        );
+        const failedWorker = workerResults.find((result) => result.status === 'rejected');
+        if (failedWorker) {
+            throw failedWorker.reason;
         }
     } finally {
         flushInFlight = false;

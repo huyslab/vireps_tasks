@@ -657,9 +657,10 @@ test.describe('data-queue', () => {
     expect(pendingCount).toBe(1);
   });
 
-  test('a timed-out request does not prevent later queued records from flushing', async ({ page }) => {
+  test('a stalled request does not prevent other queued records from flushing', async ({ page }) => {
     let phase = 'queue';
     const flushAttempts = [];
+    let releaseStalledRequest;
     const recordPrefix = uniqueRecordId('timeout');
     const stalledRecordId = `${recordPrefix}_a-stalled`;
     const laterRecordId = `${recordPrefix}_b-later`;
@@ -673,14 +674,16 @@ test.describe('data-queue', () => {
 
       flushAttempts.push(recordId);
       if (recordId === stalledRecordId) {
-        // Leave this request half-open well beyond the short test timeout. The production
-        // timeout remains 30 seconds; the override only keeps this regression test fast.
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        try {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
-        } catch (error) {
-          // Expected: AbortController has already cancelled the intercepted request.
-        }
+        await new Promise((resolve) => {
+          releaseStalledRequest = async () => {
+            await route.fulfill({
+              status: 500,
+              contentType: 'application/json',
+              body: '{"error":"mocked failure"}'
+            });
+            resolve();
+          };
+        });
         return;
       }
 
@@ -700,15 +703,76 @@ test.describe('data-queue', () => {
     }
 
     phase = 'flush';
-    await page.evaluate(async () => {
-      window.__redcapRequestTimeoutMsForTesting = 50;
-      await window.__dataQueue.flushQueue();
+    const flushPromise = page.evaluate(async () => {
+      window.__redcapRequestTimeoutMsForTesting = 5000;
+      return window.__dataQueue.flushQueue();
     });
+
+    await expect.poll(
+      () => flushAttempts,
+      { message: 'an independent record should start while the first is stalled', timeout: 1000 }
+    ).toEqual([stalledRecordId, laterRecordId]);
+
+    await releaseStalledRequest();
+    await flushPromise;
 
     expect(flushAttempts).toEqual([stalledRecordId, laterRecordId]);
     const queuedRecordIds = await page.evaluate(() =>
       window.__dataQueue.listQueuedRecords().then((records) => records.map((record) => record.record_id))
     );
     expect(queuedRecordIds).toEqual([stalledRecordId]);
+  });
+
+  test('a queue flush starts no more than four records concurrently', async ({ page }) => {
+    let phase = 'queue';
+    const flushAttempts = [];
+    const releaseByRecord = new Map();
+    const recordPrefix = uniqueRecordId('bounded-flush');
+    const recordIds = Array.from({ length: 5 }, (_, index) => `${recordPrefix}_${index}`);
+
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      const [{ record_id: recordId }] = JSON.parse(route.request().postData());
+      if (phase === 'queue') {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mocked failure"}' });
+        return;
+      }
+
+      flushAttempts.push(recordId);
+      await new Promise((resolve) => {
+        releaseByRecord.set(recordId, async () => {
+          await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mocked failure"}' });
+          resolve();
+        });
+      });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    for (const recordId of recordIds) {
+      await page.evaluate(
+        ({ id }) => new Promise((resolve) => {
+          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
+        }),
+        { id: recordId }
+      );
+    }
+
+    phase = 'flush';
+    const flushPromise = page.evaluate(() => window.__dataQueue.flushQueue());
+
+    await expect.poll(() => flushAttempts.length).toBe(4);
+    await page.waitForTimeout(100);
+    expect(flushAttempts).toHaveLength(4);
+
+    await releaseByRecord.get(flushAttempts[0])();
+    await expect.poll(() => flushAttempts.length).toBe(5);
+
+    await Promise.all(
+      flushAttempts.slice(1).map((recordId) => releaseByRecord.get(recordId)())
+    );
+    await flushPromise;
+
+    expect(flushAttempts).toHaveLength(5);
   });
 });
