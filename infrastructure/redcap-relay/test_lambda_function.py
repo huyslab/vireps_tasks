@@ -77,6 +77,35 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(json.loads(result["body"]), {"error": "Record is not authorized"})
         post.assert_not_called()
 
+    @patch("lambda_function.requests.post")
+    def test_rejects_missing_or_non_string_data_before_importing_metadata(self, post):
+        invalid_values = {
+            "missing": None,
+            "null": None,
+            "object": {"trials": []},
+            "array": [],
+        }
+
+        for label, value in invalid_values.items():
+            with self.subTest(label=label):
+                post.reset_mock()
+                event = self.valid_event()
+                record = json.loads(event["body"])[0]
+                if label == "missing":
+                    del record["data"]
+                else:
+                    record["data"] = value
+                event["body"] = json.dumps([record])
+
+                result = lambda_function.lambda_handler(event, None)
+
+                self.assertEqual(result["statusCode"], 400)
+                self.assertEqual(
+                    json.loads(result["body"]),
+                    {"error": "Record data must be a string"},
+                )
+                post.assert_not_called()
+
     @patch.dict(
         os.environ,
         {

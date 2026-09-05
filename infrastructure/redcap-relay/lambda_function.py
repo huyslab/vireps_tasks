@@ -70,6 +70,9 @@ def lambda_handler(event, context):
     if authorized_record_id != record.get("record_id"):
         return lambda_response(403, {"error": "Record is not authorized"})
 
+    if not isinstance(record.get("data"), str):
+        return lambda_response(400, {"error": "Record data must be a string"})
+
     def select_keys(record, keys):
         return {key: record[key] for key in keys if key in record}
 
