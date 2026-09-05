@@ -220,9 +220,9 @@
     </div>
 
     <div id="demo-mode-overlay">
-        <p><strong>Demo mode</strong></p>
-        <p>This device is not approved for data collection. The experiment can continue, but no data will be saved.</p>
-        <button id="demo-mode-continue">Continue in demo mode</button>
+        <p><strong>This device is not approved for data collection</strong></p>
+        <p>The session can run and its data will be stored on this device. Nothing is sent to REDCap until the device is approved, and stored sessions are sent automatically once it is.</p>
+        <button id="demo-mode-continue">Continue</button>
     </div>
 
     <script>
@@ -245,6 +245,7 @@
             enterExperiment,
             getDeviceAuthorizationStatus,
             getPendingCount,
+            isQueueAvailable,
             participantIdValidationError
         } from '@utils/index.js';
 
@@ -332,11 +333,22 @@
             }
         }
 
-        // Before starting a new session, check whether this tablet is still carrying
-        // unsent data from a previous one (core/utils/data-queue.js makes one retry attempt
-        // as soon as this page loads). This is deliberately
-        // a one-time acknowledgement plus an explicit go-ahead, not a blocking gate or a
-        // live queue monitor during the experiment.
+        /** Shows an acknowledgement overlay and resolves when the participant continues. */
+        function acknowledge(overlayId, continueId) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById(overlayId);
+                overlay.style.display = 'flex';
+                document.getElementById(continueId).addEventListener('click', () => {
+                    overlay.style.display = 'none';
+                    resolve();
+                }, { once: true });
+            });
+        }
+
+        // Startup acknowledgements, in order: an unapproved device, then any unsent data
+        // left by an earlier session (core/utils/data-queue.js starts sending it as soon as
+        // this page loads). Both are one-time notices rather than gates or live monitors -
+        // the data is stored on the device either way.
         async function startSession() {
             const participantError = participantIdValidationError(window.participantID);
             if (participantError) {
@@ -344,16 +356,20 @@
                 return;
             }
 
+            // A tablet that cannot store unsent data locally must not collect any: without
+            // the outbox there is nothing to fall back on when a send fails.
+            if (!(await isQueueAvailable())) {
+                showExperimentError(new Error(
+                    'This browser cannot store data locally, so a session cannot be run safely on it. '
+                    + 'Check that the browser is not in private mode and that site data is allowed.'
+                ));
+                return;
+            }
+
             const deviceStatus = await getDeviceAuthorizationStatus();
             window.__redcapDemoMode = !deviceStatus.approved;
             if (!deviceStatus.approved) {
-                const demoOverlay = document.getElementById('demo-mode-overlay');
-                demoOverlay.style.display = 'flex';
-                document.getElementById('demo-mode-continue').addEventListener('click', () => {
-                    demoOverlay.style.display = 'none';
-                    runExperiment();
-                }, { once: true });
-                return;
+                await acknowledge('demo-mode-overlay', 'demo-mode-continue');
             }
 
             let pendingCount = 0;
@@ -363,22 +379,14 @@
                 console.warn('Could not check for unsent data:', error);
             }
 
-            if (pendingCount === 0) {
-                runExperiment();
-                return;
+            if (pendingCount > 0) {
+                document.getElementById('pending-data-message').textContent = pendingCount === 1
+                    ? "There is 1 unsent session still stored on this device. Sending was started when this page loaded; if it still cannot be sent, it will remain stored for the next session. Tap Continue to start this participant's session."
+                    : `There are ${pendingCount} unsent sessions still stored on this device. Sending was started when this page loaded; any that still cannot be sent will remain stored for the next session. Tap Continue to start this participant's session.`;
+                await acknowledge('pending-data-overlay', 'pending-data-continue');
             }
 
-            const overlay = document.getElementById('pending-data-overlay');
-            const message = document.getElementById('pending-data-message');
-            message.textContent = pendingCount === 1
-                ? "There is 1 unsent session still stored on this device. A retry was started when this page loaded; if it still cannot be sent, it will remain stored for the next session. Tap Continue to start this participant's session."
-                : `There are ${pendingCount} unsent sessions still stored on this device. A retry was started when this page loaded; any that still cannot be sent will remain stored for the next session. Tap Continue to start this participant's session.`;
-            overlay.style.display = 'flex';
-
-            document.getElementById('pending-data-continue').addEventListener('click', () => {
-                overlay.style.display = 'none';
-                runExperiment();
-            }, { once: true });
+            runExperiment();
         }
 
         // Start the experiment when the page loads

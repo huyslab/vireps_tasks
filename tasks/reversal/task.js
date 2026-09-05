@@ -107,7 +107,7 @@ function generateReversalBlocks(settings) {
                                     
                                     // Save data to REDCap every 40 trials
                                     if (n_trials % 40 == 0) {
-                                        saveDataREDCap(3);
+                                        saveDataREDCap();
                                     }
 
                                     // Track missed responses (null responses)

@@ -41,25 +41,34 @@ function openDeviceDB() {
     return deviceDBPromise;
 }
 
+/**
+ * Reads this browser's enrollment, or null if it has none. Rejects if the enrollment could
+ * not be read: "we could not tell" is not the same as "not enrolled", and conflating them
+ * would let a transient IndexedDB failure look like an unenrolled device.
+ * @returns {Promise<Object|null>}
+ */
 async function readStoredIdentity() {
-    try {
-        const db = await openDeviceDB();
-        return await new Promise((resolve, reject) => {
-            const request = db.transaction(DEVICE_STORE_NAME, 'readonly')
-                .objectStore(DEVICE_STORE_NAME)
-                .get(DEVICE_IDENTITY_KEY);
-            request.onsuccess = () => resolve(request.result || null);
-            request.onerror = () => reject(request.error);
-        });
-    } catch (error) {
-        console.warn('device-auth: could not read device enrollment:', error);
-        return null;
-    }
+    const db = await openDeviceDB();
+    return await new Promise((resolve, reject) => {
+        const request = db.transaction(DEVICE_STORE_NAME, 'readonly')
+            .objectStore(DEVICE_STORE_NAME)
+            .get(DEVICE_IDENTITY_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+    });
 }
 
+/**
+ * Caches only a successful read. A failed one is not remembered, so a transient error
+ * cannot mark an enrolled device unenrolled for the lifetime of the page.
+ * @returns {Promise<Object|null>}
+ */
 function getDeviceIdentity() {
     if (!identityPromise) {
         identityPromise = readStoredIdentity();
+        identityPromise.catch(() => {
+            identityPromise = null;
+        });
     }
     return identityPromise;
 }
@@ -94,11 +103,21 @@ function randomIdentifier() {
     return base64urlEncode(bytes);
 }
 
+/**
+ * Whether this browser holds an enrollment. Only ever gates sending, so an unreadable
+ * enrollment is reported as false: the affected records stay in the outbox and are retried.
+ * @returns {Promise<boolean>}
+ */
 async function hasDeviceIdentity() {
     if (typeof window.__redcapDeviceSignerForTesting === 'function') {
         return true;
     }
-    return (await getDeviceIdentity()) !== null;
+    try {
+        return (await getDeviceIdentity()) !== null;
+    } catch (error) {
+        console.warn('device-auth: could not read device enrollment; treating as unavailable for now:', error);
+        return false;
+    }
 }
 
 async function createSignedRequestHeaders(recordId) {
@@ -132,6 +151,8 @@ async function createSignedRequestHeaders(recordId) {
 }
 
 async function enrollDevice(enrollmentCode) {
+    // Deliberately not using hasDeviceIdentity() here: an unreadable enrollment must abort
+    // rather than be treated as "not enrolled", which would overwrite a working private key.
     if (await getDeviceIdentity()) {
         throw new Error('This browser is already enrolled');
     }

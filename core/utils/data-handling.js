@@ -75,18 +75,16 @@ function updateState(state, save_data = true) {
 }
 
 /**
- * Saves experimental data to REDCap via the AWS Lambda endpoint, buffering locally
- * (see data-queue.js) so a record is never lost to a dropped connection - it stays queued
- * until a newer cumulative save succeeds or a later session retries it at startup.
- * @param {number} retry - Number of immediate/synchronous retry attempts before falling
- *   back to the local queue (default: 1). Exhausting these does not discard the data.
- * @param {Object} extra_fields - Additional fields (currently unused - kept for callers
- *   that still pass one, e.g. endExperiment's {message: "endTask"}; not sent to REDCap)
- * @param {Function} callback - Callback function to execute after successful submission
- * @returns {Promise<{persisted: boolean, skipped: boolean}>} Resolves after the local
- *   write-ahead attempt and reports whether the record was persisted or intentionally skipped.
+ * Saves experimental data to REDCap via the AWS Lambda endpoint by writing a cumulative
+ * snapshot to the local outbox (see data-queue.js). Delivery is the outbox's job and is
+ * retried until REDCap confirms receipt, so a dropped connection - or a device that is not
+ * currently authorized - never costs data.
+ *
+ * Async so a malformed participant ID surfaces as a rejected promise rather than a
+ * synchronous throw at the call site.
+ * @returns {Promise<{version: number}>} Resolves once the snapshot is durably stored.
  */
-function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
+async function saveDataREDCap() {
 
     // Get data, remove stimulus string to reduce payload size
     const jspsych_data = jsPsych.data.get().ignore('stimulus').json();
@@ -116,7 +114,7 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
 
     console.log("Data to be sent:", redcap_record);
 
-    return submitRecord(record_id, redcap_record, retry, callback);
+    return submitRecord(record_id, redcap_record);
 }
 
 /**
@@ -126,40 +124,25 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
 function endExperiment() {
 
     // Print end experiment message
-    console.log("Experiment finished. Sending final data...");
+    console.log("Experiment finished. Saving final data...");
 
     // Some module timelines invoke endExperiment more than once near completion (for
     // example, on bonus finish and again on the final message). Re-arm the guard and only
     // let the newest final snapshot release it.
     const saveGeneration = ++finalSaveGeneration;
     window.addEventListener('beforeunload', preventRefresh);
-    const allowUnloadIfLatest = () => {
+
+    const persistence = saveDataREDCap();
+
+    // The outbox is what makes leaving safe: once the final snapshot is durably stored it
+    // will be delivered, so do not make the participant wait for the network. The guard
+    // stays armed only if the snapshot could not be stored at all.
+    persistence.then(() => {
         if (saveGeneration === finalSaveGeneration) {
             window.removeEventListener('beforeunload', preventRefresh);
         }
-    };
-
-    // Final save gets more immediate retries than interim saves; extra_fields is passed
-    // for continuity but is currently unused (see saveDataREDCap's JSDoc).
-    const persistence = saveDataREDCap(10, {
-        message: "endTask"
-    }, (error) => {
-        // If IndexedDB was unavailable, only a confirmed network send makes it safe to
-        // leave. On exhausted retries, retain the unload warning rather than silently
-        // allowing the only copy of the final snapshot to disappear.
-        if (!error) {
-            allowUnloadIfLatest();
-        }
-    });
-
-    // Normally the write-ahead queue is enough to make navigation safe; do not make the
-    // participant wait for the network once IndexedDB has committed the final snapshot.
-    persistence.then(({ persisted, skipped }) => {
-        if (persisted || skipped) {
-            allowUnloadIfLatest();
-        }
     }).catch((error) => {
-        console.error('Failed to persist final data before completion:', error);
+        console.error('Failed to store final data before completion:', error);
     });
 
     return persistence;

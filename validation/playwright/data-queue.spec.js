@@ -6,13 +6,17 @@ import { expect, test } from '@playwright/test';
 // noise from the scenario under test, not an app bug.
 
 /**
- * Exercises core/utils/data-queue.js's actual send/retry/flush logic against a mocked
- * network. The rest of the Playwright suite runs on http://127.0.0.1:4173 (see
- * playwright.config.js), which the queue's dev-mode guard (isDevHost()) always treats as
- * "skip the network" - by design, so the suite never hits the real REDCap/Lambda endpoint.
- * That means this is the only place the real submit/retry/flush path is exercised at all;
- * window.__forceOnlineRedcapForTesting (set below) is the queue module's escape hatch for
- * exactly this purpose.
+ * Exercises core/utils/data-queue.js's actual store/send logic against a mocked network.
+ * The rest of the Playwright suite runs on http://127.0.0.1:4173 (see playwright.config.js),
+ * which the queue's dev-mode guard (isDevHost()) always treats as "do not send" - by design,
+ * so the suite never hits the real REDCap/Lambda endpoint. That means this is the only place
+ * the real send path is exercised at all; window.__forceOnlineRedcapForTesting (set below) is
+ * the queue module's escape hatch for exactly this purpose.
+ *
+ * The outbox splits saving from sending: submitRecord() only stores a snapshot, and
+ * flushQueue() is the only sender. So the deterministic pattern throughout is
+ * `await submitRecord(...)` (stored) followed by `await flushQueue()` (delivery attempted),
+ * where flushQueue() joins any pass already running and guarantees one further pass.
  *
  * Uses validation/fixtures/data-queue.html, which exposes the queue's functions directly on
  * window rather than driving a full jsPsych timeline - the behaviour under test lives
@@ -42,14 +46,42 @@ async function mockRedcapEndpoint(page) {
   };
 }
 
+/** Stores a snapshot and waits for the resulting delivery pass to finish. */
+function submitAndFlush(page, recordId, record = {}) {
+  return page.evaluate(
+    async ({ id, extra }) => {
+      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, ...extra }]));
+      await window.__dataQueue.flushQueue();
+    },
+    { id: recordId, extra: record }
+  );
+}
+
+function queuedRecordIds(page) {
+  return page.evaluate(() =>
+    window.__dataQueue.listQueuedRecords().then((records) => records.map((record) => record.record_id))
+  );
+}
+
+function isQueued(page, recordId) {
+  return page.evaluate(
+    (id) => window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id)),
+    recordId
+  );
+}
+
 test.describe('data-queue', () => {
   test.beforeEach(async ({ context }) => {
     // Forces isDevHost() to false so submitRecord()/flushQueue() attempt real fetch()es
     // against the (mocked) endpoint even though the page is served from 127.0.0.1.
     // addInitScript re-runs on every navigation within this page, so it also covers the
-    // reload in the third test below.
+    // reload in the page-reload test below.
+    //
+    // The retry backoff is pushed far out by default so a failed pass cannot fire a
+    // background retry mid-assertion; the dedicated retry test lowers it deliberately.
     await context.addInitScript(() => {
       window.__forceOnlineRedcapForTesting = true;
+      window.__redcapRetryDelayMsForTesting = 60000;
       window.__redcapDeviceSignerForTesting = async (recordId) => ({
         'X-Device-Id': 'test-approved-device',
         'X-Record-Id': recordId,
@@ -58,36 +90,6 @@ test.describe('data-queue', () => {
         'X-Device-Signature': 'test-signature',
       });
     });
-  });
-
-  test('an unapproved demo device neither transmits nor queues data', async ({ page }) => {
-    let requestCount = 0;
-    await page.route(REDCAP_ENDPOINT, async (route) => {
-      requestCount += 1;
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
-    });
-
-    await page.goto('/validation/fixtures/data-queue.html');
-    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
-
-    const recordId = uniqueRecordId('demo');
-    const result = await page.evaluate(async ({ id }) => {
-      delete window.__redcapDeviceSignerForTesting;
-      window.__redcapDemoMode = true;
-      return window.__dataQueue.submitRecord(
-        id,
-        JSON.stringify([{ record_id: id }]),
-        0,
-        () => {}
-      );
-    }, { id: recordId });
-
-    expect(result).toEqual({ persisted: false, skipped: true });
-    expect(requestCount).toBe(0);
-    const queued = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
-    , recordId);
-    expect(queued).toBe(false);
   });
 
   test('an approved submission sends authorization bound to its record ID', async ({ page }) => {
@@ -101,16 +103,52 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     const recordId = uniqueRecordId('authorized');
-    await page.evaluate(
-      ({ id }) => new Promise((resolve) => {
-        window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
-      }),
-      { id: recordId }
-    );
+    await submitAndFlush(page, recordId);
 
     expect(requestHeaders['x-device-id']).toBe('test-approved-device');
     expect(requestHeaders['x-record-id']).toBe(recordId);
     expect(requestHeaders['x-device-signature']).toBe('test-signature');
+  });
+
+  test('an unapproved device stores data for a later send rather than discarding it', async ({ page }) => {
+    let requestCount = 0;
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestCount += 1;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    // Authorization gates only sending. A device that is not approved - whether revoked,
+    // never enrolled, or wrongly judged unapproved because of clock drift - must still end
+    // up with its session on disk, or a transient problem becomes permanent data loss.
+    const recordId = uniqueRecordId('unapproved');
+    await page.evaluate(async ({ id }) => {
+      delete window.__redcapDeviceSignerForTesting;
+      window.__redcapDemoMode = true;
+      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
+      await window.__dataQueue.flushQueue();
+    }, { id: recordId });
+
+    expect(requestCount, 'an unapproved device must not transmit').toBe(0);
+    expect(await isQueued(page, recordId), 'the session must remain stored on the device').toBe(true);
+
+    // Once the device is approved, the stored session goes out with no further save.
+    await page.evaluate(async () => {
+      window.__redcapDemoMode = false;
+      window.__redcapDeviceSignerForTesting = async (recordId) => ({
+        'X-Device-Id': 'test-approved-device',
+        'X-Record-Id': recordId,
+        'X-Request-Timestamp': '1788523200',
+        'X-Request-Nonce': 'AAAAAAAAAAAAAAAAAAAAAA',
+        'X-Device-Signature': 'test-signature',
+      });
+      await window.__dataQueue.flushQueue();
+    });
+
+    expect(requestCount).toBe(1);
+    expect(await isQueued(page, recordId)).toBe(false);
   });
 
   test('a failed send leaves the record queued, and a later flush drains it', async ({ page }) => {
@@ -121,31 +159,40 @@ test.describe('data-queue', () => {
 
     const recordId = uniqueRecordId('flush');
 
-    // One immediate retry, endpoint failing throughout: submitRecord() must not throw, and
-    // the record must still be in the queue once the immediate retries are exhausted.
-    await page.evaluate(
-      ({ id }) =>
-        new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 1, () => resolve());
-        }),
-      { id: recordId }
-    );
+    // Endpoint failing throughout: submitRecord() must not throw, and the record must still
+    // be in the outbox once the delivery pass has failed.
+    await submitAndFlush(page, recordId);
+    expect(await isQueued(page, recordId), 'record should remain queued after a failed send').toBe(true);
 
-    const queuedAfterFailure = await page.evaluate(
-      (id) => window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id)),
-      recordId
-    );
-    expect(queuedAfterFailure, 'record should remain queued after exhausting immediate retries').toBe(true);
-
-    // Endpoint recovers; an explicit flush exercises the same path used once when the next
+    // Endpoint recovers; an explicit flush exercises the same path used when the next
     // session loads and should drain it.
     setFailing(false);
     await page.evaluate(() => window.__dataQueue.flushQueue());
+    expect(await isQueued(page, recordId), 'record should be removed once the send succeeds').toBe(false);
+  });
 
-    const pendingAfterFlush = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
-    , recordId);
-    expect(pendingAfterFlush, 'record should be removed from the queue once the flush succeeds').toBe(false);
+  test('a failed pass retries on its own without a further save', async ({ page }) => {
+    const { setFailing } = await mockRedcapEndpoint(page);
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    // The final save of a session is never followed by another save, so the outbox has to
+    // retry by itself rather than waiting for the next page load.
+    const recordId = uniqueRecordId('auto-retry');
+    await page.evaluate(() => {
+      window.__redcapRetryDelayMsForTesting = 50;
+    });
+    await submitAndFlush(page, recordId);
+    expect(await isQueued(page, recordId)).toBe(true);
+
+    setFailing(false);
+    await expect
+      .poll(() => isQueued(page, recordId), {
+        message: 'a failed record should be retried automatically once the endpoint recovers',
+        timeout: 5000,
+      })
+      .toBe(false);
   });
 
   test('a record still queued after a page reload is picked up by the load-time flush', async ({ page }) => {
@@ -155,16 +202,8 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     const recordId = uniqueRecordId('reload');
-
-    // Queue a record while the endpoint is failing, with zero immediate retries so it's
-    // left queued right away.
-    await page.evaluate(
-      ({ id }) =>
-        new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
-        }),
-      { id: recordId }
-    );
+    await submitAndFlush(page, recordId);
+    expect(await isQueued(page, recordId)).toBe(true);
 
     // Endpoint recovers, then the page reloads (simulating this tablet's next page load,
     // e.g. for the next task or participant) - data-queue.js flushes once on module load,
@@ -174,23 +213,19 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     await expect
-      .poll(
-        async () =>
-          page.evaluate(
-            (id) => window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id)),
-            recordId
-          ),
-        { message: 'record queued before reload should be flushed automatically on load', timeout: 5000 }
-      )
+      .poll(() => isQueued(page, recordId), {
+        message: 'record queued before reload should be sent automatically on load',
+        timeout: 5000,
+      })
       .toBe(false);
   });
 
-  test('newer snapshots for one record are sent in order and are not deleted by older sends', async ({ page }) => {
+  test('a snapshot written while a send is in flight is not deleted by that send', async ({ page }) => {
     const requestBodies = [];
     const releaseRequest = [];
 
-    // Hold each response until the test releases it. This makes the older request remain
-    // in flight while a newer cumulative snapshot is queued for the same REDCap row.
+    // Hold each response until the test releases it, so the older request is still in flight
+    // while a newer cumulative snapshot is stored for the same REDCap row.
     await page.route(REDCAP_ENDPOINT, async (route) => {
       requestBodies.push(JSON.parse(route.request().postData()));
       await new Promise((resolve) => {
@@ -204,48 +239,40 @@ test.describe('data-queue', () => {
     await page.goto('/validation/fixtures/data-queue.html');
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
-    const recordId = uniqueRecordId('versions');
-    await page.evaluate(
-      ({ id }) => window.__dataQueue.submitRecord(
-        id,
-        JSON.stringify([{ record_id: id, snapshot: 'older' }]),
-        0,
-        () => {}
-      ),
+    const recordId = uniqueRecordId('in-flight');
+    const firstFlush = page.evaluate(
+      async ({ id }) => {
+        await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, snapshot: 'older' }]));
+        await window.__dataQueue.flushQueue();
+      },
       { id: recordId }
     );
     await expect.poll(() => requestBodies.length).toBe(1);
 
     await page.evaluate(
-      ({ id }) => window.__dataQueue.submitRecord(
-        id,
-        JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
-        0,
-        () => {}
-      ),
+      ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, snapshot: 'newer' }])),
       { id: recordId }
     );
 
-    // A second request must not start until the first completes; otherwise a slow older
-    // response can overwrite the newer REDCap value or delete its queued snapshot.
+    // One sender means a second request cannot start while the first is in flight;
+    // otherwise a slow older response could overwrite the newer value in REDCap.
     await page.waitForTimeout(100);
     expect(requestBodies).toHaveLength(1);
     expect(requestBodies[0][0].snapshot).toBe('older');
 
+    // The older send succeeds, but its compare-and-delete must not remove the newer
+    // snapshot that replaced it, and the follow-up pass must send that newer snapshot.
     await releaseRequest[0]();
     await expect.poll(() => requestBodies.length).toBe(2);
     expect(requestBodies[1][0].snapshot).toBe('newer');
     expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
 
     await releaseRequest[1]();
-    await expect.poll(
-      () => page.evaluate((id) =>
-        window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
-      , recordId)
-    ).toBe(false);
+    await firstFlush;
+    expect(await isQueued(page, recordId)).toBe(false);
   });
 
-  test('a newer successful save replaces a failed snapshot without re-sending the older payload', async ({ page }) => {
+  test('a newer save replaces a failed snapshot without re-sending the older payload', async ({ page }) => {
     let failing = true;
     const requestBodies = [];
     await page.route(REDCAP_ENDPOINT, async (route) => {
@@ -261,279 +288,17 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     const recordId = uniqueRecordId('replace');
-    await page.evaluate(
-      ({ id }) => new Promise((resolve) => {
-        window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'older' }]),
-          0,
-          () => resolve()
-        );
-      }),
-      { id: recordId }
-    );
-
-    // Reconnects do not drain the local queue under the coalescing strategy. The next
-    // cumulative save replaces the failed snapshot and gets its own direct attempt.
-    failing = false;
-    await page.evaluate(() => window.dispatchEvent(new Event('online')));
-    await page.waitForTimeout(100);
+    await submitAndFlush(page, recordId, { snapshot: 'older' });
     expect(requestBodies).toHaveLength(1);
 
-    await page.evaluate(
-      ({ id }) => new Promise((resolve) => {
-        window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
-          0,
-          () => resolve()
-        );
-      }),
-      { id: recordId }
-    );
+    // Saves are cumulative, so the newer snapshot replaces the failed one in place and only
+    // that newer payload is ever sent again.
+    failing = false;
+    await submitAndFlush(page, recordId, { snapshot: 'newer' });
 
     expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['older', 'newer']);
     expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
-    const queued = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
-    , recordId);
-    expect(queued).toBe(false);
-  });
-
-  test('a successful fallback send removes an older snapshot left by a transient write failure', async ({ page }) => {
-    let failing = true;
-    const requestBodies = [];
-    await page.route(REDCAP_ENDPOINT, async (route) => {
-      requestBodies.push(JSON.parse(route.request().postData()));
-      await route.fulfill({
-        status: failing ? 500 : 200,
-        contentType: 'application/json',
-        body: failing ? '{"error":"mocked failure"}' : '{"ok":true}'
-      });
-    });
-
-    await page.goto('/validation/fixtures/data-queue.html');
-    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
-
-    const recordId = uniqueRecordId('fallback-cleanup');
-    await page.evaluate(
-      ({ id }) => new Promise((resolve) => {
-        window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'older' }]),
-          0,
-          () => resolve()
-        );
-      }),
-      { id: recordId }
-    );
-
-    failing = false;
-    const fallbackResult = await page.evaluate(async ({ id }) => {
-      const originalPut = IDBObjectStore.prototype.put;
-      let failedQueueWrite = false;
-      IDBObjectStore.prototype.put = function (...args) {
-        if (!failedQueueWrite && this.name === 'records') {
-          failedQueueWrite = true;
-          this.transaction.abort();
-          return undefined;
-        }
-        return originalPut.apply(this, args);
-      };
-
-      try {
-        let resolveCallback;
-        const callbackFinished = new Promise((resolve) => {
-          resolveCallback = resolve;
-        });
-        const persistence = await window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'newer' }]),
-          0,
-          (error) => resolveCallback(error ? error.message : null)
-        );
-        const callbackError = await callbackFinished;
-        return { ...persistence, callbackError, failedQueueWrite };
-      } finally {
-        IDBObjectStore.prototype.put = originalPut;
-      }
-    }, { id: recordId });
-
-    expect(fallbackResult).toEqual({
-      persisted: false,
-      skipped: false,
-      callbackError: null,
-      failedQueueWrite: true
-    });
-    expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['older', 'newer']);
-    expect(requestBodies[1][0].snapshot_version).toBeGreaterThan(requestBodies[0][0].snapshot_version);
-
-    const queued = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.some((record) => record.record_id === id))
-    , recordId);
-    expect(queued, 'the older queued snapshot must not survive the newer successful fallback send').toBe(false);
-  });
-
-  test('an older in-flight fallback cannot delete a newer persisted snapshot', async ({ page }) => {
-    const requestBodies = [];
-    const releaseRequest = [];
-    await page.route(REDCAP_ENDPOINT, async (route) => {
-      requestBodies.push(JSON.parse(route.request().postData()));
-      await new Promise((resolve) => {
-        releaseRequest.push(async () => {
-          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
-          resolve();
-        });
-      });
-    });
-
-    await page.goto('/validation/fixtures/data-queue.html');
-    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
-    const recordId = uniqueRecordId('fallback-before-persisted');
-
-    const fallback = await page.evaluate(async ({ id }) => {
-      const originalPut = IDBObjectStore.prototype.put;
-      let failedQueueWrite = false;
-      IDBObjectStore.prototype.put = function (...args) {
-        if (!failedQueueWrite && this.name === 'records') {
-          failedQueueWrite = true;
-          this.transaction.abort();
-          return undefined;
-        }
-        return originalPut.apply(this, args);
-      };
-      try {
-        return await window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'older-fallback' }]),
-          0,
-          () => {}
-        );
-      } finally {
-        IDBObjectStore.prototype.put = originalPut;
-      }
-    }, { id: recordId });
-    expect(fallback.persisted).toBe(false);
-    await expect.poll(() => requestBodies.length).toBe(1);
-
-    await page.evaluate(
-      ({ id }) => window.__dataQueue.submitRecord(
-        id,
-        JSON.stringify([{ record_id: id, snapshot: 'newer-persisted' }]),
-        0,
-        () => {}
-      ),
-      { id: recordId }
-    );
-
-    const queuedSnapshot = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => {
-        const entry = records.find((record) => record.record_id === id);
-        return entry ? JSON.parse(entry.payload)[0].snapshot : null;
-      })
-    , recordId);
-    expect(queuedSnapshot).toBe('newer-persisted');
-
-    // A persisted entry may also have been created by a later page load, whose local
-    // submission counter starts over. Such counters must never be compared directly.
-    await page.evaluate(async (id) => {
-      const db = await new Promise((resolve, reject) => {
-        const request = indexedDB.open('redcap_pending_queue', 2);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction('records', 'readwrite');
-        const store = tx.objectStore('records');
-        const request = store.get(id);
-        request.onsuccess = () => store.put({
-          ...request.result,
-          submission_context: 'later-page-context'
-        });
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      });
-    }, recordId);
-
-    await releaseRequest[0]();
-    await expect.poll(() => requestBodies.length).toBe(2);
-    expect(requestBodies.map((body) => body[0].snapshot)).toEqual([
-      'older-fallback',
-      'newer-persisted'
-    ]);
-
-    await releaseRequest[1]();
-    await expect.poll(() => page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) =>
-        records.some((record) => record.record_id === id)
-      )
-    , recordId)).toBe(false);
-  });
-
-  test('a delayed older fallback cannot send after a newer persisted snapshot', async ({ page }) => {
-    const requestBodies = [];
-    await page.route(REDCAP_ENDPOINT, async (route) => {
-      requestBodies.push(JSON.parse(route.request().postData()));
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
-    });
-
-    await page.goto('/validation/fixtures/data-queue.html');
-    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
-    const recordId = uniqueRecordId('persisted-before-fallback');
-
-    const results = await page.evaluate(async ({ id }) => {
-      const originalPut = IDBObjectStore.prototype.put;
-      let failedQueueWrite = false;
-      IDBObjectStore.prototype.put = function (...args) {
-        if (!failedQueueWrite && this.name === 'records') {
-          failedQueueWrite = true;
-          this.transaction.abort();
-          return undefined;
-        }
-        return originalPut.apply(this, args);
-      };
-      window.__redcapFallbackDelayMsForTesting = 100;
-
-      try {
-        let finishOlder;
-        let finishNewer;
-        const olderFinished = new Promise((resolve) => { finishOlder = resolve; });
-        const newerFinished = new Promise((resolve) => { finishNewer = resolve; });
-        const olderSubmission = window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'older-fallback' }]),
-          0,
-          () => finishOlder()
-        );
-
-        while (!failedQueueWrite) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-
-        const newerSubmission = await window.__dataQueue.submitRecord(
-          id,
-          JSON.stringify([{ record_id: id, snapshot: 'newer-persisted' }]),
-          0,
-          () => finishNewer()
-        );
-        const olderResult = await olderSubmission;
-        await Promise.all([olderFinished, newerFinished]);
-        return { olderResult, newerSubmission };
-      } finally {
-        IDBObjectStore.prototype.put = originalPut;
-        delete window.__redcapFallbackDelayMsForTesting;
-      }
-    }, { id: recordId });
-
-    expect(results.olderResult.persisted).toBe(false);
-    expect(results.newerSubmission.persisted).toBe(true);
-    expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['newer-persisted']);
-    const queued = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) =>
-        records.some((record) => record.record_id === id)
-      )
-    , recordId);
-    expect(queued).toBe(false);
+    expect(await isQueued(page, recordId)).toBe(false);
   });
 
   test('snapshot versions continue increasing after successful sends clear the queue', async ({ page }) => {
@@ -548,17 +313,7 @@ test.describe('data-queue', () => {
 
     const recordId = uniqueRecordId('versions-after-success');
     for (const snapshot of ['first', 'second']) {
-      await page.evaluate(
-        ({ id, value }) => new Promise((resolve) => {
-          window.__dataQueue.submitRecord(
-            id,
-            JSON.stringify([{ record_id: id, snapshot: value }]),
-            0,
-            () => resolve()
-          );
-        }),
-        { id: recordId, value: snapshot }
-      );
+      await submitAndFlush(page, recordId, { snapshot });
     }
 
     expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
@@ -570,9 +325,6 @@ test.describe('data-queue', () => {
     });
 
     const secondPage = await context.newPage();
-    await secondPage.addInitScript(() => {
-      window.__forceOnlineRedcapForTesting = true;
-    });
     await Promise.all([
       page.goto('/validation/fixtures/data-queue.html'),
       secondPage.goto('/validation/fixtures/data-queue.html')
@@ -585,15 +337,11 @@ test.describe('data-queue', () => {
     const recordId = uniqueRecordId('cross-tab-version');
     await Promise.all([
       page.evaluate(
-        ({ id }) => new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'first' }]), 0, () => resolve());
-        }),
+        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'first' }])),
         { id: recordId }
       ),
       secondPage.evaluate(
-        ({ id }) => new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'second' }]), 0, () => resolve());
-        }),
+        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'second' }])),
         { id: recordId }
       )
     ]);
@@ -605,7 +353,7 @@ test.describe('data-queue', () => {
     expect(JSON.parse(queuedEntry.payload)[0].snapshot_version).toBe(2);
   });
 
-  test('development-mode saves do not create an unflushable local backlog', async ({ page }) => {
+  test('development-mode saves are stored locally but never transmitted', async ({ page }) => {
     let requestCount = 0;
     await page.route(REDCAP_ENDPOINT, async (route) => {
       requestCount += 1;
@@ -618,14 +366,14 @@ test.describe('data-queue', () => {
     const recordId = uniqueRecordId('dev-host');
     await page.evaluate(async ({ id }) => {
       window.__forceOnlineRedcapForTesting = false;
-      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => {});
+      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
+      await window.__dataQueue.flushQueue();
     }, { id: recordId });
 
-    expect(requestCount).toBe(0);
-    const queued = await page.evaluate((id) =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.some((r) => r.record_id === id))
-    , recordId);
-    expect(queued).toBe(false);
+    expect(requestCount, 'development mode must not transmit').toBe(0);
+    // Storing is unconditional: dev mode suppresses only sending, so a misdetected host can
+    // never be the reason data is missing.
+    expect(await isQueued(page, recordId)).toBe(true);
   });
 
   test('pending count uses the IndexedDB count operation without loading payloads', async ({ page }) => {
@@ -635,12 +383,7 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     const recordId = uniqueRecordId('count');
-    await page.evaluate(
-      ({ id }) => new Promise((resolve) => {
-        window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
-      }),
-      { id: recordId }
-    );
+    await submitAndFlush(page, recordId);
 
     const pendingCount = await page.evaluate(async () => {
       const originalGetAll = IDBObjectStore.prototype.getAll;
@@ -657,7 +400,7 @@ test.describe('data-queue', () => {
     expect(pendingCount).toBe(1);
   });
 
-  test('a stalled request does not prevent other queued records from flushing', async ({ page }) => {
+  test('a stalled request does not prevent other queued records from sending', async ({ page }) => {
     let phase = 'queue';
     const flushAttempts = [];
     let releaseStalledRequest;
@@ -694,12 +437,7 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     for (const recordId of [stalledRecordId, laterRecordId]) {
-      await page.evaluate(
-        ({ id }) => new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
-        }),
-        { id: recordId }
-      );
+      await submitAndFlush(page, recordId);
     }
 
     phase = 'flush';
@@ -717,13 +455,10 @@ test.describe('data-queue', () => {
     await flushPromise;
 
     expect(flushAttempts).toEqual([stalledRecordId, laterRecordId]);
-    const queuedRecordIds = await page.evaluate(() =>
-      window.__dataQueue.listQueuedRecords().then((records) => records.map((record) => record.record_id))
-    );
-    expect(queuedRecordIds).toEqual([stalledRecordId]);
+    expect(await queuedRecordIds(page)).toEqual([stalledRecordId]);
   });
 
-  test('a queue flush starts no more than four records concurrently', async ({ page }) => {
+  test('a flush starts no more than four records concurrently', async ({ page }) => {
     let phase = 'queue';
     const flushAttempts = [];
     const releaseByRecord = new Map();
@@ -750,12 +485,7 @@ test.describe('data-queue', () => {
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
     for (const recordId of recordIds) {
-      await page.evaluate(
-        ({ id }) => new Promise((resolve) => {
-          window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]), 0, () => resolve());
-        }),
-        { id: recordId }
-      );
+      await submitAndFlush(page, recordId);
     }
 
     phase = 'flush';

@@ -134,7 +134,7 @@ function preKickOutWarning(settings) {
                 `,
                 on_start: function(trial) {
                     // Save data
-                    saveDataREDCap(3);
+                    saveDataREDCap();
             }
             }
         ],

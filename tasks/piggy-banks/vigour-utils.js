@@ -400,7 +400,7 @@ function piggyBankTrial(settings) {
       
       // Save data at regular intervals and end of task
       if (vigourTrialCounter % (VIGOUR_TRIALS.length / 3) == 0 || vigourTrialCounter == VIGOUR_TRIALS.length) {
-        saveDataREDCap(3);
+        saveDataREDCap();
         updateBonusState(settings);
       }
       

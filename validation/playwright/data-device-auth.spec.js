@@ -96,10 +96,11 @@ test('an enrolled device treats a status-service failure as offline, not demo mo
   expect(status).toEqual({ approved: true, verified: false });
 });
 
-test('an unapproved device gets a demo notice and its data is not saved', async ({ page }) => {
+test('an unapproved device is announced, and its data is stored rather than discarded', async ({ page }) => {
   let requestCount = 0;
   await page.addInitScript(() => {
     window.__forceOnlineRedcapForTesting = true;
+    window.__redcapRetryDelayMsForTesting = 60000;
   });
   await page.route(REDCAP_ENDPOINT, async (route) => {
     requestCount += 1;
@@ -109,23 +110,20 @@ test('an unapproved device gets a demo notice and its data is not saved', async 
   await page.goto('/experiment.html?participant_id=simulate_demo&task=vigour');
   const overlay = page.locator('#demo-mode-overlay');
   await expect(overlay).toBeVisible();
-  await expect(overlay).toContainText('no data will be saved');
+  await expect(overlay).toContainText('stored on this device');
   expect(await page.evaluate(() => window.__redcapDemoMode)).toBe(true);
 
+  // Authorization suppresses transmission only. The session must still reach the outbox, so
+  // a device that is later approved sends it rather than having silently discarded it.
   const result = await page.evaluate(async () => {
-    const { submitRecord, listQueuedRecords } = await import('/core/utils/data-queue.js');
+    const { submitRecord, listQueuedRecords, flushQueue } = await import('/core/utils/data-queue.js');
     const recordId = 'demo-record';
-    const submission = await submitRecord(
-      recordId,
-      JSON.stringify([{ record_id: recordId }]),
-      0,
-      () => {}
-    );
-    const queued = (await listQueuedRecords()).some((record) => record.record_id === recordId);
-    return { submission, queued };
+    await submitRecord(recordId, JSON.stringify([{ record_id: recordId }]));
+    await flushQueue();
+    return { queued: (await listQueuedRecords()).some((record) => record.record_id === recordId) };
   });
 
-  expect(result).toEqual({ submission: { persisted: false, skipped: true }, queued: false });
+  expect(result.queued).toBe(true);
   expect(requestCount).toBe(0);
   await page.locator('#demo-mode-continue').click();
   await expect(overlay).toBeHidden();
