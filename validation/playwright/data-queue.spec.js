@@ -374,6 +374,168 @@ test.describe('data-queue', () => {
     expect(queued, 'the older queued snapshot must not survive the newer successful fallback send').toBe(false);
   });
 
+  test('an older in-flight fallback cannot delete a newer persisted snapshot', async ({ page }) => {
+    const requestBodies = [];
+    const releaseRequest = [];
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await new Promise((resolve) => {
+        releaseRequest.push(async () => {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+          resolve();
+        });
+      });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+    const recordId = uniqueRecordId('fallback-before-persisted');
+
+    const fallback = await page.evaluate(async ({ id }) => {
+      const originalPut = IDBObjectStore.prototype.put;
+      let failedQueueWrite = false;
+      IDBObjectStore.prototype.put = function (...args) {
+        if (!failedQueueWrite && this.name === 'records') {
+          failedQueueWrite = true;
+          this.transaction.abort();
+          return undefined;
+        }
+        return originalPut.apply(this, args);
+      };
+      try {
+        return await window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'older-fallback' }]),
+          0,
+          () => {}
+        );
+      } finally {
+        IDBObjectStore.prototype.put = originalPut;
+      }
+    }, { id: recordId });
+    expect(fallback.persisted).toBe(false);
+    await expect.poll(() => requestBodies.length).toBe(1);
+
+    await page.evaluate(
+      ({ id }) => window.__dataQueue.submitRecord(
+        id,
+        JSON.stringify([{ record_id: id, snapshot: 'newer-persisted' }]),
+        0,
+        () => {}
+      ),
+      { id: recordId }
+    );
+
+    const queuedSnapshot = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) => {
+        const entry = records.find((record) => record.record_id === id);
+        return entry ? JSON.parse(entry.payload)[0].snapshot : null;
+      })
+    , recordId);
+    expect(queuedSnapshot).toBe('newer-persisted');
+
+    // A persisted entry may also have been created by a later page load, whose local
+    // submission counter starts over. Such counters must never be compared directly.
+    await page.evaluate(async (id) => {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('redcap_pending_queue', 2);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readwrite');
+        const store = tx.objectStore('records');
+        const request = store.get(id);
+        request.onsuccess = () => store.put({
+          ...request.result,
+          submission_context: 'later-page-context'
+        });
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }, recordId);
+
+    await releaseRequest[0]();
+    await expect.poll(() => requestBodies.length).toBe(2);
+    expect(requestBodies.map((body) => body[0].snapshot)).toEqual([
+      'older-fallback',
+      'newer-persisted'
+    ]);
+
+    await releaseRequest[1]();
+    await expect.poll(() => page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) =>
+        records.some((record) => record.record_id === id)
+      )
+    , recordId)).toBe(false);
+  });
+
+  test('a delayed older fallback cannot send after a newer persisted snapshot', async ({ page }) => {
+    const requestBodies = [];
+    await page.route(REDCAP_ENDPOINT, async (route) => {
+      requestBodies.push(JSON.parse(route.request().postData()));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+    const recordId = uniqueRecordId('persisted-before-fallback');
+
+    const results = await page.evaluate(async ({ id }) => {
+      const originalPut = IDBObjectStore.prototype.put;
+      let failedQueueWrite = false;
+      IDBObjectStore.prototype.put = function (...args) {
+        if (!failedQueueWrite && this.name === 'records') {
+          failedQueueWrite = true;
+          this.transaction.abort();
+          return undefined;
+        }
+        return originalPut.apply(this, args);
+      };
+      window.__redcapFallbackDelayMsForTesting = 100;
+
+      try {
+        let finishOlder;
+        let finishNewer;
+        const olderFinished = new Promise((resolve) => { finishOlder = resolve; });
+        const newerFinished = new Promise((resolve) => { finishNewer = resolve; });
+        const olderSubmission = window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'older-fallback' }]),
+          0,
+          () => finishOlder()
+        );
+
+        while (!failedQueueWrite) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        const newerSubmission = await window.__dataQueue.submitRecord(
+          id,
+          JSON.stringify([{ record_id: id, snapshot: 'newer-persisted' }]),
+          0,
+          () => finishNewer()
+        );
+        const olderResult = await olderSubmission;
+        await Promise.all([olderFinished, newerFinished]);
+        return { olderResult, newerSubmission };
+      } finally {
+        IDBObjectStore.prototype.put = originalPut;
+        delete window.__redcapFallbackDelayMsForTesting;
+      }
+    }, { id: recordId });
+
+    expect(results.olderResult.persisted).toBe(false);
+    expect(results.newerSubmission.persisted).toBe(true);
+    expect(requestBodies.map((body) => body[0].snapshot)).toEqual(['newer-persisted']);
+    const queued = await page.evaluate((id) =>
+      window.__dataQueue.listQueuedRecords().then((records) =>
+        records.some((record) => record.record_id === id)
+      )
+    , recordId);
+    expect(queued).toBe(false);
+  });
+
   test('snapshot versions continue increasing after successful sends clear the queue', async ({ page }) => {
     const requestBodies = [];
     await page.route(REDCAP_ENDPOINT, async (route) => {

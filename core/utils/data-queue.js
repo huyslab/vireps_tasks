@@ -32,11 +32,23 @@ const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 let dbPromise = null;
 let flushInFlight = false;
 let fallbackVersionCounter = 0;
+let submissionOrderCounter = 0;
+const submissionContext = crypto.randomUUID();
 const recordSendChains = new Map();
+const latestSubmissionOrderByRecord = new Map();
 
 function createFallbackVersion() {
     fallbackVersionCounter += 1;
     return (Date.now() * 1000) + fallbackVersionCounter;
+}
+
+// This order is captured before IndexedDB work starts and is comparable for every save in
+// this document, regardless of whether that save ultimately persists or falls back. The
+// REDCap snapshot version remains a separate audit value because its IndexedDB and fallback
+// allocation schemes are intentionally different.
+function createSubmissionOrder() {
+    submissionOrderCounter += 1;
+    return submissionOrderCounter;
 }
 
 /**
@@ -109,13 +121,14 @@ function openDB() {
  * caller can still attempt a direct send.
  * @param {string} record_id
  * @param {string} payload - Already-serialized JSON body to POST.
+ * @param {number} submissionOrder - Synchronous per-document ordering value.
  * Version allocation and queue replacement share one IndexedDB transaction, making the
  * single origin-wide counter monotonic across records, reloads, and tabs without retaining
  * one metadata row for every completed session.
  * @returns {Promise<Object>} The versioned entry, with persisted=false only when IndexedDB
  *   was unavailable and the caller must fall back to a best-effort direct send.
  */
-async function enqueueRecord(record_id, payload) {
+async function enqueueRecord(record_id, payload, submissionOrder) {
     try {
         const db = await openDB();
         return await new Promise((resolve, reject) => {
@@ -135,6 +148,8 @@ async function enqueueRecord(record_id, payload) {
                     payload: addSnapshotVersion(payload, version),
                     queued_at: new Date().toISOString(),
                     version,
+                    submission_context: submissionContext,
+                    submission_order: submissionOrder,
                     persisted: true
                 };
                 metadataStore.put({ key: VERSION_COUNTER_KEY, last_version: version });
@@ -147,12 +162,18 @@ async function enqueueRecord(record_id, payload) {
         });
     } catch (error) {
         console.warn('data-queue: could not persist record for later retry (IndexedDB unavailable?); falling back to best-effort send only:', error);
+        const testingDelay = Number(window.__redcapFallbackDelayMsForTesting);
+        if (Number.isFinite(testingDelay) && testingDelay > 0) {
+            await wait(testingDelay);
+        }
         const version = createFallbackVersion();
         return {
             record_id,
             payload: addSnapshotVersion(payload, version),
             queued_at: new Date().toISOString(),
             version,
+            submission_context: submissionContext,
+            submission_order: submissionOrder,
             persisted: false
         };
     }
@@ -161,7 +182,7 @@ async function enqueueRecord(record_id, payload) {
 /**
  * Checks whether an entry is still the newest queued snapshot for its record.
  * Older in-flight snapshots must not be sent again after a newer save supersedes them.
- * @param {{record_id: string, version?: number|string}} entry
+ * @param {{record_id: string, version?: number|string, submission_context?: string, submission_order?: number}} entry
  * @returns {Promise<boolean>}
  */
 async function isCurrentEntry(entry) {
@@ -197,12 +218,14 @@ async function dequeueIfNotNewer(entry) {
             const store = tx.objectStore(STORE_NAME);
             const request = store.get(entry.record_id);
             request.onsuccess = () => {
-                const queuedVersion = request.result?.version;
-                const exactMatch = queuedVersion === entry.version;
-                const comparableAndOlder = Number.isSafeInteger(queuedVersion)
-                    && Number.isSafeInteger(entry.version)
-                    && queuedVersion < entry.version;
-                if (request.result && (exactMatch || comparableAndOlder)) {
+                const queuedEntry = request.result;
+                const exactVersionMatch = queuedEntry?.version === entry.version;
+                const orderedAtOrBefore = queuedEntry?.submission_context === entry.submission_context
+                    && typeof entry.submission_context === 'string'
+                    && Number.isSafeInteger(queuedEntry?.submission_order)
+                    && Number.isSafeInteger(entry.submission_order)
+                    && queuedEntry.submission_order <= entry.submission_order;
+                if (queuedEntry && (exactVersionMatch || orderedAtOrBefore)) {
                     store.delete(entry.record_id);
                 }
             };
@@ -218,7 +241,7 @@ async function dequeueIfNotNewer(entry) {
 /**
  * Lists every record currently queued. Never throws: returns an empty array if IndexedDB
  * is unavailable or the read fails.
- * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string, version?: number|string}>>}
+ * @returns {Promise<Array<{record_id: string, payload: string, queued_at: string, version?: number|string, submission_context?: string, submission_order?: number}>>}
  */
 async function listQueuedRecords() {
     try {
@@ -345,7 +368,7 @@ function wait(delay) {
  * bounded by retriesLeft). Exhausting retriesLeft does NOT drop the record - it stays
  * queued until a newer cumulative save succeeds or a later session performs its startup
  * flush.
- * @param {{record_id: string, payload: string, version?: number|string, persisted?: boolean}} entry
+ * @param {{record_id: string, payload: string, version?: number|string, submission_context?: string, submission_order?: number, persisted?: boolean}} entry
  * @param {number} retriesLeft
  * @param {Function} callback
  */
@@ -354,6 +377,16 @@ function attemptWithRetries(entry, retriesLeft, callback) {
         let remaining = Math.max(0, Number(retriesLeft) || 0);
 
         while (true) {
+            if (
+                entry.submission_order != null
+                && latestSubmissionOrderByRecord.get(entry.record_id) !== entry.submission_order
+            ) {
+                // enqueueRecord() can fail or complete out of invocation order. A newer
+                // cumulative submission already contains this entry, so never let an older
+                // fallback send after it or delete its queued snapshot.
+                invokeCallback(callback);
+                return;
+            }
             if (entry.persisted !== false && entry.version != null && !(await isCurrentEntry(entry))) {
                 // A newer cumulative snapshot contains everything in this one. Let that
                 // snapshot send next instead of delaying it or later overwriting it.
@@ -416,7 +449,9 @@ async function submitRecord(record_id, payload, immediateRetries, callback = () 
         return { persisted: false, skipped: true };
     }
 
-    const entry = await enqueueRecord(record_id, payload);
+    const submissionOrder = createSubmissionOrder();
+    latestSubmissionOrderByRecord.set(record_id, submissionOrder);
+    const entry = await enqueueRecord(record_id, payload, submissionOrder);
     attemptWithRetries(entry, immediateRetries, callback);
     return { persisted: entry.persisted, skipped: false };
 }
