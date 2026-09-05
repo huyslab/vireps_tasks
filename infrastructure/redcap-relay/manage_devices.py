@@ -55,17 +55,23 @@ def list_devices(table):
 
 
 def set_device_status(table, device_id, status):
-    table.update_item(
-        Key={"pk": f"DEVICE#{device_id}"},
-        UpdateExpression="SET #status = :status, status_changed_at = :now",
-        ConditionExpression="#kind = :kind",
-        ExpressionAttributeNames={"#status": "status", "#kind": "kind"},
-        ExpressionAttributeValues={
-            ":status": status,
-            ":now": int(time.time()),
-            ":kind": "device",
-        },
-    )
+    try:
+        table.update_item(
+            Key={"pk": f"DEVICE#{device_id}"},
+            UpdateExpression="SET #status = :status, status_changed_at = :now",
+            ConditionExpression="#kind = :kind",
+            ExpressionAttributeNames={"#status": "status", "#kind": "kind"},
+            ExpressionAttributeValues={
+                ":status": status,
+                ":now": int(time.time()),
+                ":kind": "device",
+            },
+        )
+    except Exception as error:
+        error_code = getattr(error, "response", {}).get("Error", {}).get("Code")
+        if error_code == "ConditionalCheckFailedException":
+            raise SystemExit(f"Device not found: {device_id}") from error
+        raise
     print(f"{device_id}: {status}")
 
 
