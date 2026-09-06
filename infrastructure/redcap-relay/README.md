@@ -58,17 +58,32 @@ best-effort rather than a guaranteed spending cap.
 ## Enrol a tablet
 
 The administration script requires AWS credentials with access to the device-auth table and
-the local `boto3` package. First create a single-use code (15 minutes by default):
+its local administrator dependencies. Install them once from this directory:
 
 ```bash
-python3 manage_devices.py --table-name <DeviceAuthTableName> \
-  create-enrollment --label "Pharmacy tablet 1"
+python3 -m pip install -r requirements-admin.txt
 ```
 
-On the tablet, open `device-enrollment.html` from the deployed task site and enter the code.
-The code is stored in DynamoDB only as a SHA-256 hash, is consumed atomically, and cannot be
-used a second time. The private key never leaves the browser profile; clearing that site's
-browser data removes the device identity and requires a new enrollment.
+Create a single-use code (15 minutes by default), supplying the public HTTPS URL of the
+enrollment page:
+
+```bash
+AWS_PROFILE=ucl-sso AWS_DEFAULT_REGION=eu-north-1 \
+python3 manage_devices.py --table-name <DeviceAuthTableName> \
+  create-enrollment --label "Pharmacy tablet 1" \
+  --enrollment-page-url "https://<task-site>/device-enrollment.html"
+```
+
+The command displays both a locally generated QR code and a 12-character fallback such as
+`7K3M-P9XR-D2HF`. Scan the QR with the tablet, then tap **Approve device** on the page it
+opens. If the camera is unavailable, open `device-enrollment.html` from the deployed task
+site and enter the fallback code; hyphens, spaces and letter case do not matter.
+
+The QR puts the code in a URL fragment, which is not sent to the web server and is removed
+from the address bar and current browser-history entry as soon as the page loads. The code
+is stored in DynamoDB only as a SHA-256 hash, is consumed atomically, and cannot be used a
+second time. The private key never leaves the browser profile; clearing that site's browser
+data removes the device identity and requires a new enrollment.
 
 List or revoke devices with:
 

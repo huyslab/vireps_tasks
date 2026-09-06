@@ -9,6 +9,53 @@ function decodeBase64url(value) {
   return Uint8Array.from(atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
 }
 
+test('a QR enrollment link loads the code and removes it from browser history', async ({ page }) => {
+  let submittedCode;
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    submittedCode = request.enrollment_code;
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'QR tablet', status: 'approved' })
+    });
+  });
+
+  await page.goto('/device-enrollment.html#code=7k3m-p9xr-d2hf');
+
+  await expect(page.locator('#enrollment-code')).toHaveValue('7K3M-P9XR-D2HF');
+  await expect(page.locator('#status')).toContainText('Enrollment code loaded');
+  expect(new URL(page.url()).hash).toBe('');
+
+  await page.getByRole('button', { name: 'Approve device' }).click();
+
+  await expect(page.locator('#status')).toContainText('QR tablet is approved');
+  expect(submittedCode).toBe('7K3MP9XRD2HF');
+});
+
+test('an enrollment code can be corrected in the middle without moving the caret', async ({ page }) => {
+  await page.goto('/device-enrollment.html');
+  const codeInput = page.locator('#enrollment-code');
+  await codeInput.fill('7X3M-P9XR-D2HF');
+  await codeInput.evaluate((input) => input.setSelectionRange(2, 2));
+
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('K');
+
+  await expect(codeInput).toHaveValue('7K3M-P9XR-D2HF');
+  expect(await codeInput.evaluate((input) => input.selectionStart)).toBe(2);
+});
+
+test('an enrollment code is grouped for readability after typing finishes', async ({ page }) => {
+  await page.goto('/device-enrollment.html');
+  const codeInput = page.locator('#enrollment-code');
+  await codeInput.fill('7k3mp9xrd2hf');
+
+  await codeInput.blur();
+
+  await expect(codeInput).toHaveValue('7K3M-P9XR-D2HF');
+});
+
 test('enrollment stores a non-exportable key that signs the exact record ID after reload', async ({ page }) => {
   let enrolledPublicKey;
   await page.route(ENROLLMENT_ENDPOINT, async (route) => {

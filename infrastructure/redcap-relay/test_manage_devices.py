@@ -11,6 +11,76 @@ class FakeDynamoDBError(Exception):
 
 
 class ManageDevicesTest(unittest.TestCase):
+    @patch("manage_devices.print_terminal_qr")
+    @patch("manage_devices.prepare_terminal_qr")
+    @patch("manage_devices.generate_enrollment_code", return_value="7K3MP9XRD2HF")
+    @patch("manage_devices.time.time", return_value=1788624000)
+    @patch("builtins.print")
+    def test_create_enrollment_prints_short_code_and_local_qr(
+        self, output, current_time, generate_code, prepare_qr, print_qr
+    ):
+        table = Mock()
+        qr = Mock()
+        prepare_qr.return_value = qr
+        page_url = "https://tasks.example/device-enrollment.html"
+
+        code = manage_devices.create_enrollment(
+            table, "Pharmacy tablet 1", 900, page_url
+        )
+
+        self.assertEqual(code, "7K3MP9XRD2HF")
+        stored = table.put_item.call_args.kwargs["Item"]
+        self.assertEqual(stored["label"], "Pharmacy tablet 1")
+        self.assertEqual(stored["created_at"], 1788624000)
+        self.assertEqual(stored["expires_at"], 1788624900)
+        self.assertTrue(stored["pk"].startswith("ENROLL#"))
+        output.assert_any_call("7K3M-P9XR-D2HF")
+        link = f"{page_url}#code=7K3MP9XRD2HF"
+        output.assert_any_call(f"Enrollment link: {link}")
+        prepare_qr.assert_called_once_with(link)
+        print_qr.assert_called_once_with(qr)
+        generate_code.assert_called_once_with()
+        current_time.assert_called_once_with()
+
+    @patch(
+        "manage_devices.prepare_terminal_qr",
+        side_effect=SystemExit("Install administrator dependencies"),
+    )
+    def test_qr_is_prepared_before_storing_enrollment(self, prepare_qr):
+        table = Mock()
+
+        with self.assertRaisesRegex(SystemExit, "administrator dependencies"):
+            manage_devices.create_enrollment(
+                table,
+                "Pharmacy tablet 1",
+                900,
+                "https://tasks.example/device-enrollment.html",
+            )
+
+        table.put_item.assert_not_called()
+
+    @patch("manage_devices.sys.stdout")
+    def test_terminal_qr_uses_non_tty_output_when_redirected(self, stdout):
+        qr = Mock()
+        stdout.isatty.return_value = False
+
+        manage_devices.print_terminal_qr(qr)
+
+        qr.print_ascii.assert_called_once_with(tty=False)
+
+    def test_enrollment_link_requires_https_before_storing_code(self):
+        table = Mock()
+
+        with self.assertRaisesRegex(ValueError, "absolute HTTPS URL"):
+            manage_devices.create_enrollment(
+                table,
+                "Pharmacy tablet 1",
+                900,
+                "http://tasks.example/device-enrollment.html",
+            )
+
+        table.put_item.assert_not_called()
+
     @patch("manage_devices.time.time", return_value=1788624000)
     @patch("builtins.print")
     def test_set_device_status_updates_an_existing_device(self, output, current_time):
