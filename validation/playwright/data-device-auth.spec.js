@@ -96,7 +96,7 @@ test('an enrolled device treats a status-service failure as offline, not demo mo
   expect(status).toEqual({ approved: true, verified: false });
 });
 
-test('an unapproved device is announced, and its data is stored rather than discarded', async ({ page }) => {
+test('an unapproved device is announced, and collects no data at all', async ({ page }) => {
   let requestCount = 0;
   await page.addInitScript(() => {
     window.__forceOnlineRedcapForTesting = true;
@@ -110,20 +110,25 @@ test('an unapproved device is announced, and its data is stored rather than disc
   await page.goto('/experiment.html?participant_id=simulate_demo&task=vigour');
   const overlay = page.locator('#demo-mode-overlay');
   await expect(overlay).toBeVisible();
-  await expect(overlay).toContainText('stored on this device');
+  await expect(overlay).toContainText('no data will be saved');
   expect(await page.evaluate(() => window.__redcapDemoMode)).toBe(true);
 
-  // Authorization suppresses transmission only. The session must still reach the outbox, so
-  // a device that is later approved sends it rather than having silently discarded it.
+  // A confirmed-unapproved device is outside the study's data-collection boundary: the
+  // session may be demonstrated, but nothing about it may be transmitted or left on the
+  // tablet for a later enrollment to upload.
   const result = await page.evaluate(async () => {
     const { submitRecord, listQueuedRecords, flushQueue } = await import('/core/utils/data-queue.js');
     const recordId = 'demo-record';
-    await submitRecord(recordId, JSON.stringify([{ record_id: recordId }]));
+    const outcome = await submitRecord(recordId, JSON.stringify([{ record_id: recordId }]));
     await flushQueue();
-    return { queued: (await listQueuedRecords()).some((record) => record.record_id === recordId) };
+    return {
+      stored: outcome.stored,
+      queued: (await listQueuedRecords()).some((record) => record.record_id === recordId)
+    };
   });
 
-  expect(result.queued).toBe(true);
+  expect(result.stored).toBe(false);
+  expect(result.queued).toBe(false);
   expect(requestCount).toBe(0);
   await page.locator('#demo-mode-continue').click();
   await expect(overlay).toBeHidden();

@@ -185,6 +185,22 @@
             max-width: min(600px, 90vw);
             margin: 0;
         }
+        #save-failure-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            /* Above both acknowledgement overlays - it can be raised while one is showing. */
+            z-index: 100001;
+            background: #b3261e;
+            color: #ffffff;
+            font-size: clamp(14px, 3.5vw, 16px);
+            line-height: 1.4;
+            text-align: center;
+            padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+            box-sizing: border-box;
+        }
         #pending-data-continue,
         #demo-mode-continue {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -221,8 +237,16 @@
 
     <div id="demo-mode-overlay">
         <p><strong>This device is not approved for data collection</strong></p>
-        <p>The session can run and its data will be stored on this device. Nothing is sent to REDCap until the device is approved, and stored sessions are sent automatically once it is.</p>
+        <p>The session can be run for demonstration, but <strong>no data will be saved</strong>: nothing is stored on this device and nothing is sent to REDCap. Enrol this device before collecting data from a participant.</p>
         <button id="demo-mode-continue">Continue</button>
+    </div>
+
+    <!-- Raised by data-queue.js when a snapshot cannot be written to the outbox. Sits above
+         the overlays and stays up: a session whose data is not being stored is something
+         staff must see and act on, not a transient toast. -->
+    <div id="save-failure-banner" role="alert">
+        <strong>This session's data is not being saved on this device.</strong>
+        Please tell the study team before closing this page.
     </div>
 
     <script>
@@ -246,8 +270,17 @@
             getDeviceAuthorizationStatus,
             getPendingCount,
             isQueueAvailable,
+            onStorageFailure,
             participantIdValidationError
         } from '@utils/index.js';
+
+        // Registered before anything else can save. A snapshot that cannot be written is the
+        // one failure the outbox cannot recover from on its own, and nothing downstream
+        // awaits a save - the completion screen appears either way - so it has to be shown
+        // here rather than left in the console.
+        onStorageFailure(() => {
+            document.getElementById('save-failure-banner').style.display = 'block';
+        });
 
         // Get parameters from URL (populated by index.html's setup form redirect)
         window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
@@ -347,8 +380,10 @@
 
         // Startup acknowledgements, in order: an unapproved device, then any unsent data
         // left by an earlier session (core/utils/data-queue.js starts sending it as soon as
-        // this page loads). Both are one-time notices rather than gates or live monitors -
-        // the data is stored on the device either way.
+        // this page loads). Both are one-time notices rather than gates or live monitors.
+        // The unapproved-device notice is load-bearing, though: setting __redcapDemoMode is
+        // what stops the session's data from being stored at all, so it is set before any
+        // task can run.
         async function startSession() {
             const participantError = participantIdValidationError(window.participantID);
             if (participantError) {

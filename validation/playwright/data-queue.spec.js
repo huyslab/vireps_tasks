@@ -8,10 +8,11 @@ import { expect, test } from '@playwright/test';
 /**
  * Exercises core/utils/data-queue.js's actual store/send logic against a mocked network.
  * The rest of the Playwright suite runs on http://127.0.0.1:4173 (see playwright.config.js),
- * which the queue's dev-mode guard (isDevHost()) always treats as "do not send" - by design,
- * so the suite never hits the real REDCap/Lambda endpoint. That means this is the only place
- * the real send path is exercised at all; window.__forceOnlineRedcapForTesting (set below) is
- * the queue module's escape hatch for exactly this purpose.
+ * which the queue's dev-host guard (isDevHost()) treats as "neither store nor send" - by
+ * design, so the suite never hits the real REDCap/Lambda endpoint and never leaves a backlog
+ * behind. That means this is the only place the real store/send path is exercised at all;
+ * window.__forceOnlineRedcapForTesting (set below) is the queue module's escape hatch for
+ * exactly this purpose.
  *
  * The outbox splits saving from sending: submitRecord() only stores a snapshot, and
  * flushQueue() is the only sender. So the deterministic pattern throughout is
@@ -110,7 +111,7 @@ test.describe('data-queue', () => {
     expect(requestHeaders['x-device-signature']).toBe('test-signature');
   });
 
-  test('an unapproved device stores data for a later send rather than discarding it', async ({ page }) => {
+  test('a device confirmed unapproved neither sends nor keeps the session', async ({ page }) => {
     let requestCount = 0;
     await page.route(REDCAP_ENDPOINT, async (route) => {
       requestCount += 1;
@@ -120,21 +121,26 @@ test.describe('data-queue', () => {
     await page.goto('/validation/fixtures/data-queue.html');
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
-    // Authorization gates only sending. A device that is not approved - whether revoked,
-    // never enrolled, or wrongly judged unapproved because of clock drift - must still end
-    // up with its session on disk, or a transient problem becomes permanent data loss.
+    // A browser that is definitively unapproved - never enrolled, or revoked - must collect
+    // nothing at all. Keeping the session would leave participant data on an unapproved
+    // device for whenever that device is next enrolled, which is a privacy boundary rather
+    // than a queueing detail. (An unreachable status service is a different case: it leaves
+    // the device approved, so those sessions are stored and queued - see
+    // data-device-auth.spec.js.)
     const recordId = uniqueRecordId('unapproved');
-    await page.evaluate(async ({ id }) => {
+    const result = await page.evaluate(async ({ id }) => {
       delete window.__redcapDeviceSignerForTesting;
       window.__redcapDemoMode = true;
-      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
+      const outcome = await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
       await window.__dataQueue.flushQueue();
+      return outcome;
     }, { id: recordId });
 
     expect(requestCount, 'an unapproved device must not transmit').toBe(0);
-    expect(await isQueued(page, recordId), 'the session must remain stored on the device').toBe(true);
+    expect(result.stored, 'submitRecord must report that nothing was stored').toBe(false);
+    expect(await isQueued(page, recordId), 'no demo session may be left on the device').toBe(false);
 
-    // Once the device is approved, the stored session goes out with no further save.
+    // Approving the device afterwards must not resurrect it: there is nothing to resurrect.
     await page.evaluate(async () => {
       window.__redcapDemoMode = false;
       window.__redcapDeviceSignerForTesting = async (recordId) => ({
@@ -147,7 +153,7 @@ test.describe('data-queue', () => {
       await window.__dataQueue.flushQueue();
     });
 
-    expect(requestCount).toBe(1);
+    expect(requestCount).toBe(0);
     expect(await isQueued(page, recordId)).toBe(false);
   });
 
@@ -353,7 +359,7 @@ test.describe('data-queue', () => {
     expect(JSON.parse(queuedEntry.payload)[0].snapshot_version).toBe(2);
   });
 
-  test('development-mode saves are stored locally but never transmitted', async ({ page }) => {
+  test('development-mode saves are neither transmitted nor left in the outbox', async ({ page }) => {
     let requestCount = 0;
     await page.route(REDCAP_ENDPOINT, async (route) => {
       requestCount += 1;
@@ -363,17 +369,102 @@ test.describe('data-queue', () => {
     await page.goto('/validation/fixtures/data-queue.html');
     await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
+    // Nothing ever drains a development host, so storing there would accumulate records for
+    // good and raise the pending-data notice on later local runs.
     const recordId = uniqueRecordId('dev-host');
-    await page.evaluate(async ({ id }) => {
+    const result = await page.evaluate(async ({ id }) => {
       window.__forceOnlineRedcapForTesting = false;
-      await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
+      const outcome = await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
       await window.__dataQueue.flushQueue();
+      return outcome;
     }, { id: recordId });
 
     expect(requestCount, 'development mode must not transmit').toBe(0);
-    // Storing is unconditional: dev mode suppresses only sending, so a misdetected host can
-    // never be the reason data is missing.
-    expect(await isQueued(page, recordId)).toBe(true);
+    expect(result.stored).toBe(false);
+    expect(await isQueued(page, recordId), 'a local run must not build a permanent backlog').toBe(false);
+  });
+
+  test('the storage check commits a probe write and leaves nothing behind', async ({ page }) => {
+    await mockRedcapEndpoint(page);
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    const result = await page.evaluate(async () => ({
+      available: await window.__dataQueue.isQueueAvailable(),
+      pending: await window.__dataQueue.getPendingCount(),
+      queuedIds: (await window.__dataQueue.listQueuedRecords()).map((record) => record.record_id),
+    }));
+
+    expect(result.available).toBe(true);
+    // The probe is written and removed in one transaction, so it can never be counted as
+    // pending data or picked up by a delivery pass.
+    expect(result.pending).toBe(0);
+    expect(result.queuedIds).toEqual([]);
+  });
+
+  test('the storage check fails a browser that cannot commit a write', async ({ page }) => {
+    await mockRedcapEndpoint(page);
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    // A browser restricted to read-only site data, or one out of quota, opens the database
+    // quite happily and only then refuses to write. Opening a connection is therefore not
+    // evidence that a session can be collected safely.
+    const available = await page.evaluate(async () => {
+      const originalTransaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (stores, mode, ...rest) {
+        if (mode === 'readwrite') {
+          throw new DOMException('site data is read-only', 'InvalidStateError');
+        }
+        return originalTransaction.call(this, stores, mode, ...rest);
+      };
+      try {
+        return await window.__dataQueue.isQueueAvailable();
+      } finally {
+        IDBDatabase.prototype.transaction = originalTransaction;
+      }
+    });
+
+    expect(available).toBe(false);
+  });
+
+  test('a snapshot that cannot be stored announces itself', async ({ page }) => {
+    await mockRedcapEndpoint(page);
+
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+
+    // Nothing downstream awaits a save - interim saves are fire-and-forget and the final one
+    // runs from an unawaited jsPsych callback - so a storage failure that only rejects a
+    // promise reaches nobody. It has to be announced for staff to act on.
+    const recordId = uniqueRecordId('storage-failure');
+    const result = await page.evaluate(async ({ id }) => {
+      const failures = [];
+      const unsubscribe = window.__dataQueue.onStorageFailure((failure) => failures.push(failure.record_id));
+      const originalTransaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (stores, mode, ...rest) {
+        if (mode === 'readwrite') {
+          throw new DOMException('quota exceeded', 'QuotaExceededError');
+        }
+        return originalTransaction.call(this, stores, mode, ...rest);
+      };
+      let rejected = false;
+      try {
+        await window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id }]));
+      } catch (error) {
+        rejected = true;
+      } finally {
+        IDBDatabase.prototype.transaction = originalTransaction;
+        unsubscribe();
+      }
+      return { rejected, failures };
+    }, { id: recordId });
+
+    expect(result.rejected, 'an unstored snapshot must not resolve as if it were saved').toBe(true);
+    expect(result.failures).toEqual([recordId]);
+    expect(await isQueued(page, recordId)).toBe(false);
   });
 
   test('pending count uses the IndexedDB count operation without loading payloads', async ({ page }) => {

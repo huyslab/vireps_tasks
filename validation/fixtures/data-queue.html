@@ -20,9 +20,23 @@
 </head>
 <body>
     <script type="module">
-        import { submitRecord, flushQueue, getPendingCount, listQueuedRecords } from './core/utils/data-queue.js';
+        import {
+            submitRecord,
+            flushQueue,
+            getPendingCount,
+            listQueuedRecords,
+            isQueueAvailable,
+            onStorageFailure
+        } from './core/utils/data-queue.js';
 
-        window.__dataQueue = { submitRecord, flushQueue, getPendingCount, listQueuedRecords };
+        window.__dataQueue = {
+            submitRecord,
+            flushQueue,
+            getPendingCount,
+            listQueuedRecords,
+            isQueueAvailable,
+            onStorageFailure
+        };
         window.__DATA_QUEUE_FIXTURE_READY = true;
     </script>
 </body>

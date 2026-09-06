@@ -60,9 +60,12 @@ function postToParent(message, fallback = () => {}) {
  */
 function updateState(state, save_data = true) {
 
-    // Save data to REDCap
+    // Save data to REDCap. Deliberately not awaited - the caller is a jsPsych callback and
+    // delivery is the outbox's job either way. The catch is only here so a failed save is
+    // not an unhandled rejection: staff are told about it by the storage-failure notice
+    // data-queue.js raises, which is visible whether or not anyone awaits this.
     if (!state.includes("no_resume") && save_data){
-        saveDataREDCap();
+        saveDataREDCap().catch(() => {});
     }
 
     // Update bonus state
@@ -77,12 +80,14 @@ function updateState(state, save_data = true) {
 /**
  * Saves experimental data to REDCap via the AWS Lambda endpoint by writing a cumulative
  * snapshot to the local outbox (see data-queue.js). Delivery is the outbox's job and is
- * retried until REDCap confirms receipt, so a dropped connection - or a device that is not
- * currently authorized - never costs data.
+ * retried until REDCap confirms receipt, so a dropped connection never costs data. A session
+ * that must not keep data at all stores nothing instead (see isCollectionSuppressed).
  *
  * Async so a malformed participant ID surfaces as a rejected promise rather than a
  * synchronous throw at the call site.
- * @returns {Promise<{version: number}>} Resolves once the snapshot is durably stored.
+ * @returns {Promise<{stored: boolean, version: number|null}>} Resolves once the snapshot is
+ *   durably stored, or immediately with stored:false for a session that must not keep data
+ *   (a development host, or a device confirmed unapproved).
  */
 async function saveDataREDCap() {
 
@@ -141,8 +146,9 @@ function endExperiment() {
         if (saveGeneration === finalSaveGeneration) {
             window.removeEventListener('beforeunload', preventRefresh);
         }
-    }).catch((error) => {
-        console.error('Failed to store final data before completion:', error);
+    }).catch(() => {
+        // Already reported by data-queue.js's storage-failure notice, which staff can act
+        // on; the unload guard stays armed so leaving the page still prompts.
     });
 
     return persistence;

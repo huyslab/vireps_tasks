@@ -11,8 +11,9 @@ import {
  * are deliberately separate jobs:
  *
  *   - submitRecord() only writes the newest snapshot to IndexedDB. It never touches the
- *     network and never consults device authorization, so no failure on the sending side can
- *     discard data.
+ *     network, so no failure on the sending side can ever cost data. The one thing it does
+ *     consult is whether this session may hold data at all (isCollectionSuppressed) - a
+ *     governance question, not a delivery one.
  *   - flushQueue() is the only code that sends. It runs one pass at a time and deletes an
  *     entry only once the endpoint has confirmed receipt.
  *
@@ -34,6 +35,7 @@ const DB_VERSION = 2;
 const STORE_NAME = 'records';
 const METADATA_STORE_NAME = 'metadata';
 const VERSION_COUNTER_KEY = 'snapshot_version';
+const STORAGE_PROBE_KEY = '__storage_probe__';
 const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 const FLUSH_CONCURRENCY = 4;
 const RETRY_BASE_DELAY_MS = 1000;
@@ -44,6 +46,7 @@ let activeFlush = null;
 let flushRequested = false;
 let retryTimer = null;
 let retryAttempt = 0;
+const storageFailureHandlers = new Set();
 
 /**
  * Adds the locally assigned snapshot version to every REDCap record in the request. Keeping
@@ -65,11 +68,10 @@ function addSnapshotVersion(payload, version) {
 }
 
 /**
- * Whether network sends should be skipped (development/test mode).
- * Mirrors the previous behaviour of skipping saves on localhost/127.0.0.1. This suppresses
- * only sending - records are still written to the outbox, so a misdetection here can never
- * lose data. The window.__forceOnlineRedcapForTesting escape hatch lets a dedicated
- * Playwright spec exercise the real send/flush logic while still served from 127.0.0.1.
+ * Whether this page is running against a development host (localhost/127.0.0.1), where
+ * saves are neither sent nor kept. The window.__forceOnlineRedcapForTesting escape hatch
+ * lets a dedicated Playwright spec exercise the real store/send logic while still served
+ * from 127.0.0.1.
  * @returns {boolean}
  */
 function isDevHost() {
@@ -115,11 +117,40 @@ function openDB() {
 /**
  * Whether this browser can store the outbox at all. Checked once before a session starts:
  * a tablet that cannot durably hold data should not be collecting it (see experiment.html).
+ *
+ * Opening the database proves too little to gate a session on. A browser with an exhausted
+ * quota, or one restricted to read-only site data, hands back a connection quite happily and
+ * then rejects every write. So this commits a real readwrite transaction with the same store
+ * scope and write footprint as enqueueRecord(), and removes the probe in that same
+ * transaction: IndexedDB transactions are atomic, so either both operations commit - leaving
+ * nothing for listQueuedRecords()/getPendingCount() to find, whatever happens to the page
+ * afterwards - or the transaction aborts and this reports false.
+ *
+ * What it still cannot promise is that a particular several-hundred-KB snapshot will fit
+ * later in the session. That is why an enqueue failure mid-session is announced separately
+ * rather than left to the caller (see onStorageFailure).
  * @returns {Promise<boolean>}
  */
 async function isQueueAvailable() {
     try {
-        await openDB();
+        const db = await openDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+            const queueStore = tx.objectStore(STORE_NAME);
+            const metadataStore = tx.objectStore(METADATA_STORE_NAME);
+            queueStore.put({
+                record_id: STORAGE_PROBE_KEY,
+                payload: '[]',
+                queued_at: new Date().toISOString(),
+                version: 0
+            });
+            queueStore.delete(STORAGE_PROBE_KEY);
+            metadataStore.put({ key: STORAGE_PROBE_KEY });
+            metadataStore.delete(STORAGE_PROBE_KEY);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error('Storage probe transaction aborted'));
+        });
         return true;
     } catch (error) {
         console.error('data-queue: local storage for unsent data is unavailable:', error);
@@ -303,15 +334,39 @@ async function sendOnce(record_id, payload) {
 }
 
 /**
+ * Whether this session must not put participant data on this device at all.
+ *
+ * Storing is otherwise unconditional, because the outbox exists precisely so that a problem
+ * on the sending side never costs data. These two cases are not sending problems, though;
+ * they are sessions whose data is never going to leave the device, so writing it would only
+ * build a backlog that nothing can drain:
+ *
+ *   - Development hosts, where canSend() refuses permanently. Repeated local runs would
+ *     otherwise accumulate records for good and raise the pending-data notice on later runs.
+ *   - Confirmed demo mode, where the browser is definitively unapproved: never enrolled, or
+ *     revoked. The study's contract is that such a browser collects nothing, so keeping the
+ *     session would leave participant data on an unapproved device, to be uploaded whenever
+ *     that device is next enrolled.
+ *
+ * "Confirmed" is the load-bearing word for demo mode. experiment.html sets the flag from
+ * getDeviceAuthorizationStatus(), which reports approved whenever the verdict is merely
+ * unavailable - an unreachable or failing status service, a 5xx - so a transient outage
+ * still stores and queues normally (see device-auth.js).
+ * @returns {boolean}
+ */
+function isCollectionSuppressed() {
+    return isDevHost() || window.__redcapDemoMode === true;
+}
+
+/**
  * Whether sending is currently possible. Only ever suppresses transmission - anything this
  * rejects stays in the outbox and is retried later.
  * @returns {Promise<boolean>}
  */
 async function canSend() {
-    if (isDevHost()) {
-        return false;
-    }
-    if (window.__redcapDemoMode === true) {
+    // A suppressed session stores nothing, but a backlog from an earlier one may still be
+    // here - and must stay here while the device is unapproved.
+    if (isCollectionSuppressed()) {
         return false;
     }
     return await hasDeviceIdentity();
@@ -427,19 +482,65 @@ function scheduleRetry(allConfirmed) {
 }
 
 /**
+ * Registers a listener for a snapshot that could not be stored, and returns a function that
+ * unregisters it.
+ *
+ * A rejected save reaches nobody on its own: interim saves go through updateState(), which
+ * does not await them, and the final save runs from a jsPsych callback that is not awaited
+ * either - so the completion screen appears whether or not anything was written. Storage
+ * failures therefore have to announce themselves, loudly enough for staff to act on before
+ * the tablet moves to the next participant (experiment.html renders the notice).
+ * @param {(failure: {record_id: string, error: Error}) => void} handler
+ * @returns {() => void}
+ */
+function onStorageFailure(handler) {
+    storageFailureHandlers.add(handler);
+    return () => storageFailureHandlers.delete(handler);
+}
+
+/**
+ * @param {string} record_id
+ * @param {Error} error
+ */
+function reportStorageFailure(record_id, error) {
+    console.error(`data-queue: could not store a snapshot for ${record_id}:`, error);
+    for (const handler of storageFailureHandlers) {
+        try {
+            handler({ record_id, error });
+        } catch (handlerError) {
+            // One broken listener must not stop the others, nor mask the original failure.
+            console.error('data-queue: a storage-failure listener threw:', handlerError);
+        }
+    }
+}
+
+/**
  * Records a snapshot for later delivery and pokes the sender.
  *
  * Resolves once the snapshot is durably stored, which is what makes it safe to navigate
  * away - delivery happens independently and is retried until REDCap confirms it. Rejects
- * only if the snapshot could not be stored at all.
+ * only if the snapshot could not be stored at all, having first announced that failure to
+ * onStorageFailure() listeners.
+ *
+ * Resolves with stored:false, having written nothing, for a session that must not hold data
+ * at all (see isCollectionSuppressed).
  * @param {string} record_id
  * @param {string} payload - Already-serialized JSON body to POST.
- * @returns {Promise<{version: number}>}
+ * @returns {Promise<{stored: boolean, version: number|null}>}
  */
 async function submitRecord(record_id, payload) {
-    const entry = await enqueueRecord(record_id, payload);
+    if (isCollectionSuppressed()) {
+        return { stored: false, version: null };
+    }
+    let entry;
+    try {
+        entry = await enqueueRecord(record_id, payload);
+    } catch (error) {
+        reportStorageFailure(record_id, error);
+        throw error;
+    }
     requestFlush();
-    return { version: entry.version };
+    return { stored: true, version: entry.version };
 }
 
 // Retry anything left by an earlier session as soon as this page loads.
@@ -454,5 +555,6 @@ export {
     getPendingCount,
     listQueuedRecords,
     isQueueAvailable,
-    isDevHost
+    isDevHost,
+    onStorageFailure
 };

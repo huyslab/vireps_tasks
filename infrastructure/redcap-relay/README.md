@@ -87,9 +87,11 @@ python3 manage_devices.py --table-name <DeviceAuthTableName> revoke <device-id>
 ```
 
 A revoked tablet receives an authorization failure and cannot write to REDCap. When that
-status can be checked at experiment startup it is placed in demo mode. A locally enrolled
-tablet that is temporarily offline remains in collection mode so it can queue data; the
-server still enforces revocation when a later upload is attempted.
+status can be checked at experiment startup it is placed in demo mode, and a session run in
+demo mode is neither sent nor written to the local queue, so revocation leaves no participant
+data behind for a later enrollment to upload. A locally enrolled tablet that is temporarily
+offline is a different case: an unreachable status service leaves it in collection mode so it
+can queue data, and the server still enforces revocation when a later upload is attempted.
 
 ## Request authorization
 
