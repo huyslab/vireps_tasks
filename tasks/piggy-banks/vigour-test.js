@@ -120,7 +120,7 @@ const postVigourTrial = {
     }
     const n_trials = jsPsych.data.get().filter({ trialphase: "vigour_test" }).count()
     if (n_trials % 9 == 0) {
-      saveDataREDCap(3);
+      saveDataREDCap();
     }
   },
   post_trial_gap: 400

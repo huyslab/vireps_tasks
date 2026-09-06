@@ -155,6 +155,63 @@
             body[data-preferred-orientation="landscape"] .phone-rotate-icon { display: block; }
             body[data-preferred-orientation="landscape"] .phone-rotate-icon svg { animation: rotate-to-landscape 2.5s ease-in-out infinite; }
         }
+
+        /* Startup notices for a previous-session backlog or an unapproved demo device.
+           Both are acknowledgements rather than experiment gates and are toggled after
+           asynchronous IndexedDB/device checks rather than by static media queries. */
+        #pending-data-overlay,
+        #demo-mode-overlay {
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100000;
+            background: #ffffff;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        #pending-data-overlay p,
+        #demo-mode-overlay p {
+            font-size: clamp(16px, 4vw, 20px);
+            color: #182b4b;
+            line-height: 1.4;
+            max-width: min(600px, 90vw);
+            margin: 0;
+        }
+        #save-failure-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            /* Above both acknowledgement overlays - it can be raised while one is showing. */
+            z-index: 100001;
+            background: #b3261e;
+            color: #ffffff;
+            font-size: clamp(14px, 3.5vw, 16px);
+            line-height: 1.4;
+            text-align: center;
+            padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+            box-sizing: border-box;
+        }
+        #pending-data-continue,
+        #demo-mode-continue {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -172,7 +229,26 @@
         <p class="rotate-msg-portrait">Please rotate your device to <strong>portrait</strong> mode to continue.</p>
         <p class="rotate-msg-landscape">Please rotate your device to <strong>landscape</strong> mode to continue.</p>
     </div>
-    
+
+    <div id="pending-data-overlay">
+        <p id="pending-data-message"></p>
+        <button id="pending-data-continue">Continue</button>
+    </div>
+
+    <div id="demo-mode-overlay">
+        <p><strong>This device is not approved for data collection</strong></p>
+        <p>The session can be run for demonstration, but <strong>no data will be saved</strong>: nothing is stored on this device and nothing is sent to REDCap. Enrol this device before collecting data from a participant.</p>
+        <button id="demo-mode-continue">Continue</button>
+    </div>
+
+    <!-- Raised by data-queue.js when a snapshot cannot be written to the outbox. Sits above
+         the overlays and stays up: a session whose data is not being stored is something
+         staff must see and act on, not a transient toast. -->
+    <div id="save-failure-banner" role="alert">
+        <strong>This session's data is not being saved on this device.</strong>
+        Please tell the study team before closing this page.
+    </div>
+
     <script>
         (function () {
             function setOrientationAngle() {
@@ -189,18 +265,45 @@
     <script type="module">
         // Import task registry functions
         import { createTaskTimeline, getTaskInfo } from '@api/index.js';
-        import { enterExperiment } from '@utils/index.js';
+        import {
+            enterExperiment,
+            getDeviceAuthorizationStatus,
+            getPendingCount,
+            isQueueAvailable,
+            onStorageFailure,
+            participantIdValidationError
+        } from '@utils/index.js';
+
+        // Registered before anything else can save. A snapshot that cannot be written is the
+        // one failure the outbox cannot recover from on its own, and nothing downstream
+        // awaits a save - the completion screen appears either way - so it has to be shown
+        // here rather than left in the console.
+        onStorageFailure(() => {
+            document.getElementById('save-failure-banner').style.display = 'block';
+        });
 
         // Get parameters from URL (populated by index.html's setup form redirect)
         window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
         window.simulating = window.participantID.includes("simulate") || false;
-        window.context = new URLSearchParams(window.location.search).get('context') || '';
 
         // Which task to run. No session/sequence selection here - each task uses its
         // registry default. That is exact for vigour, reversal and go/no-go, which do not
         // vary by session; PILT does have per-session sequences and will use wk0.
         const taskName = new URLSearchParams(window.location.search).get('task') || '';
         window.module = taskName;
+
+        function showExperimentError(error) {
+            console.error('Error running experiment:', error);
+            const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
+            errorContainer.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>Error Loading Experiment</h2>
+                    <p>There was an error loading the ${taskName || 'requested'} task:</p>
+                    <p><strong>${error.message}</strong></p>
+                    <p>Please check the console for more details.</p>
+                </div>
+            `;
+        }
 
         // Initialize jsPsych
         window.jsPsych = initJsPsych({
@@ -216,13 +319,9 @@
             try {
                 // Fail fast if this page was reached without what index.html's setup form
                 // provides - otherwise createTaskTimeline throws deep in the call stack for a
-                // missing task, and an unrecognized context fails silently later (saveDataREDCap
-                // only saves data for "relmed"/"prolific" contexts).
+                // missing task.
                 if (!taskName) {
                     throw new Error('Missing "task" URL parameter. Launch this page via index.html rather than directly.');
-                }
-                if (window.context !== 'relmed' && window.context !== 'prolific') {
-                    throw new Error(`Missing or unrecognized "context" URL parameter ("${window.context}"). Data will not be saved to REDCap unless context is "relmed" or "prolific". Launch this page via index.html rather than directly.`);
                 }
 
                 // Get task information
@@ -261,24 +360,75 @@
                 }
 
             } catch (error) {
-                console.error('Error running experiment:', error);
-                // jsPsych.getDisplayElement() is only populated once jsPsych.run()/simulate()
-                // has started (inside prepareDom()) - errors thrown before that point (e.g. the
-                // guard above, or createTaskTimeline for an unknown task) need the raw container.
-                const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
-                errorContainer.innerHTML = `
-                    <div style="text-align: center; padding: 50px;">
-                        <h2>Error Loading Experiment</h2>
-                        <p>There was an error loading the ${taskName || 'requested'} task:</p>
-                        <p><strong>${error.message}</strong></p>
-                        <p>Please check the console for more details.</p>
-                    </div>
-                `;
+                // jsPsych's display element is populated only after run()/simulate() starts;
+                // showExperimentError also handles failures detected before that point.
+                showExperimentError(error);
             }
         }
 
+        /** Shows an acknowledgement overlay and resolves when the participant continues. */
+        function acknowledge(overlayId, continueId) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById(overlayId);
+                overlay.style.display = 'flex';
+                document.getElementById(continueId).addEventListener('click', () => {
+                    overlay.style.display = 'none';
+                    resolve();
+                }, { once: true });
+            });
+        }
+
+        // Startup checks, in order: whether this device may collect at all, then - only if
+        // it may - whether it can store what it collects, then any unsent data left by an
+        // earlier session (core/utils/data-queue.js starts sending it as soon as this page
+        // loads). The notices are one-time acknowledgements rather than gates or live
+        // monitors. The unapproved-device one is load-bearing, though: setting
+        // __redcapDemoMode is what stops the session's data from being stored at all, so it
+        // is set before any task can run.
+        async function startSession() {
+            const participantError = participantIdValidationError(window.participantID);
+            if (participantError) {
+                showExperimentError(new Error(participantError));
+                return;
+            }
+
+            // Device status first, because it decides whether this session collects at
+            // all. Only a collecting session needs the outbox; a demo session stores
+            // nothing, so gating it on writable storage would block the one thing an
+            // unapproved tablet is still allowed to do.
+            const deviceStatus = await getDeviceAuthorizationStatus();
+            window.__redcapDemoMode = !deviceStatus.approved;
+            if (!deviceStatus.approved) {
+                await acknowledge('demo-mode-overlay', 'demo-mode-continue');
+            } else if (!(await isQueueAvailable())) {
+                // A tablet that will collect data must be able to hold it: without the
+                // outbox there is nothing to fall back on when a send fails.
+                showExperimentError(new Error(
+                    'This browser cannot store data locally, so a session cannot be run safely on it. '
+                    + 'Check that the browser is not in private mode and that site data is allowed.'
+                ));
+                return;
+            }
+
+            let pendingCount = 0;
+            try {
+                pendingCount = await getPendingCount();
+            } catch (error) {
+                console.warn('Could not check for unsent data:', error);
+            }
+
+            if (pendingCount > 0) {
+                document.getElementById('pending-data-message').textContent = pendingCount === 1
+                    ? "There is 1 unsent session still stored on this device. Sending was started when this page loaded; if it still cannot be sent, it will remain stored for the next session. Tap Continue to start this participant's session."
+                    : `There are ${pendingCount} unsent sessions still stored on this device. Sending was started when this page loaded; any that still cannot be sent will remain stored for the next session. Tap Continue to start this participant's session.`;
+                await acknowledge('pending-data-overlay', 'pending-data-continue');
+            }
+
+            runExperiment();
+        }
+
         // Start the experiment when the page loads
-        window.addEventListener('load', runExperiment);
+        window.addEventListener('load', startSession);
     </script>
 </body>
 </html>

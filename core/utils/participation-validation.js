@@ -6,19 +6,17 @@ import { saveDataREDCap } from './data-handling.js';
  */
 
 /**
- * Which context's PARTICIPANT-FACING behaviour to use.
+ * Which variant of PARTICIPANT-FACING behaviour to use.
  *
- * `window.context` historically selected two unrelated things at once: the
- * data-submission route, and a set of differences in what participants
- * experience (fullscreen enforcement, comprehension kick-outs, some instruction
- * wording). Those are separate concerns, and coupling them meant choosing a data
- * route silently changed the study.
- *
- * They are now split. `window.context` selects the data route only - see
- * saveDataREDCap in data-handling.js, currently 'prolific'. Everything a
- * participant sees or is subjected to follows RELMED's variant, which is the
- * gentler one: no fullscreen enforcement, no removal for failed comprehension.
- * Change this constant to move the whole participant experience at once.
+ * This used to be coupled to `window.context`, which also selected the
+ * data-submission route at the same time - choosing where data went silently
+ * changed what a participant experienced (fullscreen enforcement, comprehension
+ * kick-outs, some instruction wording). There is now only one data-submission
+ * route (saveDataREDCap in data-handling.js always submits to REDCap via the AWS
+ * Lambda endpoint), and this constant independently controls the participant
+ * experience. Currently fixed to RELMED's variant, the gentler one: no fullscreen
+ * enforcement, no removal for failed comprehension. Change this constant to move
+ * the whole participant experience at once.
  */
 const PARTICIPANT_EXPERIENCE = 'relmed';
 
@@ -128,16 +126,15 @@ function preKickOutWarning(settings) {
             {
                 // No threat of removal here: nothing in the battery terminates a
                 // session. kickOut() only ever shows this screen and the
-                // speed-accuracy one; the single trial that could end a session
-                // (createInstructionsKickOut) is unused and disabled. Saying we
-                // would stop someone's participation was simply untrue.
+                // speed-accuracy one. Saying we would stop someone's participation
+                // was simply untrue.
                 stimulus: `<p>You seem to be taking too long to respond on the games.</p>
                     <p>Please try to respond more quickly. Also, please keep your attention on the game window, and don't use other tabs or windows.</p>
                     <p>Tap the button below to continue.</p>
                 `,
                 on_start: function(trial) {
                     // Save data
-                    saveDataREDCap(3);
+                    saveDataREDCap();
             }
             }
         ],
@@ -148,8 +145,8 @@ function preKickOutWarning(settings) {
     }
 }
 /**
- * Context-specific kick-out warning configuration
- * Different behavior for RELMED vs Prolific participants
+ * Speed/accuracy nudge shown once a participant has accumulated enough response-time
+ * warnings on a task (see kickOut() below).
  */
 function kickOutWarning(settings)  {
     return {
@@ -198,60 +195,6 @@ function kickOut(settings) {
 }
 
 /**
- * Creates instruction-based kick-out trial for participants who fail comprehension checks.
- *
- * CURRENTLY DISABLED AND UNUSED. No task calls it, and PARTICIPANT_EXPERIENCE is
- * 'relmed', so it always returns undefined: the battery never terminates a
- * session, which is deliberate. It is kept rather than deleted because it is the
- * mechanism an online cohort would need if that decision were ever reversed -
- * note that its copy is Prolific-specific and would need rewriting first.
- *
- * @param {string} task - Task name for tracking instruction failures
- * @returns {Object|undefined} jsPsych trial object, or undefined while disabled
- */
-
-const createInstructionsKickOut = (task) => {
-    if (PARTICIPANT_EXPERIENCE === "relmed") {
-        return undefined;
-    } else {
-        return {
-            type: jsPsychHtmlKeyboardResponse,
-            conditional_function: function () {
-                if (jsPsych.data.get().last(1).select(`${task}_instruction_fail`).values[0] >= window.max_instruction_fails) {
-                    return true;
-                } else {
-                    return false;
-                }
-            },
-            css_classes: ['instructions'],
-            timeline: [
-                {
-                    stimulus: '...',
-                    trial_duration: 200,
-                    on_finish: function (data) {
-                        // Save data
-                        saveDataREDCap(3);
-                        // Allow refresh
-                        window.removeEventListener('beforeunload', preventRefresh);
-                    }
-                },
-                {
-                    stimulus: `<p>Thank you for your time—unfortunately, it seems that the instructions weren’t fully understood, so we won’t be able to proceed with the experiment.</p>
-                    <p>If you believe this is a mistake, please email haoyang.lu@ucl.ac.uk, explaining the circumstances.</p>
-                    <p>Please return this study on <a href="https://app.prolific.com/">Prolific</a>.</p>
-                    <p>You may now close this tab.</p>
-                `
-                }
-            ],
-            choices: ["NO_KEYS"],
-            data: {
-                trialphase: 'kick-out'
-            }
-        }
-    }
-}
-
-/**
  * Checks if the browser is currently in fullscreen mode
  * Used to enforce fullscreen participation in experiments
  * @returns {boolean} True if user has exited fullscreen, false otherwise
@@ -291,8 +234,8 @@ function checkFullscreen(){
  *  a. The last trial's `trialphase` is `"no_choice_warning"` (used for tasks with external warning messages).
  *  b. Checking data field `"response_deadline_warning"` for the last task trial (used for tasks with interal warning messages).
  *
- * (A previous note here claimed a prolific context always allows a warning. The
- * implementation has never done that - there is no context check below - so the
+ * (A previous note here claimed a data-submission context always allows a warning.
+ * The implementation has never done that - there is no such check below - so the
  * note has been removed rather than the behaviour added.)
  *
  * @param {string} task - The name of the task, used to track task-specific warnings.
@@ -549,7 +492,6 @@ export {
     fullscreen_prompt,
     kickOut,
     createReadyTrial,
-    createInstructionsKickOut,
     checkFullscreen,
     canBeWarned,
     showTemporaryWarning,

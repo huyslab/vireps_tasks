@@ -217,7 +217,7 @@ export async function createGoNoGoTimeline(settings) {
           },
           on_finish: (data) => {
             const n = jsPsych.data.get().filter({ trialphase: 'go_no_go' }).count();
-            if (n % 40 === 0) saveDataREDCap(3);
+            if (n % 40 === 0) saveDataREDCap();
           },
         },
       ],

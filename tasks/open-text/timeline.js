@@ -73,7 +73,7 @@ export function createOpenTextTimeline(settings) {
         on_timeline_finish: () => {
             // Clean up CSS classes and save final data
             document.body.className = '';
-            saveDataREDCap(3);
+            saveDataREDCap();
         }
     }
 

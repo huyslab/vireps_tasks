@@ -164,7 +164,7 @@ export function createCoreControlTimeline(settings) {
 
             // Save data to REDCap every 24 trials
             if (n_trials % 24 === 0) {
-              saveDataREDCap(3);
+              saveDataREDCap();
             }
 
             // Track non-response warnings
@@ -254,7 +254,7 @@ export function createCoreControlTimeline(settings) {
             updateState(`control_trial_${jsPsych.evaluateTimelineVariable('trial')}`, false);
 
             if (n_trials % 24 === 0) {
-              saveDataREDCap(3);
+              saveDataREDCap();
             }
 
             if (data.response === null) {
@@ -334,7 +334,7 @@ export function createCoreControlTimeline(settings) {
         updateBonusState(settings);
 
         if (n_trials % 24 === 0) {
-          saveDataREDCap(3);
+          saveDataREDCap();
         }
 
         if (data.response === null) {

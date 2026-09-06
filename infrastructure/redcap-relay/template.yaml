@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Authenticated REDCap relay Lambda for the pharmacies pilot tasks
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 128
+    Architectures:
+      - x86_64
+
+Parameters:
+  REDCapUrl:
+    Type: String
+    Description: REDCap API URL
+
+  REDCapApiToken:
+    Type: String
+    NoEcho: true
+    Description: REDCap project API token
+
+Resources:
+  REDCapRelayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 20
+          ThrottlingRateLimit: 10
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Device-Id,X-Record-Id,X-Request-Timestamp,X-Request-Nonce,X-Device-Signature'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: DeviceRequestAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          DeviceRequestAuthorizer:
+            FunctionArn: !GetAtt DeviceRequestAuthorizerFunction.Arn
+            FunctionPayloadType: REQUEST
+            Identity:
+              Headers:
+                - X-Device-Id
+                - X-Record-Id
+                - X-Request-Timestamp
+                - X-Request-Nonce
+                - X-Device-Signature
+              ReauthorizeEvery: 0
+      GatewayResponses:
+        UNAUTHORIZED:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'*'"
+        ACCESS_DENIED:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'*'"
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'*'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'*'"
+
+  DeviceAuthTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  DeviceRequestAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: authorizeREDCapPharmaciesPilotDevice
+      CodeUri: .
+      Handler: device_auth.authorizer_handler
+      Description: Verify enrolled-device signatures for pharmacies pilot data
+      Environment:
+        Variables:
+          DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
+          REQUEST_MAX_AGE_SECONDS: "300"
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+              Condition:
+                "ForAllValues:StringLike":
+                  "dynamodb:LeadingKeys":
+                    - "NONCE#*"
+
+  EnrollREDCapPharmaciesPilotDevice:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: enrollREDCapPharmaciesPilotDevice
+      CodeUri: .
+      Handler: device_auth.enrollment_handler
+      Description: Consume a one-time code and register a pharmacies pilot tablet
+      Environment:
+        Variables:
+          DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:TransactWriteItems
+              Resource: !GetAtt DeviceAuthTable.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /pharmaciespilot/enroll
+            Method: post
+            RestApiId: !Ref REDCapRelayApi
+            Auth:
+              Authorizer: NONE
+              OverrideApiAuth: true
+
+  # Deliberately outside the request authorizer. The authorizer's 401 cannot say whether a
+  # device is revoked or merely holding a drifted clock, and the browser needs that
+  # distinction before it decides to stop collecting - so this route verifies the same
+  # signature itself and reports a typed verdict (see device_auth.status_handler).
+  REDCapPharmaciesPilotDeviceStatus:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: statusREDCapPharmaciesPilotDevice
+      CodeUri: .
+      Handler: device_auth.status_handler
+      Description: Report why a pharmacies pilot tablet is or is not approved
+      Environment:
+        Variables:
+          DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
+          REQUEST_MAX_AGE_SECONDS: "300"
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /pharmaciespilot/device-status
+            Method: post
+            RestApiId: !Ref REDCapRelayApi
+            Auth:
+              Authorizer: NONE
+              OverrideApiAuth: true
+
+  WriteToREDCapPharmaciesPilot:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: writeToREDCapPharmaciesPilot
+      CodeUri: .
+      Handler: lambda_function.lambda_handler
+      Description: Relay authenticated pharmacies pilot task data to REDCap
+      Environment:
+        Variables:
+          REDCAP_URL: !Ref REDCapUrl
+          REDCAP_API_TOKEN: !Ref REDCapApiToken
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /pharmaciespilot
+            Method: post
+            RestApiId: !Ref REDCapRelayApi
+
+Outputs:
+  REDCapRelayEndpoint:
+    Description: Enrolled-device POST endpoint for the REDCap relay
+    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/pharmaciespilot"
+
+  DeviceEnrollmentEndpoint:
+    Description: One-time device enrollment endpoint
+    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/pharmaciespilot/enroll"
+
+  DeviceAuthTableName:
+    Description: DynamoDB table used by the device administration script
+    Value: !Ref DeviceAuthTable

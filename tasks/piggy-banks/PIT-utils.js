@@ -197,7 +197,7 @@ function PITTrial(settings) {
       
       // Save data at regular intervals and end of task
       if (PITtrialCounter % (PIT_TRIAL_LIST.length / 3) == 0 || PITtrialCounter == PIT_TRIAL_LIST.length) {
-        saveDataREDCap(3);
+        saveDataREDCap();
         updateBonusState(settings);
       }
       

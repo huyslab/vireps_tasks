@@ -123,6 +123,7 @@
                     id="participantId" 
                     name="participantId" 
                     placeholder="Enter participant ID"
+                    maxlength="236"
                     required
                     autocomplete="off"
                 >
@@ -149,8 +150,8 @@
         </form>
     </div>
 
-    <script>
-        const CONTEXT = 'prolific';
+    <script type="module">
+        import { participantIdValidationError } from './core/utils/participant-id.js';
 
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -162,16 +163,9 @@
             // Hide error message
             errorMessage.style.display = 'none';
 
-            // Validate participant ID
-            if (!participantId) {
-                errorMessage.textContent = 'Please enter a participant ID';
-                errorMessage.style.display = 'block';
-                return;
-            }
-
-            // Check if participant ID contains only valid characters (alphanumeric, hyphens, underscores)
-            if (!/^[a-zA-Z0-9_-]+$/.test(participantId)) {
-                errorMessage.textContent = 'Participant ID can only contain letters, numbers, hyphens, and underscores';
+            const participantError = participantIdValidationError(participantId);
+            if (participantError) {
+                errorMessage.textContent = participantError;
                 errorMessage.style.display = 'block';
                 return;
             }
@@ -183,11 +177,10 @@
                 return;
             }
 
-            // Redirect to experiment.html. Context is fixed to prolific: it selects the
-            // data-submission path in core/utils/data-handling.js (the relmed path posts to
-            // a parent window that only exists when embedded in the RELMED app), so it is a
-            // deployment property rather than something an experimenter should pick per run.
-            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&context=${encodeURIComponent(CONTEXT)}&task=${encodeURIComponent(task)}`;
+            // Redirect to experiment.html. There is a single data-submission route
+            // (core/utils/data-handling.js posts to REDCap via an AWS Lambda endpoint), so
+            // no per-run context selection is needed here.
+            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&task=${encodeURIComponent(task)}`;
         });
 
         // Enable real-time validation

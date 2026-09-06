@@ -8,6 +8,9 @@ Icon
 relmed_vigour_task.code-workspace
 node_modules/
 test-results/
+.aws-sam/
+__pycache__/
+*.pyc
 
 # Playwright
 /playwright-report/

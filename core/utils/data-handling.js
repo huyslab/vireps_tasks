@@ -1,4 +1,8 @@
 import { preventRefresh} from "./participation-validation.js"
+import { submitRecord } from "./data-queue.js"
+import { createREDCapRecordId } from "./participant-id.js"
+
+let finalSaveGeneration = 0;
 
 /**
  * Data handling and communication utilities
@@ -56,9 +60,12 @@ function postToParent(message, fallback = () => {}) {
  */
 function updateState(state, save_data = true) {
 
-    // Save data to REDCap
+    // Save data to REDCap. Deliberately not awaited - the caller is a jsPsych callback and
+    // delivery is the outbox's job either way. The catch is only here so a failed save is
+    // not an unhandled rejection: staff are told about it by the storage-failure notice
+    // data-queue.js raises, which is visible whether or not anyone awaits this.
     if (!state.includes("no_resume") && save_data){
-        saveDataREDCap();
+        saveDataREDCap().catch(() => {});
     }
 
     // Update bonus state
@@ -71,13 +78,18 @@ function updateState(state, save_data = true) {
 }
 
 /**
- * Saves experimental data to REDCap database with retry mechanism
- * Handles both RELMED and Prolific data submission contexts
- * @param {number} retry - Number of retry attempts remaining (default: 1)
- * @param {Object} extra_fields - Additional fields to include in data submission
- * @param {Function} callback - Callback function to execute after successful submission
+ * Saves experimental data to REDCap via the AWS Lambda endpoint by writing a cumulative
+ * snapshot to the local outbox (see data-queue.js). Delivery is the outbox's job and is
+ * retried until REDCap confirms receipt, so a dropped connection never costs data. A session
+ * that must not keep data at all stores nothing instead (see isCollectionSuppressed).
+ *
+ * Async so a malformed participant ID surfaces as a rejected promise rather than a
+ * synchronous throw at the call site.
+ * @returns {Promise<{stored: boolean, version: number|null}>} Resolves once the snapshot is
+ *   durably stored, or immediately with stored:false for a session that must not keep data
+ *   (a development host, or a device confirmed unapproved).
  */
-function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
+async function saveDataREDCap() {
 
     // Get data, remove stimulus string to reduce payload size
     const jspsych_data = jsPsych.data.get().ignore('stimulus').json();
@@ -95,92 +107,19 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
         }
     ]);
 
-    const data_message = {
-        data: {
-            record_id: window.participantID + "_" + window.module_start_time,
-            participant_id: window.participantID,
-            sitting_start_time: window.module_start_time,
-            module: window.module,
-            data: combined_data
-        },
-        ...extra_fields
-    };
+    const record_id = createREDCapRecordId(window.participantID, window.module_start_time);
 
-    console.log("Data to be sent:", data_message);
+    const redcap_record = JSON.stringify([{
+        record_id: record_id,
+        participant_id: window.participantID,
+        sitting_start_time: window.module_start_time,
+        module: window.module,
+        data: combined_data
+    }]);
 
-    if (window.context === "relmed") {
-        // Check if we're in a development environment
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            console.log("Development mode: skipping data save to parent");
-            callback();
-            return;
-        }
+    console.log("Data to be sent:", redcap_record);
 
-        postToParent(
-            data_message,
-            () => {
-                if (retry > 0) {
-                    console.warn(`Failed to save data, retrying... (${retry} attempts left)`);
-                    // Exponential backoff: 1s, 2s, 4s, etc.
-                    const delay = Math.pow(2, (3 - retry)) * 1000;
-                    setTimeout(function () {
-                        saveDataREDCap(retry - 1);
-                    }, delay);
-                } else {
-                    console.error('Failed to submit data after retrying.');
-                }
-                
-            }
-        );
-
-        callback();
-
-    } else if (window.context === "prolific") {
-
-        // Prepare REDCap record for Prolific context
-        var redcap_record = JSON.stringify([{
-            record_id: window.participantID + "_" + window.module_start_time,
-            participant_id: window.participantID,
-            sitting_start_time: window.module_start_time,
-            module: window.module,
-            data: combined_data
-        }])
-    
-        // Submit data via AWS Lambda endpoint for Prolific studies
-        fetch('https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot', { 
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: redcap_record
-        })
-        .then(data => {
-            if (data.status === 200) {
-                console.log('Data successfully submitted to REDCap');
-            } else {
-                console.error('Error submitting data:', data.message);
-            }
-            return data.json()
-        })
-        .then(data => {
-            console.log(data)
-            callback(); // Call the callback function if submission is successful
-        }
-        )
-        .catch(error => {
-            console.error('Error:', error);
-            if (retry > 0) {
-                console.log('Retrying to submit data...');
-                setTimeout(function(){
-                    saveDataREDCap(retry - 1);
-                }, 1000);
-            } else {
-                console.error('Failed to submit data after retrying.');
-                callback(error); // Call the callback function with the error if retries are exhausted
-            }
-        });
-    }
-
+    return submitRecord(record_id, redcap_record);
 }
 
 /**
@@ -190,15 +129,29 @@ function saveDataREDCap(retry = 1, extra_fields = {}, callback = () => {}) {
 function endExperiment() {
 
     // Print end experiment message
-    console.log("Experiment finished. Sending final data...");
+    console.log("Experiment finished. Saving final data...");
 
-    // Remove beforeunload event listener to allow page navigation
-    window.removeEventListener('beforeunload', preventRefresh);
+    // Some module timelines invoke endExperiment more than once near completion (for
+    // example, on bonus finish and again on the final message). Re-arm the guard and only
+    // let the newest final snapshot release it.
+    const saveGeneration = ++finalSaveGeneration;
+    window.addEventListener('beforeunload', preventRefresh);
 
-    // Save data with end task message for RELMED context
-    saveDataREDCap(10, {
-        message: "endTask"
+    const persistence = saveDataREDCap();
+
+    // The outbox is what makes leaving safe: once the final snapshot is durably stored it
+    // will be delivered, so do not make the participant wait for the network. The guard
+    // stays armed only if the snapshot could not be stored at all.
+    persistence.then(() => {
+        if (saveGeneration === finalSaveGeneration) {
+            window.removeEventListener('beforeunload', preventRefresh);
+        }
+    }).catch(() => {
+        // Already reported by data-queue.js's storage-failure notice, which staff can act
+        // on; the unload guard stays armed so leaving the page still prompts.
     });
+
+    return persistence;
 }
 
 // Export functions for use in other modules
@@ -208,5 +161,3 @@ export {
     saveDataREDCap,
     endExperiment
 };
-
-
