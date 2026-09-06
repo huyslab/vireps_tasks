@@ -33,6 +33,29 @@ test('a QR enrollment link loads the code and removes it from browser history', 
   expect(submittedCode).toBe('7K3MP9XRD2HF');
 });
 
+test('an enrollment code can be corrected in the middle without moving the caret', async ({ page }) => {
+  await page.goto('/device-enrollment.html');
+  const codeInput = page.locator('#enrollment-code');
+  await codeInput.fill('7X3M-P9XR-D2HF');
+  await codeInput.evaluate((input) => input.setSelectionRange(2, 2));
+
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('K');
+
+  await expect(codeInput).toHaveValue('7K3M-P9XR-D2HF');
+  expect(await codeInput.evaluate((input) => input.selectionStart)).toBe(2);
+});
+
+test('an enrollment code is grouped for readability after typing finishes', async ({ page }) => {
+  await page.goto('/device-enrollment.html');
+  const codeInput = page.locator('#enrollment-code');
+  await codeInput.fill('7k3mp9xrd2hf');
+
+  await codeInput.blur();
+
+  await expect(codeInput).toHaveValue('7K3M-P9XR-D2HF');
+});
+
 test('enrollment stores a non-exportable key that signs the exact record ID after reload', async ({ page }) => {
   let enrolledPublicKey;
   await page.route(ENROLLMENT_ENDPOINT, async (route) => {

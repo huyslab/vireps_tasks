@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import sys
 import time
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -26,7 +27,7 @@ def enrollment_link(page_url, code):
     return urlunsplit(parsed._replace(fragment=urlencode({"code": code})))
 
 
-def print_terminal_qr(value):
+def prepare_terminal_qr(value):
     try:
         import qrcode
     except ImportError as error:
@@ -37,13 +38,18 @@ def print_terminal_qr(value):
     qr = qrcode.QRCode(border=4)
     qr.add_data(value)
     qr.make(fit=True)
-    qr.print_ascii(tty=True)
+    return qr
+
+
+def print_terminal_qr(qr):
+    qr.print_ascii(tty=sys.stdout.isatty())
 
 
 def create_enrollment(table, label, ttl_seconds, enrollment_page_url=None):
     code = generate_enrollment_code()
     code_hash = hash_enrollment_code(code)
     link = enrollment_link(enrollment_page_url, code) if enrollment_page_url else None
+    qr = prepare_terminal_qr(link) if link else None
     now = int(time.time())
     table.put_item(
         Item={
@@ -58,10 +64,10 @@ def create_enrollment(table, label, ttl_seconds, enrollment_page_url=None):
     print(f"Device label: {label}")
     print(f"Enrollment code (single use, expires in {ttl_seconds} seconds):")
     print(display_enrollment_code(code))
-    if link:
+    if qr:
         print(f"Enrollment link: {link}")
         print("Scan this QR code with the data-collection device:")
-        print_terminal_qr(link)
+        print_terminal_qr(qr)
     return code
 
 

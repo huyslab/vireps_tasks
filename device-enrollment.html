@@ -94,7 +94,7 @@
             status.textContent = 'Enrollment code loaded. Tap Approve device to continue.';
         }
 
-        codeInput.addEventListener('input', () => {
+        codeInput.addEventListener('blur', () => {
             codeInput.value = displayCode(codeInput.value);
         });
 
