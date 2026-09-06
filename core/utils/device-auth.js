@@ -19,7 +19,7 @@ const DEVICE_IDENTITY_KEY = 'current_device';
 const REQUEST_VERSION = 'v1';
 const STATUS_RECORD_ID = '__device_status__';
 
-const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
+const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 const DEVICE_ENROLLMENT_ENDPOINT = `${REDCAP_ENDPOINT}/enroll`;
 const DEVICE_STATUS_ENDPOINT = `${REDCAP_ENDPOINT}/device-status`;
 const DEVICE_STATUS_TIMEOUT_MS = 5000;

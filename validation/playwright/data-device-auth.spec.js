@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
+const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 const ENROLLMENT_ENDPOINT = `${REDCAP_ENDPOINT}/enroll`;
 const STATUS_ENDPOINT = `${REDCAP_ENDPOINT}/device-status`;
 

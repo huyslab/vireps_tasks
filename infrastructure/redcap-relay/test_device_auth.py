@@ -14,7 +14,7 @@ NOW = 1_788_523_200
 DEVICE_ID = "12345678-1234-4234-9234-123456789abc"
 RECORD_ID = "participant_session"
 NONCE = "AAAAAAAAAAAAAAAAAAAAAA"
-METHOD_ARN = "arn:aws:execute-api:eu-north-1:123456789012:api/Prod/POST/pharmaciespilot"
+METHOD_ARN = "arn:aws:execute-api:eu-north-1:123456789012:api/Prod/POST/redcap"
 
 
 class ConditionalFailure(Exception):

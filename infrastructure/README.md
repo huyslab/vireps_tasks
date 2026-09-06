@@ -163,8 +163,26 @@ expected. Clear both variables afterwards:
 unset VIREPS_REDCAP_TOKEN VIREPS_REDCAP_URL
 ```
 
-The same build and deploy procedure is used for subsequent updates. Supplying the explicit
-bucket and `--no-resolve-s3` remains necessary on every deployment.
+For subsequent updates that do not change the REDCap URL or token, rebuild and omit
+`--parameter-overrides`. SAM will tell CloudFormation to reuse both existing parameter
+values:
+
+```bash
+sam build --use-container
+
+sam deploy \
+  --template-file .aws-sam/build/template.yaml \
+  --stack-name vireps-redcap-relay \
+  --region eu-north-1 \
+  --profile ucl-sso \
+  --s3-bucket ucl-vireps-sam-artifacts-843414937160-eu-north-1 \
+  --s3-prefix vireps-redcap-relay \
+  --no-resolve-s3 \
+  --capabilities CAPABILITY_IAM \
+  --confirm-changeset
+```
+
+Supplying the explicit bucket and `--no-resolve-s3` remains necessary on every deployment.
 
 ## 5. Verify the deployment
 

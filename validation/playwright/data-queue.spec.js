@@ -24,7 +24,7 @@ import { expect, test } from '@playwright/test';
  * entirely in data-queue.js.
  */
 
-const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
+const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 
 function uniqueRecordId(label) {
   return `data-queue-spec_${label}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;

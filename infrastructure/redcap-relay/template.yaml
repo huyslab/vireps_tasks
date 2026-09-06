@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Authenticated REDCap relay Lambda for the pharmacies pilot tasks
+Description: Authenticated REDCap relay Lambda for the Vireps tasks
 
 Globals:
   Function:
@@ -92,10 +92,10 @@ Resources:
   DeviceRequestAuthorizerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: authorizeREDCapPharmaciesPilotDevice
+      FunctionName: authorizeREDCapDevice
       CodeUri: .
       Handler: device_auth.authorizer_handler
-      Description: Verify enrolled-device signatures for pharmacies pilot data
+      Description: Verify enrolled-device signatures for REDCap data
       Environment:
         Variables:
           DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
@@ -114,13 +114,13 @@ Resources:
                   "dynamodb:LeadingKeys":
                     - "NONCE#*"
 
-  EnrollREDCapPharmaciesPilotDevice:
+  EnrollREDCapDevice:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: enrollREDCapPharmaciesPilotDevice
+      FunctionName: enrollREDCapDevice
       CodeUri: .
       Handler: device_auth.enrollment_handler
-      Description: Consume a one-time code and register a pharmacies pilot tablet
+      Description: Consume a one-time code and register a REDCap data-collection device
       Environment:
         Variables:
           DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
@@ -136,7 +136,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Path: /pharmaciespilot/enroll
+            Path: /redcap/enroll
             Method: post
             RestApiId: !Ref REDCapRelayApi
             Auth:
@@ -147,13 +147,13 @@ Resources:
   # device is revoked or merely holding a drifted clock, and the browser needs that
   # distinction before it decides to stop collecting - so this route verifies the same
   # signature itself and reports a typed verdict (see device_auth.status_handler).
-  REDCapPharmaciesPilotDeviceStatus:
+  REDCapDeviceStatus:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: statusREDCapPharmaciesPilotDevice
+      FunctionName: statusREDCapDevice
       CodeUri: .
       Handler: device_auth.status_handler
-      Description: Report why a pharmacies pilot tablet is or is not approved
+      Description: Report why a REDCap data-collection device is or is not approved
       Environment:
         Variables:
           DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
@@ -168,20 +168,20 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Path: /pharmaciespilot/device-status
+            Path: /redcap/device-status
             Method: post
             RestApiId: !Ref REDCapRelayApi
             Auth:
               Authorizer: NONE
               OverrideApiAuth: true
 
-  WriteToREDCapPharmaciesPilot:
+  WriteToREDCap:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: writeToREDCapPharmaciesPilot
+      FunctionName: writeToREDCap
       CodeUri: .
       Handler: lambda_function.lambda_handler
-      Description: Relay authenticated pharmacies pilot task data to REDCap
+      Description: Relay authenticated Vireps task data to REDCap
       Environment:
         Variables:
           REDCAP_URL: !Ref REDCapUrl
@@ -190,18 +190,18 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Path: /pharmaciespilot
+            Path: /redcap
             Method: post
             RestApiId: !Ref REDCapRelayApi
 
 Outputs:
   REDCapRelayEndpoint:
     Description: Enrolled-device POST endpoint for the REDCap relay
-    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/pharmaciespilot"
+    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/redcap"
 
   DeviceEnrollmentEndpoint:
     Description: One-time device enrollment endpoint
-    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/pharmaciespilot/enroll"
+    Value: !Sub "https://${REDCapRelayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/redcap/enroll"
 
   DeviceAuthTableName:
     Description: DynamoDB table used by the device administration script

@@ -92,7 +92,7 @@ returns the same opaque 401 for a revoked device, an unknown device, a bad signa
 timestamp outside the five-minute window. Read as "unapproved", that 401 would put a tablet
 whose clock has drifted into demo mode and throw the session away.
 
-`POST /pharmaciespilot/device-status` therefore runs outside the authorizer and verifies the
+`POST /redcap/device-status` therefore runs outside the authorizer and verifies the
 same signature itself, returning a typed verdict:
 
 | Response | Meaning | Browser behaviour |

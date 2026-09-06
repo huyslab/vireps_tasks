@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const MAX_PARTICIPANT_ID_LENGTH = 236;
-const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com/Prod/pharmaciespilot';
+const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 
 test('the launcher rejects participant IDs that cannot fit in a REDCap record ID', async ({ page }) => {
   await page.goto('/index.html');
