@@ -1,6 +1,5 @@
 import base64
 import binascii
-import hashlib
 import json
 import re
 import time
@@ -10,6 +9,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
+from enrollment_code import hash_enrollment_code, is_valid_enrollment_code
 
 
 REQUEST_VERSION = "v1"
@@ -102,7 +103,7 @@ def enrollment_handler(event, context):
 
     enrollment_code = body.get("enrollment_code")
     device_id = body.get("device_id")
-    if not isinstance(enrollment_code, str) or len(enrollment_code) < 20:
+    if not is_valid_enrollment_code(enrollment_code):
         return api_response(400, {"error": "Invalid enrollment code"})
     if not isinstance(device_id, str) or not DEVICE_ID_PATTERN.fullmatch(device_id):
         return api_response(400, {"error": "Invalid device ID"})
@@ -113,7 +114,7 @@ def enrollment_handler(event, context):
         return api_response(400, {"error": "Invalid device public key"})
 
     now = int(time.time())
-    code_hash = hashlib.sha256(enrollment_code.encode("utf-8")).hexdigest()
+    code_hash = hash_enrollment_code(enrollment_code)
     table = get_table()
     enrollment_key = f"{ENROLLMENT_PREFIX}{code_hash}"
     device_key = f"{DEVICE_PREFIX}{device_id}"

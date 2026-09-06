@@ -11,6 +11,46 @@ class FakeDynamoDBError(Exception):
 
 
 class ManageDevicesTest(unittest.TestCase):
+    @patch("manage_devices.print_terminal_qr")
+    @patch("manage_devices.generate_enrollment_code", return_value="7K3MP9XRD2HF")
+    @patch("manage_devices.time.time", return_value=1788624000)
+    @patch("builtins.print")
+    def test_create_enrollment_prints_short_code_and_local_qr(
+        self, output, current_time, generate_code, print_qr
+    ):
+        table = Mock()
+        page_url = "https://tasks.example/device-enrollment.html"
+
+        code = manage_devices.create_enrollment(
+            table, "Pharmacy tablet 1", 900, page_url
+        )
+
+        self.assertEqual(code, "7K3MP9XRD2HF")
+        stored = table.put_item.call_args.kwargs["Item"]
+        self.assertEqual(stored["label"], "Pharmacy tablet 1")
+        self.assertEqual(stored["created_at"], 1788624000)
+        self.assertEqual(stored["expires_at"], 1788624900)
+        self.assertTrue(stored["pk"].startswith("ENROLL#"))
+        output.assert_any_call("7K3M-P9XR-D2HF")
+        link = f"{page_url}#code=7K3MP9XRD2HF"
+        output.assert_any_call(f"Enrollment link: {link}")
+        print_qr.assert_called_once_with(link)
+        generate_code.assert_called_once_with()
+        current_time.assert_called_once_with()
+
+    def test_enrollment_link_requires_https_before_storing_code(self):
+        table = Mock()
+
+        with self.assertRaisesRegex(ValueError, "absolute HTTPS URL"):
+            manage_devices.create_enrollment(
+                table,
+                "Pharmacy tablet 1",
+                900,
+                "http://tasks.example/device-enrollment.html",
+            )
+
+        table.put_item.assert_not_called()
+
     @patch("manage_devices.time.time", return_value=1788624000)
     @patch("builtins.print")
     def test_set_device_status_updates_an_existing_device(self, output, current_time):

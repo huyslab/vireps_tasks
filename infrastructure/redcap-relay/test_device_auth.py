@@ -16,6 +16,7 @@ DEVICE_ID = "12345678-1234-4234-9234-123456789abc"
 RECORD_ID = "participant_session"
 NONCE = "AAAAAAAAAAAAAAAAAAAAAA"
 METHOD_ARN = "arn:aws:execute-api:eu-north-1:123456789012:api/Prod/POST/redcap"
+ENROLLMENT_CODE = "7K3MP9XRD2HF"
 
 
 class ConditionalFailure(Exception):
@@ -279,7 +280,7 @@ class DeviceAuthorizationTest(unittest.TestCase):
         event = {
             "body": json.dumps(
                 {
-                    "enrollment_code": "a-valid-single-use-enrollment-code",
+                    "enrollment_code": "7k3m-p9xr d2hf",
                     "device_id": DEVICE_ID,
                     "public_key": public_jwk(self.private_key),
                 }
@@ -293,9 +294,7 @@ class DeviceAuthorizationTest(unittest.TestCase):
         transaction = table.meta.client.transact_write_items.call_args.kwargs
         self.assertEqual(len(transaction["TransactItems"]), 2)
         enrollment_update = transaction["TransactItems"][0]["Update"]
-        enrollment_key = "ENROLL#" + hashlib.sha256(
-            b"a-valid-single-use-enrollment-code"
-        ).hexdigest()
+        enrollment_key = "ENROLL#" + hashlib.sha256(ENROLLMENT_CODE.encode()).hexdigest()
         self.assertEqual(enrollment_update["Key"]["pk"], enrollment_key)
         self.assertEqual(enrollment_update["ExpressionAttributeValues"][":now"], NOW)
         registered = transaction["TransactItems"][1]["Put"]["Item"]
@@ -314,7 +313,7 @@ class DeviceAuthorizationTest(unittest.TestCase):
         event = {
             "body": json.dumps(
                 {
-                    "enrollment_code": "an-expired-single-use-enrollment-code",
+                    "enrollment_code": "WXYZ2345ABCD",
                     "device_id": DEVICE_ID,
                     "public_key": public_jwk(self.private_key),
                 }
@@ -339,7 +338,7 @@ class DeviceAuthorizationTest(unittest.TestCase):
         event = {
             "body": json.dumps(
                 {
-                    "enrollment_code": "a-valid-single-use-enrollment-code",
+                    "enrollment_code": ENROLLMENT_CODE,
                     "device_id": DEVICE_ID,
                     "public_key": public_jwk(self.private_key),
                 }
@@ -353,6 +352,24 @@ class DeviceAuthorizationTest(unittest.TestCase):
         table.meta.client.transact_write_items.assert_called_once()
         table.update_item.assert_not_called()
         table.put_item.assert_not_called()
+
+    def test_enrollment_rejects_short_or_ambiguous_codes_before_reading_table(self):
+        table = Mock()
+        event = {
+            "body": json.dumps(
+                {
+                    "enrollment_code": "10IL-ABCD",
+                    "device_id": DEVICE_ID,
+                    "public_key": public_jwk(self.private_key),
+                }
+            )
+        }
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.enrollment_handler(event, None)
+
+        self.assertEqual(result["statusCode"], 400)
+        table.get_item.assert_not_called()
 
 
 if __name__ == "__main__":

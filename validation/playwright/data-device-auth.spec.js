@@ -9,6 +9,30 @@ function decodeBase64url(value) {
   return Uint8Array.from(atob((value + padding).replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
 }
 
+test('a QR enrollment link loads the code and removes it from browser history', async ({ page }) => {
+  let submittedCode;
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    submittedCode = request.enrollment_code;
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'QR tablet', status: 'approved' })
+    });
+  });
+
+  await page.goto('/device-enrollment.html#code=7k3m-p9xr-d2hf');
+
+  await expect(page.locator('#enrollment-code')).toHaveValue('7K3M-P9XR-D2HF');
+  await expect(page.locator('#status')).toContainText('Enrollment code loaded');
+  expect(new URL(page.url()).hash).toBe('');
+
+  await page.getByRole('button', { name: 'Approve device' }).click();
+
+  await expect(page.locator('#status')).toContainText('QR tablet is approved');
+  expect(submittedCode).toBe('7K3MP9XRD2HF');
+});
+
 test('enrollment stores a non-exportable key that signs the exact record ID after reload', async ({ page }) => {
   let enrolledPublicKey;
   await page.route(ENROLLMENT_ENDPOINT, async (route) => {
