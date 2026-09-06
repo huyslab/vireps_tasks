@@ -154,6 +154,120 @@ class DeviceAuthorizationTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "DynamoDB unavailable"):
                 device_auth.authorizer_handler(self.authorizer_event(), None)
 
+    def status_event(self, timestamp=NOW, device_id=DEVICE_ID):
+        message = device_auth.canonical_request(
+            device_id, device_auth.STATUS_RECORD_ID, str(timestamp), NONCE
+        )
+        return {
+            "headers": {
+                "X-Device-Id": device_id,
+                "X-Record-Id": device_auth.STATUS_RECORD_ID,
+                "X-Request-Timestamp": str(timestamp),
+                "X-Request-Nonce": NONCE,
+                "X-Device-Signature": raw_signature(self.private_key, message),
+            }
+        }
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_approves_a_fresh_signed_request(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {"Item": self.device}
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(self.status_event(), None)
+
+        self.assertEqual(result["statusCode"], 200)
+        body = json.loads(result["body"])
+        self.assertEqual(body["status"], "approved")
+        self.assertEqual(body["server_time"], NOW)
+        # A read-only check must not consume the device's replay protection.
+        table.put_item.assert_not_called()
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_reports_clock_skew_rather_than_denial(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {"Item": self.device}
+
+        # An hour of drift is what the authorizer collapses into an opaque 401. Here the
+        # signature and the enrollment still verify, so the device is approved and only its
+        # clock is wrong - and server_time is what lets it correct itself and keep
+        # collecting instead of being sent to demo mode.
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(self.status_event(timestamp=NOW - 3600), None)
+
+        self.assertEqual(result["statusCode"], 200)
+        body = json.loads(result["body"])
+        self.assertEqual(body["status"], "clock_skew")
+        self.assertEqual(body["server_time"], NOW)
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_reports_a_revoked_device_as_unapproved(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {"Item": {**self.device, "status": "revoked"}}
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(self.status_event(), None)
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(json.loads(result["body"])["status"], "unapproved")
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_reports_an_unknown_device_as_unapproved(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {}
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(self.status_event(), None)
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(json.loads(result["body"])["status"], "unapproved")
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_rejects_an_unverifiable_signature_without_a_verdict(self, current_time):
+        table = Mock()
+        table.get_item.return_value = {"Item": self.device}
+        event = self.status_event()
+        event["headers"]["X-Device-Signature"] = base64url(bytes(64))
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(event, None)
+
+        # No "status" field: the browser must not read this as permission to stop
+        # collecting, only as "cannot tell".
+        self.assertEqual(result["statusCode"], 401)
+        body = json.loads(result["body"])
+        self.assertNotIn("status", body)
+        self.assertEqual(body["server_time"], NOW)
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_rejects_malformed_credentials_before_reading_the_table(self, current_time):
+        table = Mock()
+        event = self.status_event()
+        del event["headers"]["X-Device-Signature"]
+
+        with patch("device_auth.get_table", return_value=table):
+            result = device_auth.status_handler(event, None)
+
+        self.assertEqual(result["statusCode"], 401)
+        self.assertNotIn("status", json.loads(result["body"]))
+        table.get_item.assert_not_called()
+
+    @patch.dict("os.environ", {"REQUEST_MAX_AGE_SECONDS": "300"})
+    @patch("device_auth.time.time", return_value=NOW)
+    def test_status_surfaces_dynamodb_failure_rather_than_denying(self, current_time):
+        table = Mock()
+        table.get_item.side_effect = RuntimeError("DynamoDB unavailable")
+
+        with patch("device_auth.get_table", return_value=table):
+            with self.assertRaisesRegex(RuntimeError, "DynamoDB unavailable"):
+                device_auth.status_handler(self.status_event(), None)
+
     @patch("device_auth.time.time", return_value=NOW)
     def test_enrollment_consumes_code_and_registers_public_key(self, current_time):
         table = Mock()

@@ -378,12 +378,13 @@
             });
         }
 
-        // Startup acknowledgements, in order: an unapproved device, then any unsent data
-        // left by an earlier session (core/utils/data-queue.js starts sending it as soon as
-        // this page loads). Both are one-time notices rather than gates or live monitors.
-        // The unapproved-device notice is load-bearing, though: setting __redcapDemoMode is
-        // what stops the session's data from being stored at all, so it is set before any
-        // task can run.
+        // Startup checks, in order: whether this device may collect at all, then - only if
+        // it may - whether it can store what it collects, then any unsent data left by an
+        // earlier session (core/utils/data-queue.js starts sending it as soon as this page
+        // loads). The notices are one-time acknowledgements rather than gates or live
+        // monitors. The unapproved-device one is load-bearing, though: setting
+        // __redcapDemoMode is what stops the session's data from being stored at all, so it
+        // is set before any task can run.
         async function startSession() {
             const participantError = participantIdValidationError(window.participantID);
             if (participantError) {
@@ -391,20 +392,22 @@
                 return;
             }
 
-            // A tablet that cannot store unsent data locally must not collect any: without
-            // the outbox there is nothing to fall back on when a send fails.
-            if (!(await isQueueAvailable())) {
+            // Device status first, because it decides whether this session collects at
+            // all. Only a collecting session needs the outbox; a demo session stores
+            // nothing, so gating it on writable storage would block the one thing an
+            // unapproved tablet is still allowed to do.
+            const deviceStatus = await getDeviceAuthorizationStatus();
+            window.__redcapDemoMode = !deviceStatus.approved;
+            if (!deviceStatus.approved) {
+                await acknowledge('demo-mode-overlay', 'demo-mode-continue');
+            } else if (!(await isQueueAvailable())) {
+                // A tablet that will collect data must be able to hold it: without the
+                // outbox there is nothing to fall back on when a send fails.
                 showExperimentError(new Error(
                     'This browser cannot store data locally, so a session cannot be run safely on it. '
                     + 'Check that the browser is not in private mode and that site data is allowed.'
                 ));
                 return;
-            }
-
-            const deviceStatus = await getDeviceAuthorizationStatus();
-            window.__redcapDemoMode = !deviceStatus.approved;
-            if (!deviceStatus.approved) {
-                await acknowledge('demo-mode-overlay', 'demo-mode-continue');
             }
 
             let pendingCount = 0;

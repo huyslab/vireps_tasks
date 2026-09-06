@@ -4,6 +4,10 @@
  * Enrollment creates a non-exportable P-256 private key in IndexedDB. Every network
  * attempt signs a fresh, five-minute request credential, so queued records do not carry
  * an authorization token that can expire while the tablet is offline.
+ *
+ * Requests are signed against the server's clock rather than the device's: a tablet drifted
+ * past that five-minute window could otherwise never produce a credential the relay accepts
+ * (see currentTimestamp and getDeviceAuthorizationStatus).
  */
 
 const DEVICE_DB_NAME = 'redcap_device_identity';
@@ -20,6 +24,33 @@ const DEVICE_STATUS_TIMEOUT_MS = 5000;
 
 let deviceDBPromise = null;
 let identityPromise = null;
+let serverTimeOffsetSeconds = 0;
+
+/**
+ * Seconds since the epoch, corrected by whatever offset the server last reported.
+ *
+ * Tablets in the field do drift, and the authorizer rejects anything more than five
+ * minutes out. Left uncorrected, a drifted device cannot sign a request the server will
+ * accept - not the status check, and not a single REDCap write - so its data would queue
+ * forever. Signing against the server's clock instead makes the drift irrelevant.
+ * @returns {number}
+ */
+function currentTimestamp() {
+    return Math.floor(Date.now() / 1000) + serverTimeOffsetSeconds;
+}
+
+/**
+ * Records how far this device's clock is from the server's. Every status response carries
+ * server_time, including the 401s, so any answer at all is enough to calibrate from.
+ * @param {*} serverTime - Unix seconds as reported by the relay.
+ */
+function calibrateClock(serverTime) {
+    const reported = Number(serverTime);
+    if (!Number.isFinite(reported)) {
+        return;
+    }
+    serverTimeOffsetSeconds = Math.round(reported - Date.now() / 1000);
+}
 
 function openDeviceDB() {
     if (deviceDBPromise) {
@@ -130,7 +161,7 @@ async function createSignedRequestHeaders(recordId) {
         throw new Error('This device is not enrolled for data collection');
     }
 
-    const timestamp = String(Math.floor(Date.now() / 1000));
+    const timestamp = String(currentTimestamp());
     const nonceBytes = new Uint8Array(16);
     crypto.getRandomValues(nonceBytes);
     const nonce = base64urlEncode(nonceBytes);
@@ -194,9 +225,31 @@ async function enrollDevice(enrollmentCode) {
 }
 
 /**
- * Confirms enrollment when online. A locally enrolled tablet remains in collection mode
- * during a network outage so the offline queue still works; the server independently
- * rejects a device that has been revoked when a send is eventually attempted.
+ * Establishes whether this browser may collect data, and corrects its clock while it is at
+ * it. The answer gates collection entirely (experiment.html turns approved:false into demo
+ * mode, which stores nothing), so the bar for approved:false is deliberately high: only an
+ * explicit "unapproved" verdict from the relay clears it.
+ *
+ * That is why this reads the relay's typed verdict rather than the HTTP status. The request
+ * authorizer that guards the write route answers one question - may this write proceed -
+ * and collapses revocation, an unknown device, a bad signature and a stale timestamp into
+ * one 401. Treating that 401 as "unapproved" would send a tablet whose clock has drifted
+ * past the five-minute window into demo mode and discard the session. The status route
+ * therefore verifies the signature itself and distinguishes the cases (see
+ * device_auth.status_handler):
+ *
+ *   - "unapproved" - revoked or unknown to the server. The one definitive no.
+ *   - "clock_skew" - signature and enrollment verified, only the timestamp was stale. The
+ *     device is approved; server_time has now corrected the drift for every later request,
+ *     including the queued writes that were failing because of it.
+ *   - "approved"   - all good.
+ *
+ * Anything else - an HTTP 401 (malformed or unverifiable credentials, still
+ * undifferentiated), a 5xx, an unreachable service, a timeout - means the verdict is
+ * unavailable, not negative. A locally enrolled tablet stays in collection mode so the
+ * outbox keeps working, and the server independently rejects a revoked device when a send
+ * is eventually attempted.
+ * @returns {Promise<{approved: boolean, verified?: boolean, reason?: string, clockCorrected?: boolean}>}
  */
 async function getDeviceAuthorizationStatus() {
     if (window.__redcapDeviceStatusForTesting) {
@@ -223,10 +276,21 @@ async function getDeviceAuthorizationStatus() {
         } finally {
             clearTimeout(timeoutId);
         }
-        if (response.ok) {
+
+        const body = await response.json().catch(() => ({}));
+        calibrateClock(body.server_time);
+
+        if (response.ok && body.status === 'approved') {
             return { approved: true, verified: true };
         }
-        if (response.status === 401 || response.status === 403) {
+        if (response.ok && body.status === 'clock_skew') {
+            console.warn(
+                `device-auth: this device's clock is ${serverTimeOffsetSeconds}s from the server's; `
+                + 'corrected for subsequent requests'
+            );
+            return { approved: true, verified: true, clockCorrected: true };
+        }
+        if (response.ok && body.status === 'unapproved') {
             return { approved: false, reason: 'not-approved' };
         }
         console.warn(`device-auth: status check returned HTTP ${response.status}; continuing offline`);

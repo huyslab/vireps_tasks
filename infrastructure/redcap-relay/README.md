@@ -93,6 +93,36 @@ data behind for a later enrollment to upload. A locally enrolled tablet that is 
 offline is a different case: an unreachable status service leaves it in collection mode so it
 can queue data, and the server still enforces revocation when a later upload is attempted.
 
+### Why `device-status` is not behind the authorizer
+
+Demo mode discards a session, so the browser needs a differentiated answer before it enters
+one. The request authorizer cannot give it: it answers only "may this write proceed", and
+returns the same opaque 401 for a revoked device, an unknown device, a bad signature and a
+timestamp outside the five-minute window. Read as "unapproved", that 401 would put a tablet
+whose clock has drifted into demo mode and throw the session away.
+
+`POST /pharmaciespilot/device-status` therefore runs outside the authorizer and verifies the
+same signature itself, returning a typed verdict:
+
+| Response | Meaning | Browser behaviour |
+| --- | --- | --- |
+| `200 {"status":"approved"}` | Enrolled, approved, fresh | Collects and sends |
+| `200 {"status":"clock_skew"}` | Signature and enrollment verified, timestamp stale | Collects; corrects its clock from `server_time` |
+| `200 {"status":"unapproved"}` | Revoked or unknown to the server | Demo mode - collects nothing |
+| `401` | Malformed or unverifiable credentials | Treated as "cannot tell": collects and queues |
+
+Only an explicit `unapproved` stops a device collecting. Every response carries
+`server_time`, and the browser signs all later requests - REDCap writes included - against
+that clock, so a drifted tablet's queued data can actually be delivered rather than failing
+authorization forever. The route records no nonce: it is read-only, must keep working
+precisely when timestamps are stale, and discloses nothing beyond the status of the device
+whose signature it just verified.
+
+Deploy the stack before the browser application. A new browser against an old relay still
+works and fails safe - an undifferentiated 401 is read as "cannot tell", so the tablet
+collects and queues rather than discarding anything; it simply will not enter demo mode
+until the new handler is live.
+
 ## Request authorization
 
 Authenticated requests carry `X-Device-Id`, `X-Record-Id`, `X-Request-Timestamp`,
@@ -104,7 +134,9 @@ v1\n<device-id>\n<record-id>\n<unix-timestamp>\n<nonce>
 
 Signatures are accepted for five minutes and authorizer caching is disabled. Every retry
 uses a new timestamp, nonce, and signature, so IndexedDB records can remain offline without
-carrying an expiring bearer credential.
+carrying an expiring bearer credential. The timestamp is the browser's own clock corrected by
+the offset last reported by `device-status`, so a drifted tablet still signs inside the
+window.
 
 ## Validate locally
 

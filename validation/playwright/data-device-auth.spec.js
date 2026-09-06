@@ -96,6 +96,142 @@ test('an enrolled device treats a status-service failure as offline, not demo mo
   expect(status).toEqual({ approved: true, verified: false });
 });
 
+test('a device unknown to the relay is reported unapproved, not merely unauthorized', async ({ page }) => {
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'Revoked tablet', status: 'approved' })
+    });
+  });
+  await page.route(STATUS_ENDPOINT, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'unapproved', server_time: Math.floor(Date.now() / 1000) })
+    });
+  });
+
+  await page.goto('/validation/fixtures/device-auth.html');
+  await page.waitForFunction(() => window.__DEVICE_AUTH_FIXTURE_READY === true);
+  const status = await page.evaluate(async () => {
+    await window.__deviceAuth.enrollDevice('single-use-enrollment-code-for-test');
+    return window.__deviceAuth.getDeviceAuthorizationStatus();
+  });
+
+  // The explicit verdict is the only thing that may stop a device collecting.
+  expect(status).toEqual({ approved: false, reason: 'not-approved' });
+});
+
+test('a drifted clock corrects itself instead of sending the tablet to demo mode', async ({ page }) => {
+  // An hour ahead of the tablet. The write route's authorizer collapses this into the same
+  // opaque 401 as revocation, which is why the status route reports it as its own verdict:
+  // read as "unapproved", a drifted clock would put the session in demo mode and discard it.
+  const serverTime = Math.floor(Date.now() / 1000) + 3600;
+  const seenTimestamps = [];
+
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'Drifted tablet', status: 'approved' })
+    });
+  });
+  await page.route(STATUS_ENDPOINT, async (route) => {
+    seenTimestamps.push(Number(route.request().headers()['x-request-timestamp']));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'clock_skew', server_time: serverTime })
+    });
+  });
+
+  await page.goto('/validation/fixtures/device-auth.html');
+  await page.waitForFunction(() => window.__DEVICE_AUTH_FIXTURE_READY === true);
+  const result = await page.evaluate(async () => {
+    await window.__deviceAuth.enrollDevice('single-use-enrollment-code-for-test');
+    const status = await window.__deviceAuth.getDeviceAuthorizationStatus();
+    const headers = await window.__deviceAuth.createSignedRequestHeaders('drifted-record');
+    return { status, signedTimestamp: Number(headers['X-Request-Timestamp']) };
+  });
+
+  expect(result.status.approved, 'a drifted clock is not a revoked device').toBe(true);
+  expect(result.status.clockCorrected).toBe(true);
+
+  // The first request went out on the device's own clock; every later one - the REDCap
+  // writes included - is signed against the server's, so they can actually be accepted.
+  expect(Math.abs(seenTimestamps[0] - serverTime)).toBeGreaterThan(300);
+  expect(Math.abs(result.signedTimestamp - serverTime)).toBeLessThanOrEqual(5);
+});
+
+test('a drifted tablet keeps collecting and stores its session', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__forceOnlineRedcapForTesting = true;
+    window.__redcapRetryDelayMsForTesting = 60000;
+    window.__redcapDeviceSignerForTesting = async (recordId) => ({
+      'X-Device-Id': 'drifted-device',
+      'X-Record-Id': recordId,
+      'X-Request-Timestamp': '1788523200',
+      'X-Request-Nonce': 'AAAAAAAAAAAAAAAAAAAAAA',
+      'X-Device-Signature': 'test-signature',
+    });
+  });
+  await page.route(STATUS_ENDPOINT, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'clock_skew', server_time: Math.floor(Date.now() / 1000) + 3600 })
+    });
+  });
+  await page.route(REDCAP_ENDPOINT, async (route) => {
+    await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"stale"}' });
+  });
+
+  await page.goto('/experiment.html?participant_id=simulate_drift&task=vigour');
+  await expect(page.locator('#demo-mode-overlay')).toBeHidden();
+  expect(await page.evaluate(() => window.__redcapDemoMode)).toBe(false);
+
+  const result = await page.evaluate(async () => {
+    const { submitRecord, listQueuedRecords } = await import('/core/utils/data-queue.js');
+    const recordId = 'drifted-record';
+    const outcome = await submitRecord(recordId, JSON.stringify([{ record_id: recordId }]));
+    return {
+      stored: outcome.stored,
+      queued: (await listQueuedRecords()).some((record) => record.record_id === recordId)
+    };
+  });
+
+  expect(result.stored, 'a drifted clock must never cost a session').toBe(true);
+  expect(result.queued).toBe(true);
+});
+
+test('an unapproved device can still run a demo when the outbox is unwritable', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: false, reason: 'not-approved' };
+    // A browser restricted to read-only site data. A demo stores nothing, so this must not
+    // stand between the tablet and the one thing it is still allowed to do.
+    const originalTransaction = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (stores, mode, ...rest) {
+      if (mode === 'readwrite') {
+        throw new DOMException('site data is read-only', 'InvalidStateError');
+      }
+      return originalTransaction.call(this, stores, mode, ...rest);
+    };
+  });
+
+  await page.goto('/experiment.html?participant_id=simulate_demo_unwritable&task=vigour');
+
+  const overlay = page.locator('#demo-mode-overlay');
+  await expect(overlay).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toBeHidden();
+  expect(await page.evaluate(() => window.__redcapDemoMode)).toBe(true);
+
+  await page.locator('#demo-mode-continue').click();
+  await expect(overlay).toBeHidden();
+});
+
 test('an unapproved device is announced, and collects no data at all', async ({ page }) => {
   let requestCount = 0;
   await page.addInitScript(() => {

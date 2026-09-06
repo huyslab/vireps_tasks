@@ -143,13 +143,27 @@ Resources:
               Authorizer: NONE
               OverrideApiAuth: true
 
+  # Deliberately outside the request authorizer. The authorizer's 401 cannot say whether a
+  # device is revoked or merely holding a drifted clock, and the browser needs that
+  # distinction before it decides to stop collecting - so this route verifies the same
+  # signature itself and reports a typed verdict (see device_auth.status_handler).
   REDCapPharmaciesPilotDeviceStatus:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: statusREDCapPharmaciesPilotDevice
       CodeUri: .
       Handler: device_auth.status_handler
-      Description: Confirm that the requesting pharmacies pilot tablet is approved
+      Description: Report why a pharmacies pilot tablet is or is not approved
+      Environment:
+        Variables:
+          DEVICE_AUTH_TABLE: !Ref DeviceAuthTable
+          REQUEST_MAX_AGE_SECONDS: "300"
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt DeviceAuthTable.Arn
       Events:
         Api:
           Type: Api
@@ -157,6 +171,9 @@ Resources:
             Path: /pharmaciespilot/device-status
             Method: post
             RestApiId: !Ref REDCapRelayApi
+            Auth:
+              Authorizer: NONE
+              OverrideApiAuth: true
 
   WriteToREDCapPharmaciesPilot:
     Type: AWS::Serverless::Function
