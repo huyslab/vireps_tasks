@@ -76,8 +76,9 @@ python3 manage_devices.py --table-name <DeviceAuthTableName> \
 
 The command displays both a locally generated QR code and a 12-character fallback such as
 `7K3M-P9XR-D2HF`. Scan the QR with the tablet, then tap **Approve device** on the page it
-opens. If the camera is unavailable, open `device-enrollment.html` from the deployed task
-site and enter the fallback code; hyphens, spaces and letter case do not matter.
+opens. Once approved, tap **Start data collection** to open the task launcher. If the camera
+is unavailable, open `device-enrollment.html` from the deployed task site and enter the
+fallback code; hyphens, spaces and letter case do not matter.
 
 The QR puts the code in a URL fragment, which is not sent to the web server and is removed
 from the address bar and current browser-history entry as soon as the page loads. The code

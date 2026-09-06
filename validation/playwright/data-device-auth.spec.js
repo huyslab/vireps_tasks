@@ -30,6 +30,9 @@ test('a QR enrollment link loads the code and removes it from browser history', 
   await page.getByRole('button', { name: 'Approve device' }).click();
 
   await expect(page.locator('#status')).toContainText('QR tablet is approved');
+  const startButton = page.getByRole('link', { name: 'Start data collection' });
+  await expect(startButton).toBeVisible();
+  await expect(startButton).toHaveAttribute('href', './index.html');
   expect(submittedCode).toBe('7K3MP9XRD2HF');
 });
 

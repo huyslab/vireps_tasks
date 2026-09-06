@@ -27,7 +27,7 @@
         h1 { margin-top: 0; font-size: 26px; }
         p { line-height: 1.5; }
         label { display: block; margin: 24px 0 8px; font-weight: 600; }
-        input, button {
+        input, button, .button-link {
             width: 100%;
             padding: 13px 15px;
             border-radius: 8px;
@@ -40,7 +40,7 @@
             text-transform: uppercase;
         }
         .hint { margin-top: 8px; color: #475467; font-size: 14px; }
-        button {
+        button, .button-link {
             margin-top: 16px;
             border: 0;
             background: #5a67d8;
@@ -48,6 +48,8 @@
             font-weight: 600;
             cursor: pointer;
         }
+        .button-link { display: block; text-align: center; text-decoration: none; }
+        .button-link[hidden] { display: none; }
         button:disabled { opacity: 0.6; cursor: wait; }
         #status { min-height: 24px; margin-top: 18px; }
         .error { color: #b42318; }
@@ -67,6 +69,7 @@
             <button id="enroll-button" type="submit">Approve device</button>
         </form>
         <p id="status" role="status" aria-live="polite"></p>
+        <a id="start-button" class="button-link" href="./index.html" hidden>Start data collection</a>
     </main>
 
     <script type="module">
@@ -74,6 +77,7 @@
 
         const form = document.getElementById('enrollment-form');
         const button = document.getElementById('enroll-button');
+        const startButton = document.getElementById('start-button');
         const status = document.getElementById('status');
         const codeInput = document.getElementById('enrollment-code');
 
@@ -101,6 +105,7 @@
         const existingIdentity = await getDeviceIdentity();
         if (existingIdentity) {
             form.hidden = true;
+            startButton.hidden = false;
             status.className = 'success';
             status.textContent = `This browser is already approved as ${existingIdentity.label}.`;
         }
@@ -113,6 +118,7 @@
             try {
                 const result = await enrollDevice(normalizeCode(codeInput.value));
                 form.hidden = true;
+                startButton.hidden = false;
                 status.className = 'success';
                 status.textContent = `${result.label} is approved for data collection.`;
             } catch (error) {

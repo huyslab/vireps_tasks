@@ -103,7 +103,8 @@ The command prints a QR code and a 12-character fallback code. On the device:
 
 1. Scan the QR code and open it in the browser that will run the experiments.
 2. Tap **Approve device**.
-3. After approval, open the [task launcher](https://huyslab.github.io/vireps_tasks/).
+3. Tap **Start data collection** to open the
+   [task launcher](https://huyslab.github.io/vireps_tasks/).
 
 If QR scanning is unavailable, open the
 [device-enrollment page](https://huyslab.github.io/vireps_tasks/device-enrollment.html) and
