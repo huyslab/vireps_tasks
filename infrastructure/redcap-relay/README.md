@@ -36,19 +36,10 @@ the payload contains a field that is absent from the project data dictionary.
 
 ## Deploy
 
-Prerequisites are an authenticated AWS CLI, AWS SAM CLI, and Docker. From this directory:
-
-```bash
-sam build --use-container
-sam deploy --guided
-```
-
-Supply the REDCap API URL and project token when prompted. On later deployments, use:
-
-```bash
-sam build --use-container
-sam deploy
-```
+Prerequisites are an authenticated AWS CLI, AWS SAM CLI, and Docker. Follow the complete
+[infrastructure deployment guide](../README.md), including its explicit artifact-bucket and
+non-guided deployment commands. Do not use `sam deploy --guided` in the UCL account: an
+organisation policy prevents creation of SAM's automatic artifact bucket.
 
 The deployed endpoint is emitted as the `REDCapRelayEndpoint` stack output. This upgrade
 introduces an explicit API Gateway resource, so deploy the stack first and compare that
