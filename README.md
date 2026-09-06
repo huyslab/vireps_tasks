@@ -66,6 +66,60 @@ markup lives in the entry HTML and is driven by
 Per-trial `pointer_type` is recorded wherever a task accepts both, so touch and
 keyboard sessions can be told apart in analysis.
 
+## Enrol a data-collection device
+
+Only enrolled browsers save experiment data to REDCap. An unenrolled browser can still run
+the experiment, but it runs in demo mode and does not save data. Enrol the same browser
+profile that will be used for data collection; private/incognito windows do not retain the
+device identity.
+
+First deploy the current [REDCap relay](infrastructure/README.md) and this website. Then,
+from the repository root, sign in to the UCL AWS account and install the administrator
+dependencies (installation is needed only once):
+
+```bash
+aws sso login --profile ucl-sso
+
+cd infrastructure/redcap-relay
+python3 -m pip install -r requirements-admin.txt
+
+export AWS_PROFILE=ucl-sso
+export AWS_DEFAULT_REGION=eu-north-1
+export DEVICE_AUTH_TABLE=$(aws cloudformation describe-stacks \
+  --stack-name vireps-redcap-relay \
+  --query 'Stacks[0].Outputs[?OutputKey==`DeviceAuthTableName`].OutputValue | [0]' \
+  --output text)
+```
+
+Generate a single-use code for the device. Codes expire after 15 minutes by default:
+
+```bash
+python3 manage_devices.py create-enrollment \
+  --label "Tablet 1" \
+  --enrollment-page-url "https://huyslab.github.io/vireps_tasks/device-enrollment.html"
+```
+
+The command prints a QR code and a 12-character fallback code. On the device:
+
+1. Scan the QR code and open it in the browser that will run the experiments.
+2. Tap **Approve device**.
+3. After approval, open the [task launcher](https://huyslab.github.io/vireps_tasks/).
+
+If QR scanning is unavailable, open the
+[device-enrollment page](https://huyslab.github.io/vireps_tasks/device-enrollment.html) and
+type the fallback code. Hyphens, spaces and letter case do not matter. Clearing the site's
+browser data removes its device identity, in which case it must be enrolled again.
+
+List enrolled devices or revoke one with:
+
+```bash
+python3 manage_devices.py list
+python3 manage_devices.py revoke <device-id>
+```
+
+See the [relay documentation](infrastructure/redcap-relay/README.md#enrol-a-tablet) for
+more detail about enrollment security, expiry and revocation.
+
 ## Repository Structure
 
 ```
