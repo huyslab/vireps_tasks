@@ -207,6 +207,97 @@ test('a drifted tablet keeps collecting and stores its session', async ({ page }
   expect(result.queued).toBe(true);
 });
 
+test('a tablet that booted offline still drains its queue once it reconnects', async ({ page }) => {
+  // The scenario the startup-only calibration missed: a skewed tablet whose status check
+  // fails because it has no network yet. Without a later refresh its offset stays at zero,
+  // so every retry after connectivity returns is signed with the drifted local clock and
+  // rejected - the records are safe, but the outbox cannot drain for the whole session.
+  const serverTime = Math.floor(Date.now() / 1000) + 3600;
+  const MAX_AGE_SECONDS = 300;
+  let statusReachable = false;
+  const statusAttempts = [];
+  const writeOutcomes = [];
+
+  await page.addInitScript(() => {
+    window.__forceOnlineRedcapForTesting = true;
+    window.__redcapRetryDelayMsForTesting = 100;
+  });
+
+  await page.route(ENROLLMENT_ENDPOINT, async (route) => {
+    const request = JSON.parse(route.request().postData());
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ device_id: request.device_id, label: 'Offline-boot tablet', status: 'approved' })
+    });
+  });
+
+  await page.route(STATUS_ENDPOINT, async (route) => {
+    statusAttempts.push(statusReachable ? 'online' : 'offline');
+    if (!statusReachable) {
+      await route.abort('connectionfailed');
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'clock_skew', server_time: serverTime })
+    });
+  });
+
+  // Stands in for the authorizer's freshness window: a timestamp signed on the device's own
+  // drifted clock is rejected exactly as the real relay would reject it.
+  await page.route(REDCAP_ENDPOINT, async (route) => {
+    const timestamp = Number(route.request().headers()['x-request-timestamp']);
+    const fresh = Math.abs(timestamp - serverTime) <= MAX_AGE_SECONDS;
+    writeOutcomes.push(fresh ? 'accepted' : 'rejected');
+    await route.fulfill({
+      status: fresh ? 200 : 401,
+      contentType: 'application/json',
+      body: fresh ? '{"ok":true}' : '{"message":"Unauthorized"}'
+    });
+  });
+
+  // Enrol first: experiment.html would otherwise see an unenrolled browser at startup and
+  // go into demo mode, which is a different case entirely.
+  await page.goto('/validation/fixtures/device-auth.html');
+  await page.waitForFunction(() => window.__DEVICE_AUTH_FIXTURE_READY === true);
+  await page.evaluate(() => window.__deviceAuth.enrollDevice('single-use-enrollment-code-for-test'));
+
+  // Boots with no network: the startup status check fails, so nothing is calibrated.
+  await page.goto('/experiment.html?participant_id=simulate_offline_boot&task=vigour');
+  await expect(page.locator('#demo-mode-overlay')).toBeHidden();
+  expect(await page.evaluate(() => window.__redcapDemoMode)).toBe(false);
+  expect(statusAttempts).toEqual(['offline']);
+
+  const recordId = 'offline-boot-record';
+  const stored = await page.evaluate(async (id) => {
+    const { submitRecord } = await import('/core/utils/data-queue.js');
+    const outcome = await submitRecord(id, JSON.stringify([{ record_id: id }]));
+    return outcome.stored;
+  }, recordId);
+  expect(stored).toBe(true);
+
+  // Connectivity returns. No further save and no page reload - only the outbox's own retry,
+  // which is the sender the review pointed out never refreshed its calibration.
+  statusReachable = true;
+
+  await expect
+    .poll(
+      () => page.evaluate((id) => import('/core/utils/data-queue.js')
+        .then(({ listQueuedRecords }) => listQueuedRecords())
+        .then((records) => records.some((record) => record.record_id === id)), recordId),
+      { message: 'the queue should drain once the clock is re-measured', timeout: 10000 }
+    )
+    .toBe(false);
+
+  // The first attempt was signed on the drifted clock and refused; the recalibration that
+  // refusal triggered is what let the retry succeed.
+  expect(writeOutcomes[0]).toBe('rejected');
+  expect(writeOutcomes.at(-1)).toBe('accepted');
+  expect(statusAttempts).toContain('online');
+});
+
 test('an unapproved device can still run a demo when the outbox is unwritable', async ({ page }) => {
   await page.addInitScript(() => {
     window.__redcapDeviceStatusForTesting = { approved: false, reason: 'not-approved' };

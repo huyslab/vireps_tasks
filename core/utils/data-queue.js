@@ -1,7 +1,8 @@
 import {
     REDCAP_ENDPOINT,
     createSignedRequestHeaders,
-    hasDeviceIdentity
+    hasDeviceIdentity,
+    refreshClockCalibration
 } from './device-auth.js';
 
 /**
@@ -318,6 +319,16 @@ async function sendOnce(record_id, payload) {
             signal: controller.signal
         });
         if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                // The credential this sender is producing is not being accepted. The
+                // commonest reason a previously fine tablet starts seeing this is a drifted
+                // clock, so take a fresh measurement before the next retry - a tablet that
+                // booted offline has no measurement at all yet, and would otherwise keep
+                // signing with the bad local clock for the rest of the page session.
+                // Calibration only: this never reconsiders whether the device is approved,
+                // so a background retry cannot flip a running session into demo mode.
+                await refreshClockCalibration();
+            }
             throw new Error(`REDCap endpoint responded with HTTP ${response.status}`);
         }
         // Awaited inside the try so the timeout still covers reading the body: a stalled

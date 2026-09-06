@@ -6,8 +6,10 @@
  * an authorization token that can expire while the tablet is offline.
  *
  * Requests are signed against the server's clock rather than the device's: a tablet drifted
- * past that five-minute window could otherwise never produce a credential the relay accepts
- * (see currentTimestamp and getDeviceAuthorizationStatus).
+ * past that five-minute window could otherwise never produce a credential the relay accepts.
+ * The offset is measured at startup and re-measured whenever a send comes back unauthorized,
+ * so a tablet that booted offline still recovers once it is back on the network (see
+ * currentTimestamp, getDeviceAuthorizationStatus and refreshClockCalibration).
  */
 
 const DEVICE_DB_NAME = 'redcap_device_identity';
@@ -21,10 +23,13 @@ const REDCAP_ENDPOINT = 'https://4csc8jmaw2.execute-api.eu-north-1.amazonaws.com
 const DEVICE_ENROLLMENT_ENDPOINT = `${REDCAP_ENDPOINT}/enroll`;
 const DEVICE_STATUS_ENDPOINT = `${REDCAP_ENDPOINT}/device-status`;
 const DEVICE_STATUS_TIMEOUT_MS = 5000;
+const CLOCK_RECALIBRATION_INTERVAL_MS = 30000;
 
 let deviceDBPromise = null;
 let identityPromise = null;
 let serverTimeOffsetSeconds = 0;
+let calibrationInFlight = null;
+let lastCalibrationAttempt = 0;
 
 /**
  * Seconds since the epoch, corrected by whatever offset the server last reported.
@@ -50,6 +55,70 @@ function calibrateClock(serverTime) {
         return;
     }
     serverTimeOffsetSeconds = Math.round(reported - Date.now() / 1000);
+}
+
+/**
+ * Asks the relay for its verdict and its clock. Both callers below calibrate from the
+ * result; only one of them reads the verdict.
+ * @returns {Promise<{status: number, body: Object}>}
+ */
+async function requestDeviceStatus() {
+    const signedHeaders = await createSignedRequestHeaders(STATUS_RECORD_ID);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEVICE_STATUS_TIMEOUT_MS);
+    let response;
+    try {
+        response = await fetch(DEVICE_STATUS_ENDPOINT, {
+            method: 'POST',
+            headers: signedHeaders,
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+    const body = await response.json().catch(() => ({}));
+    calibrateClock(body.server_time);
+    return { status: response.status, ok: response.ok, body };
+}
+
+/**
+ * Re-measures this device's offset from the relay's clock after a request came back
+ * unauthorized. Resolves either way; a failure just leaves the previous offset in place.
+ *
+ * The startup check is not enough on its own. A tablet that boots offline never reaches a
+ * calibration at all, so once connectivity returns every queued write is still signed with
+ * the drifted local clock and rejected - the records stay safe, but the outbox cannot drain
+ * for the rest of the page session. An authorization failure is the precise signal that the
+ * credential the sender is producing is not being accepted, which is exactly when a fresh
+ * measurement is worth taking.
+ *
+ * Calibration only: this deliberately ignores the approval verdict in the response. A
+ * background retry must never be able to switch a running session into demo mode, which now
+ * means collecting nothing - a far worse outcome than the failed send that triggered it.
+ * Concurrent flush workers share one request, and repeat attempts are spaced out so a
+ * genuinely revoked device cannot turn its doomed retries into a second stream of them. The
+ * spacing applies only between refreshes: the startup check does not arm it, or a tablet
+ * that booted offline would be throttled out of the first measurement it actually needs.
+ * @returns {Promise<void>}
+ */
+function refreshClockCalibration() {
+    if (calibrationInFlight) {
+        return calibrationInFlight;
+    }
+    const now = Date.now();
+    if (now - lastCalibrationAttempt < CLOCK_RECALIBRATION_INTERVAL_MS) {
+        return Promise.resolve();
+    }
+    lastCalibrationAttempt = now;
+    calibrationInFlight = requestDeviceStatus()
+        .then(() => {})
+        .catch((error) => {
+            console.warn('device-auth: could not refresh the server clock offset:', error);
+        })
+        .finally(() => {
+            calibrationInFlight = null;
+        });
+    return calibrationInFlight;
 }
 
 function openDeviceDB() {
@@ -263,37 +332,22 @@ async function getDeviceAuthorizationStatus() {
     }
 
     try {
-        const signedHeaders = await createSignedRequestHeaders(STATUS_RECORD_ID);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), DEVICE_STATUS_TIMEOUT_MS);
-        let response;
-        try {
-            response = await fetch(DEVICE_STATUS_ENDPOINT, {
-                method: 'POST',
-                headers: signedHeaders,
-                signal: controller.signal
-            });
-        } finally {
-            clearTimeout(timeoutId);
-        }
+        const { ok, status, body } = await requestDeviceStatus();
 
-        const body = await response.json().catch(() => ({}));
-        calibrateClock(body.server_time);
-
-        if (response.ok && body.status === 'approved') {
+        if (ok && body.status === 'approved') {
             return { approved: true, verified: true };
         }
-        if (response.ok && body.status === 'clock_skew') {
+        if (ok && body.status === 'clock_skew') {
             console.warn(
                 `device-auth: this device's clock is ${serverTimeOffsetSeconds}s from the server's; `
                 + 'corrected for subsequent requests'
             );
             return { approved: true, verified: true, clockCorrected: true };
         }
-        if (response.ok && body.status === 'unapproved') {
+        if (ok && body.status === 'unapproved') {
             return { approved: false, reason: 'not-approved' };
         }
-        console.warn(`device-auth: status check returned HTTP ${response.status}; continuing offline`);
+        console.warn(`device-auth: status check returned HTTP ${status}; continuing offline`);
         return { approved: true, verified: false };
     } catch (error) {
         console.warn('device-auth: status check unavailable; continuing with offline queue:', error);
@@ -310,5 +364,6 @@ export {
     enrollDevice,
     getDeviceAuthorizationStatus,
     getDeviceIdentity,
-    hasDeviceIdentity
+    hasDeviceIdentity,
+    refreshClockCalibration
 };

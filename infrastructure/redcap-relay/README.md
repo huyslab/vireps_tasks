@@ -114,7 +114,11 @@ same signature itself, returning a typed verdict:
 Only an explicit `unapproved` stops a device collecting. Every response carries
 `server_time`, and the browser signs all later requests - REDCap writes included - against
 that clock, so a drifted tablet's queued data can actually be delivered rather than failing
-authorization forever. The route records no nonce: it is read-only, must keep working
+authorization forever. The offset is measured at startup and re-measured whenever a write
+comes back 401 or 403, so a tablet that booted with no network still recovers when
+connectivity returns instead of signing with its drifted clock for the rest of the session.
+That refresh reads only `server_time`: it never reconsiders approval, so a background retry
+cannot put a running session into demo mode. The route records no nonce: it is read-only, must keep working
 precisely when timestamps are stale, and discloses nothing beyond the status of the device
 whose signature it just verified.
 
