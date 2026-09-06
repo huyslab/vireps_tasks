@@ -128,10 +128,28 @@ Resources:
         - Version: "2012-10-17"
           Statement:
             - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:TransactWriteItems
+              Action: dynamodb:GetItem
               Resource: !GetAtt DeviceAuthTable.Arn
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+              Condition:
+                "ForAnyValue:StringEquals":
+                  "dynamodb:EnclosingOperation":
+                    - TransactWriteItems
+                "ForAllValues:StringLike":
+                  "dynamodb:LeadingKeys":
+                    - "ENROLL#*"
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt DeviceAuthTable.Arn
+              Condition:
+                "ForAnyValue:StringEquals":
+                  "dynamodb:EnclosingOperation":
+                    - TransactWriteItems
+                "ForAllValues:StringLike":
+                  "dynamodb:LeadingKeys":
+                    - "DEVICE#*"
       Events:
         Api:
           Type: Api

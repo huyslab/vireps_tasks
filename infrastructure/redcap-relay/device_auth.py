@@ -134,7 +134,7 @@ def enrollment_handler(event, context):
                 {
                     "Update": {
                         "TableName": table.name,
-                        "Key": {"pk": {"S": enrollment_key}},
+                        "Key": {"pk": enrollment_key},
                         "UpdateExpression": "SET used_at = :now, used_by = :device_id",
                         "ConditionExpression": (
                             "#kind = :kind AND expires_at >= :now "
@@ -142,9 +142,9 @@ def enrollment_handler(event, context):
                         ),
                         "ExpressionAttributeNames": {"#kind": "kind"},
                         "ExpressionAttributeValues": {
-                            ":kind": {"S": "enrollment"},
-                            ":now": {"N": str(now)},
-                            ":device_id": {"S": device_id},
+                            ":kind": "enrollment",
+                            ":now": now,
+                            ":device_id": device_id,
                         },
                     }
                 },
@@ -152,13 +152,13 @@ def enrollment_handler(event, context):
                     "Put": {
                         "TableName": table.name,
                         "Item": {
-                            "pk": {"S": device_key},
-                            "kind": {"S": "device"},
-                            "device_id": {"S": device_id},
-                            "label": {"S": label},
-                            "status": {"S": "approved"},
-                            "public_key": {"S": serialized_public_key},
-                            "enrolled_at": {"N": str(now)},
+                            "pk": device_key,
+                            "kind": "device",
+                            "device_id": device_id,
+                            "label": label,
+                            "status": "approved",
+                            "public_key": serialized_public_key,
+                            "enrolled_at": now,
                         },
                         "ConditionExpression": "attribute_not_exists(pk)",
                     }

@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import unittest
 from unittest.mock import Mock, patch
@@ -291,10 +292,17 @@ class DeviceAuthorizationTest(unittest.TestCase):
         self.assertEqual(result["statusCode"], 201)
         transaction = table.meta.client.transact_write_items.call_args.kwargs
         self.assertEqual(len(transaction["TransactItems"]), 2)
+        enrollment_update = transaction["TransactItems"][0]["Update"]
+        enrollment_key = "ENROLL#" + hashlib.sha256(
+            b"a-valid-single-use-enrollment-code"
+        ).hexdigest()
+        self.assertEqual(enrollment_update["Key"]["pk"], enrollment_key)
+        self.assertEqual(enrollment_update["ExpressionAttributeValues"][":now"], NOW)
         registered = transaction["TransactItems"][1]["Put"]["Item"]
-        self.assertEqual(registered["status"], {"S": "approved"})
-        self.assertEqual(registered["label"], {"S": "Pharmacy tablet 1"})
-        self.assertEqual(json.loads(registered["public_key"]["S"])["crv"], "P-256")
+        self.assertEqual(registered["status"], "approved")
+        self.assertEqual(registered["label"], "Pharmacy tablet 1")
+        self.assertEqual(registered["enrolled_at"], NOW)
+        self.assertEqual(json.loads(registered["public_key"])["crv"], "P-256")
         table.update_item.assert_not_called()
         table.put_item.assert_not_called()
 
