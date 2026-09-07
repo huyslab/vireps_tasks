@@ -11,7 +11,8 @@ test('the launcher rejects participant IDs that cannot fit in a REDCap record ID
   await input.evaluate((element, value) => {
     element.value = value;
   }, 'a'.repeat(MAX_PARTICIPANT_ID_LENGTH + 1));
-  await page.selectOption('#task', 'vigour');
+  await page.selectOption('#sessionNumber', '1');
+  await page.selectOption('#module', 'module_1');
   await page.locator('#startForm').evaluate((form) => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });

@@ -2,6 +2,47 @@
 // Each module can contain one or more tasks, and each task can have its own configuration settings.
 
 export const ModuleRegistry = {
+    module_1: {
+        name: "Module 1: Reversal and Faces Go/No-Go",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0",
+            stimulus_session: 1
+        },
+        elements: [
+            { type: "instructions", config: { text: "start_message" } },
+            { type: "task", name: "reversal" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "reversal", game_description: "squirrel game" } },
+            { type: "task", name: "go_no_go" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "go_no_go", game_description: "Faces Game" } },
+            { type: "instructions", config: { text: "end_message" } }
+        ]
+    },
+    module_2: {
+        name: "Module 2: Learning and Effort Tasks",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0"
+        },
+        elements: [
+            { type: "instructions", config: { text: "start_message" } },
+            { type: "task", name: "max_press_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "maximum key-press task" } },
+            { type: "task", name: "pavlovian_lottery" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
+            { type: "task", name: "PILT" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
+            { type: "task", name: "vigour" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
+            { type: "task", name: "PIT" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in cloudy space" } },
+            { type: "task", name: "vigour_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank knowledge test" } },
+            { type: "task", name: "post_PILT_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "card knowledge test" } },
+            { type: "instructions", config: { text: "end_message" } }
+        ]
+    },
     full_battery: {
         name: "Full RELEMD Task Battery",
         moduleConfig: { // Settings that apply to all tasks in the module unless overridden
@@ -56,4 +97,3 @@ export const ModuleRegistry = {
         ]
     }
 };
-

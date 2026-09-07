@@ -259,8 +259,7 @@
     </script>
 
     <script type="module">
-        // Import task registry functions
-        import { createTaskTimeline, getTaskInfo } from '@api/index.js';
+        import { createModuleTimeline, createTaskTimeline, getModuleInfo, getTaskInfo } from '@api/index.js';
         import {
             enterExperiment,
             getDeviceAuthorizationStatus,
@@ -278,15 +277,27 @@
             document.getElementById('save-failure-banner').style.display = 'block';
         });
 
-        // Get parameters from URL (populated by index.html's setup form redirect)
-        window.participantID = new URLSearchParams(window.location.search).get('participant_id') || '';
-        window.simulating = window.participantID.includes("simulate") || false;
+        const parameters = new URLSearchParams(window.location.search);
+        const SESSION_CONFIG = Object.freeze({
+            '1': { session: 'wk0', stimulusSession: 1 },
+            '2': { session: 'wk2', stimulusSession: 2 },
+            '3': { session: 'wk4', stimulusSession: 3 },
+            '4': { session: 'wk24', stimulusSession: 4 },
+            '5': { session: 'wk28', stimulusSession: 5 }
+        });
+        const STUDY_MODULES = new Set(['module_1', 'module_2']);
 
-        // Which task to run. No session/sequence selection here - each task uses its
-        // registry default. That is exact for vigour, reversal and go/no-go, which do not
-        // vary by session; PILT does have per-session sequences and will use wk0.
-        const taskName = new URLSearchParams(window.location.search).get('task') || '';
-        window.module = taskName;
+        // The setup page launches a complete study module. The task parameter remains
+        // supported for task-specific examples and automated rendering checks.
+        window.participantID = parameters.get('participant_id') || '';
+        window.simulating = window.participantID.includes("simulate") || false;
+        const moduleName = parameters.get('module') || '';
+        const taskName = parameters.get('task') || '';
+        const sessionNumber = parameters.get('session_number') || '';
+        const sessionConfig = SESSION_CONFIG[sessionNumber];
+        window.module = moduleName || taskName;
+        window.session = sessionConfig?.session || 'wk0';
+        window.sessionNumber = sessionNumber ? Number(sessionNumber) : null;
 
         function showExperimentError(error) {
             console.error('Error running experiment:', error);
@@ -294,9 +305,9 @@
             errorContainer.innerHTML = `
                 <div class="instructions" style="padding: 50px;">
                     <h2>Error Loading Experiment</h2>
-                    <p>There was an error loading the ${taskName || 'requested'} task:</p>
+                    <p>There was an error loading the requested experiment:</p>
                     <p><strong>${error.message}</strong></p>
-                    <p>Please check the console for more details.</p>
+                    <p>Please call the experimenter.</p>
                 </div>
             `;
         }
@@ -305,27 +316,37 @@
         window.jsPsych = initJsPsych({
             display_element: 'display_element',
             on_finish: function(data) {
-                // Display results
-                jsPsych.getDisplayElement().innerHTML = '<p>Thank you for participating! You may now close this tab.</p>';
+                jsPsych.getDisplayElement().innerHTML = moduleName
+                    ? '<p>Thank you. Please call the experimenter.</p>'
+                    : '<p>Thank you for participating! You may now close this tab.</p>';
             }
         });
 
         // Function to run the experiment
         async function runExperiment() {
             try {
-                // Fail fast if this page was reached without what index.html's setup form
-                // provides - otherwise createTaskTimeline throws deep in the call stack for a
-                // missing task.
-                if (!taskName) {
-                    throw new Error('Missing "task" URL parameter. Launch this page via index.html rather than directly.');
+                let timeline;
+                if (moduleName) {
+                    if (!STUDY_MODULES.has(moduleName)) {
+                        throw new Error('The selected module is not available. Please return to the setup page.');
+                    }
+                    if (!sessionConfig) {
+                        throw new Error('A valid session number is required. Please return to the setup page.');
+                    }
+
+                    console.log('Module info:', getModuleInfo(moduleName));
+                    timeline = await createModuleTimeline(moduleName, {
+                        session: sessionConfig.session,
+                        sequence: sessionConfig.session,
+                        stimulus_session: sessionConfig.stimulusSession,
+                        session_number: Number(sessionNumber)
+                    });
+                } else if (taskName) {
+                    console.log('Task info:', getTaskInfo(taskName));
+                    timeline = await createTaskTimeline(taskName);
+                } else {
+                    throw new Error('No module was selected. Please launch the experiment from the setup page.');
                 }
-
-                // Get task information
-                const taskInfo = getTaskInfo(taskName);
-                console.log('Task info:', taskInfo);
-
-                // Create the task timeline with default settings
-                const timeline = await createTaskTimeline(taskName);
                 console.log('Timeline created:', timeline);
 
                 // Create the complete timeline

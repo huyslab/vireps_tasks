@@ -126,7 +126,9 @@
 </head>
 <body>
     <div class="container">
-        
+        <h1 class="title">Experiment setup</h1>
+        <p class="subtitle">For the experimenter to complete before handing the device to the participant.</p>
+
         <form id="startForm">
             <div class="form-group">
                 <label for="participantId">Participant ID:</label>
@@ -140,15 +142,25 @@
                     autocomplete="off"
                 >
             </div>
-            
+
             <div class="form-group">
-                <label for="task">Task:</label>
-                <select id="task" name="task" required>
-                    <option value="">Select task</option>
-                    <option value="vigour">Vigour</option>
-                    <option value="reversal">Reversal</option>
-                    <option value="PILT">PILT (card choosing)</option>
-                    <option value="go_no_go">Faces Go/No-Go</option>
+                <label for="sessionNumber">Session number:</label>
+                <select id="sessionNumber" name="sessionNumber" required>
+                    <option value="">Select session</option>
+                    <option value="1">Session 1 (week 0)</option>
+                    <option value="2">Session 2 (week 2)</option>
+                    <option value="3">Session 3 (week 4)</option>
+                    <option value="4">Session 4 (week 24)</option>
+                    <option value="5">Session 5 (week 28)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="module">Module:</label>
+                <select id="module" name="module" required>
+                    <option value="">Select module</option>
+                    <option value="module_1">Module 1 — Reversal and Faces Go/No-Go</option>
+                    <option value="module_2">Module 2 — Learning and effort tasks</option>
                 </select>
             </div>
 
@@ -169,7 +181,8 @@
             e.preventDefault();
 
             const participantId = document.getElementById('participantId').value.trim();
-            const task = document.getElementById('task').value;
+            const sessionNumber = document.getElementById('sessionNumber').value;
+            const moduleName = document.getElementById('module').value;
             const errorMessage = document.getElementById('errorMessage');
 
             // Hide error message
@@ -182,17 +195,24 @@
                 return;
             }
 
-            // Validate task selection
-            if (!task) {
-                errorMessage.textContent = 'Please select a task';
+            if (!sessionNumber) {
+                errorMessage.textContent = 'Please select a session number';
                 errorMessage.style.display = 'block';
                 return;
             }
 
-            // Redirect to experiment.html. There is a single data-submission route
-            // (core/utils/data-handling.js posts to REDCap via an AWS Lambda endpoint), so
-            // no per-run context selection is needed here.
-            window.location.href = `experiment.html?participant_id=${encodeURIComponent(participantId)}&task=${encodeURIComponent(task)}`;
+            if (!moduleName) {
+                errorMessage.textContent = 'Please select a module';
+                errorMessage.style.display = 'block';
+                return;
+            }
+
+            const parameters = new URLSearchParams({
+                participant_id: participantId,
+                session_number: sessionNumber,
+                module: moduleName
+            });
+            window.location.href = `experiment.html?${parameters.toString()}`;
         });
 
         // Enable real-time validation
@@ -203,12 +223,13 @@
             }
         });
 
-        // Hide error message when task is selected
-        document.getElementById('task').addEventListener('change', function() {
-            const errorMessage = document.getElementById('errorMessage');
-            if (this.value) {
-                errorMessage.style.display = 'none';
-            }
+        ['sessionNumber', 'module'].forEach((fieldId) => {
+            document.getElementById(fieldId).addEventListener('change', function() {
+                const errorMessage = document.getElementById('errorMessage');
+                if (this.value) {
+                    errorMessage.style.display = 'none';
+                }
+            });
         });
 
         // Focus on the input field when page loads

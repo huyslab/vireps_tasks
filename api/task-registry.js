@@ -203,6 +203,12 @@ export const TaskRegistry = {
     },
     sequences: {
       trial1: '@tasks/go-no-go/sequences/trial1.js',
+      // Repeat sessions use new face sets with the same balanced trial schedule.
+      wk0: '@tasks/go-no-go/sequences/trial1.js',
+      wk2: '@tasks/go-no-go/sequences/trial1.js',
+      wk4: '@tasks/go-no-go/sequences/trial1.js',
+      wk24: '@tasks/go-no-go/sequences/trial1.js',
+      wk28: '@tasks/go-no-go/sequences/trial1.js',
     },
     requirements: {
       css: ['@tasks/go-no-go/styles.css'],
@@ -476,4 +482,3 @@ export const globalConfigOptions = {
     interimWarning: "Show message about abiding by instructions after participant receives this many warnings in a task. Default is 5.",
     finalWarning: "Show message about abiding by instructions after participant receives this many warnings in a task. Default is 15."
 }
-

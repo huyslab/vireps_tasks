@@ -38,8 +38,10 @@ Fifteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 
-Two modules in `api/module-registry.js` combine these into sittings:
-`full_battery` and `screening`.
+The experimenter launcher uses two supervised modules from `api/module-registry.js`:
+`module_1` (reversal and Faces Go/No-Go) and `module_2` (the linked learning and
+effort tasks). Every task is followed by acceptability ratings. The older
+`full_battery` and `screening` definitions remain available through the API.
 
 ## Input modality and devices
 
@@ -198,12 +200,13 @@ This approach gives you maximum flexibility to customize which tasks to include 
 
 ### Approach 2: Predefined Modules
 
-Modules are predefined collections of tasks designed to be completed in a single session. They include task sequencing, instruction messages, and standardized configurations.
+Modules are predefined collections of tasks designed to be completed in a single sitting. They include task sequencing, instruction messages, and standardized configurations. The experimenter selects a session number and module on `index.html`; the two modules may be run after an experimenter-determined break or on different days.
 
 #### Available Modules
 
-- **`full_battery`**: Complete RELMED task battery with all tasks and questionnaires
-- **`screening`**: Shortened version for participant screening with key tasks
+- **`module_1`**: Reversal, acceptability ratings, Faces Go/No-Go, acceptability ratings
+- **`module_2`**: Maximum press rate through the post-PILT test from the original full battery, with acceptability ratings after each task
+- **`full_battery`** and **`screening`**: Legacy module definitions retained for API compatibility
 
 #### Using Modules
 
@@ -212,13 +215,14 @@ Modules are predefined collections of tasks designed to be completed in a single
 import { createModuleTimeline, getModuleInfo, listModules } from '/api/index.js';
 
 // Get information about available modules
-console.log(listModules()); // ['full_battery', 'screening']
-console.log(getModuleInfo('screening')); // Detailed module information
+console.log(listModules());
+console.log(getModuleInfo('module_1')); // Detailed module information
 
 // Create timeline for a module
-const timeline = await createModuleTimeline('screening', {
-    session: 'screening',
-    sequence: 'screening'
+const timeline = await createModuleTimeline('module_1', {
+    session: 'wk2',
+    sequence: 'wk2',
+    stimulus_session: 2
 });
 
 // Run the experiment
@@ -359,11 +363,13 @@ Use these exact strings when calling `createTaskTimeline()`:
 - `'PILT'`, `'WM'`, `'post_learning_test'`, `'post_PILT_test'`, `'post_WM_test'`
 - `'delay_discounting'`, `'vigour'`, `'vigour_test'`, `'PIT'` 
 - `'control'`, `'max_press_test'`, `'pavlovian_lottery'`, `'open_text'`
-- `'reversal'`, `'acceptability_judgment'`
+- `'reversal'`, `'go_no_go'`, `'acceptability_judgment'`
 
 ### Module Names
 
 Use these exact strings when calling `createModuleTimeline()`:
+- `'module_1'` - Reversal and Faces Go/No-Go
+- `'module_2'` - Linked learning and effort tasks
 - `'full_battery'` - Complete RELMED task battery 
 - `'screening'` - Shortened screening version
 
@@ -383,19 +389,17 @@ Each example demonstrates proper file loading, API usage, and task configuration
 ### Module Example
 - `experiment.html` - Complete module-based experiment using `createModuleTimeline()`
 
-This example shows how to:
+This entry point shows how to:
 - Load all required dependencies for multiple tasks
-- Use URL parameters to select modules (`full_battery` vs `screening`)
+- Use URL parameters supplied by `index.html` to select `module_1` or `module_2`
+- Map Session 1–5 to the week-specific task sequences and face stimulus sets
 - Handle module configuration and timeline creation
 - Support simulation mode for testing
 
 **Key features demonstrated:**
 ```javascript
-// Module selection based on URL parameter
-const module_name = session == "screening" ? 'screening' : 'full_battery';
-
 // Module timeline creation
-const timeline = await createModuleTimeline(module_name, settings);
+const timeline = await createModuleTimeline(moduleName, settings);
 
 // Complete experiment structure
 const fullTimeline = [
