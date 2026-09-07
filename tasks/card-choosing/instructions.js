@@ -77,7 +77,7 @@ function preparePILTInstructions(settings) {
             `<p>On each turn of this game, you will see two cards.
                 You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
                 <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
-                <div style='display: grid;'><table style='width: 200px; grid-column: 2;'><tr>
+                <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1penny.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>`,
@@ -86,7 +86,7 @@ function preparePILTInstructions(settings) {
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
             pages.push(`<p>When you flip a card, you might see broken coins like these:</p>\
-                <div style='display: grid;'><table style='width: 200px; grid-column: 2;'><tr>
+                <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1pennybroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>
@@ -508,4 +508,3 @@ export {
     testInstructions,
     WM_instructions
 };
-

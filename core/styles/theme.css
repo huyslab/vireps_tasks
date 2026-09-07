@@ -35,7 +35,8 @@
     --rlm-surface: #ffffff;
     --rlm-surface-sunken: #f7f9fc;
     --rlm-disabled: #c7d1e0;
-    --rlm-disabled-ink: #f2f5fa;
+    /* 4.83:1 against --rlm-disabled, so a temporarily gated action keeps a readable label. */
+    --rlm-disabled-ink: #47566d;
     --rlm-positive: #28a745;
     --rlm-negative: #dc3545;
     /* The negative hue as a button ground: dark enough to carry white text */
@@ -213,9 +214,25 @@
     border-collapse: collapse;
 }
 
-.instructions td {
-    padding-left: 20px;
-    padding-right: 20px;
+/* Three 100px coin examples plus desktop cell spacing need 420px, wider than the reading
+   column on a phone. Give those specific legends a fixed layout so their images shrink
+   together on narrow screens instead of clipping the final coin. Other instruction tables
+   keep their task-owned cell spacing. */
+.instructions .rlm-coin-table {
+    width: min(420px, 100%);
+    table-layout: fixed;
+}
+
+.instructions .rlm-coin-table td {
+    padding-inline: clamp(2px, 2vw, 20px);
+}
+
+.instructions .rlm-coin-table td img {
+    display: block;
+    width: 100% !important;
+    max-width: 100px;
+    height: auto !important;
+    margin: 0 auto;
 }
 
 /* A full URL is longer than a phone is wide */
