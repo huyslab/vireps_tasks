@@ -44,8 +44,9 @@
     <!-- Core utilities -->
     <script type="module" src="core/utils/index.js"></script>
 
-    <!-- CSS Styles -->
+    <!-- CSS Styles. The shared theme loads after jsPsych defaults and before task styles. -->
     <link href="core/jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <link href="core/styles/theme.css" rel="stylesheet" type="text/css" />
 
     <style>
         html, body {
@@ -58,7 +59,7 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: var(--rlm-font);
         }
         
         #display_element {
@@ -66,7 +67,8 @@
             height: 100vh;
             height: 100dvh;
             display: flex;
-            justify-content: center;
+            /* Top-align overflowing pages so landscape instructions remain scrollable. */
+            justify-content: flex-start;
             align-items: center;
             /* Respect iPhone Dynamic Island and Home Indicator safe areas */
             padding-top: env(safe-area-inset-top);
@@ -74,12 +76,6 @@
             padding-left: env(safe-area-inset-left);
             padding-right: env(safe-area-inset-right);
             box-sizing: border-box;
-        }
-
-        .instructions p {
-            max-width: min(700px, 92vw);
-            text-align: left;
-            margin: 1em 0;
         }
 
         /* Orientation gate: block the wrong orientation for the active task on any touch
@@ -96,7 +92,7 @@
             bottom: 0;
             left: 0;
             z-index: 100000;
-            background: #ffffff;
+            background: var(--rlm-surface);
             align-items: center;
             justify-content: center;
             text-align: center;
@@ -105,7 +101,7 @@
         }
         #rotate-overlay p {
             font-size: clamp(18px, 5vw, 24px);
-            color: #182b4b;
+            color: var(--rlm-ink);
             line-height: 1.4;
             max-width: 90vw;
             margin: 0;
@@ -170,7 +166,7 @@
             bottom: 0;
             left: 0;
             z-index: 100000;
-            background: #ffffff;
+            background: var(--rlm-surface);
             align-items: center;
             justify-content: center;
             text-align: center;
@@ -180,7 +176,7 @@
         #pending-data-overlay p,
         #demo-mode-overlay p {
             font-size: clamp(16px, 4vw, 20px);
-            color: #182b4b;
+            color: var(--rlm-ink);
             line-height: 1.4;
             max-width: min(600px, 90vw);
             margin: 0;
@@ -296,7 +292,7 @@
             console.error('Error running experiment:', error);
             const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
             errorContainer.innerHTML = `
-                <div style="text-align: center; padding: 50px;">
+                <div class="instructions" style="padding: 50px;">
                     <h2>Error Loading Experiment</h2>
                     <p>There was an error loading the ${taskName || 'requested'} task:</p>
                     <p><strong>${error.message}</strong></p>

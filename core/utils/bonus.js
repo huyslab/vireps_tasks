@@ -135,7 +135,7 @@ function bonusTrial(module) {
         css_classes: ['instructions'],
         stimulus: function (trial) {
             // Determine context-appropriate terminology
-            let stimulus =  `Thank you for completing this session!`      
+            let stimulus =  `<p>Thank you for completing this session!</p>`
             const total_bonus = computeTotalBonus(module);
             stimulus += `
                     <p>It is time to reveal your total bonus payment for this module.</p>

@@ -149,36 +149,9 @@
   opacity: 0;
 }
 
-#instruction-text {
-  font-size: clamp(15px, 4vw, 20px);
-  margin: clamp(1em, 3vw, 1.5em) auto;
-  max-width: min(700px, 90vw); /* keep text/images within the viewport on phones */
-  box-sizing: border-box;
-  text-align: center;
-  line-height: 1.4;
-}
-
-.spacebar-icon {
-  display: inline-block;
-  padding: 0.4vmin 0.6vmin;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
-}
-
-.spacebar-icon-pressed {
-  display: inline-block;
-  padding: 0.3vmin 0.6vmin; /* Slightly reduce padding */
-  background-color: #e0e0e0; /* Darker shade for pressed effect */
-  border: 1px solid #aaa; /* Darker border */
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
-  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2); /* Inner shadow for pressed effect */
-  transform: translateY(1.5px); /* Moves key down */
-}
+/* #instruction-text, .spacebar-icon, .spacebar-icon-pressed and .highlight-txt are shared
+   across tasks and live in core/styles/theme.css. The overrides this task needs are at the
+   bottom of this file. */
 
 .instruct-coin-container {
   display: flex;
@@ -196,11 +169,6 @@
   width: 100%;
   height: auto;
 }
-.highlight-txt {
-  font-weight: bold;
-  color: #0066cc;
-}
-
 .pav-stimuli-container {
   margin: 30px 0;
 }
@@ -240,12 +208,13 @@
     grid-template-rows: 2.5fr 5fr 2.5fr;
   }
 
-  .experiment-wrapper .jspsych-btn,
-  .jspsych-instructions-nav .jspsych-btn {
-    font-size: clamp(14px, 3.5vw, 18px);
+  /* The game surface takes the whole screen, so its buttons give back the padding the
+     shared button carries. Scoped to this task's wrapper: the shared sizing is what every
+     other screen, including this task's own instruction pages, keeps. */
+  .experiment-wrapper .jspsych-btn {
+    font-size: clamp(14px, 3.5vw, 16px);
     padding: 10px 18px;
     min-height: 44px;
-    min-width: 44px;
   }
 
   .instruct-coin-container {

@@ -77,7 +77,7 @@ function preparePILTInstructions(settings) {
             `<p>On each turn of this game, you will see two cards.
                 You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
                 <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
-                <div style='display: grid;'><table style='width: 200px; grid-column: 2;'><tr>
+                <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1penny.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>`,
@@ -86,7 +86,7 @@ function preparePILTInstructions(settings) {
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
             pages.push(`<p>When you flip a card, you might see broken coins like these:</p>\
-                <div style='display: grid;'><table style='width: 200px; grid-column: 2;'><tr>
+                <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1pennybroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>
@@ -301,7 +301,7 @@ function preparePILTInstructions(settings) {
                             <br>
                             <p style="max-width: 700px; text-align: left;"><strong>The correct answer:</strong> True</p>
                             <p style="max-width: 700px; text-align: left;"><strong>Explanation:</strong> ${item.explanation}</p>
-                            ${settings.session === "screening" ? "<p>Press next to review the instructions again.<p>" : "<p>Press next to try the quiz again.</p>"}
+                            ${settings.session === "screening" ? "<p>Press next to review the instructions again.</p>" : "<p>Press next to try the quiz again.</p>"}
                         `);
                     }
                 }
@@ -451,8 +451,8 @@ const LTM_instructions = [
         pages: [
             '<p>You will now play another round of the card choosing game.</p>\
                 <p>Your goal remains to add as much money as you can to your safe.</p>',
-            `<p>This time, you will choose between three cards on every turn.<p>
-            <p>In every triplet, one picture card will always have £1 and 50-pence coins behind it, while the other two cards will have only pennies.<p>
+            `<p>This time, you will choose between three cards on every turn.</p>
+            <p>In every triplet, one picture card will always have £1 and 50-pence coins behind it, while the other two cards will have only pennies.</p>
             <p>You can earn more by learning which is the better picture card in each triplet and choosing that card when you next see same triplet.</p>`,
             touchCapable
                 ? `<p><b>Tap the card you want to choose</b> - left, middle, or right.</p>`
@@ -483,13 +483,13 @@ const WM_instructions = [
             '<p>You will now play another round of the card choosing game.</p>\
                 <p>Your goal remains to add as much money as you can to your safe.</p>',
             touchCapable
-                ? `<p>This time, you will see only one card on each turn.<p>
+                ? `<p>This time, you will see only one card on each turn.</p>
             <p>Below the card there are three buttons: <span class="cardChoosingResponseBtn">←</span> <span class="cardChoosingResponseBtn">↑</span> <span class="cardChoosingResponseBtn">→</span>. You can flip the card by tapping any one of them.</p>
-            <p>For each card, tapping one of the three buttons will always reveal £1 and 50-pence coins, while the other two will reveal only pennies.<p>
+            <p>For each card, tapping one of the three buttons will always reveal £1 and 50-pence coins, while the other two will reveal only pennies.</p>
             <p>You can earn more by learning which is the better button for each card, and tapping that button when you next see the same card.</p>`
-                : `<p>This time, you will see only one card on each turn.<p>
+                : `<p>This time, you will see only one card on each turn.</p>
             <p>You can flip this card by pressing either the left <span class="spacebar-icon">&nbsp;←&nbsp;</span>, up <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or right <span class="spacebar-icon">&nbsp;→&nbsp;</span> arrow keys on your keyboard.</p>
-            <p>For each card, pressing one of the keys will always reveal £1 and 50-pence coins, while the other two keys will reveal only pennies.<p>
+            <p>For each card, pressing one of the keys will always reveal £1 and 50-pence coins, while the other two keys will reveal only pennies.</p>
             <p>You can earn more by learning which is the better key to press for each card and pressing that key when you next see same card.</p>`
         ],
         show_clickable_nav: true,
@@ -508,5 +508,3 @@ export {
     testInstructions,
     WM_instructions
 };
-
-

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RELMED Task Battery</title>
+    <link href="core/styles/theme.css" rel="stylesheet" type="text/css">
     <style>
         * {
             margin: 0;
@@ -12,35 +13,36 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: var(--rlm-font);
+            background: var(--rlm-accent-soft);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #333;
+            padding: var(--rlm-space-5);
+            color: var(--rlm-ink);
         }
 
         .container {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            background: var(--rlm-surface);
+            padding: clamp(24px, 6vw, 40px);
+            border-radius: var(--rlm-radius-lg);
+            box-shadow: var(--rlm-shadow);
             text-align: center;
             max-width: 500px;
-            width: 90%;
+            width: 100%;
         }
 
         .title {
             font-size: 28px;
             font-weight: 600;
             margin-bottom: 10px;
-            color: #2c3e50;
+            color: var(--rlm-ink);
         }
 
         .subtitle {
             font-size: 16px;
-            color: #7f8c8d;
+            color: var(--rlm-ink-muted);
             margin-bottom: 30px;
         }
 
@@ -53,7 +55,7 @@
             font-size: 14px;
             font-weight: 500;
             margin-bottom: 8px;
-            color: #555;
+            color: var(--rlm-ink);
             text-align: left;
         }
 
@@ -62,50 +64,60 @@
             width: 100%;
             padding: 12px 16px;
             font-size: 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            transition: border-color 0.3s ease;
+            border: 2px solid var(--rlm-line);
+            border-radius: var(--rlm-radius-sm);
+            transition: border-color var(--rlm-transition), box-shadow var(--rlm-transition);
             outline: none;
-            background: white;
+            background: var(--rlm-surface);
+            color: var(--rlm-ink);
+            font-family: var(--rlm-font);
         }
 
         input[type="text"]:focus,
         select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--rlm-accent);
+            box-shadow: 0 0 0 var(--rlm-focus-ring) rgba(74, 111, 165, 0.18);
         }
 
         .start-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: var(--rlm-accent);
+            color: var(--rlm-surface);
             border: none;
             padding: 14px 32px;
             font-size: 16px;
             font-weight: 600;
-            border-radius: 8px;
+            border-radius: var(--rlm-radius-sm);
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: background var(--rlm-transition), transform var(--rlm-transition);
             width: 100%;
+            min-height: var(--rlm-tap-target);
+            font-family: var(--rlm-font);
         }
 
-        .start-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        @media (hover: hover) {
+            .start-button:hover {
+                background: var(--rlm-accent-dark);
+            }
+        }
+
+        .start-button:focus-visible {
+            outline: var(--rlm-focus-ring) solid var(--rlm-accent);
+            outline-offset: var(--rlm-focus-offset);
         }
 
         .start-button:active {
-            transform: translateY(0);
+            transform: scale(0.98);
         }
 
         .start-button:disabled {
-            background: #bdc3c7;
+            background: var(--rlm-disabled);
+            color: var(--rlm-disabled-ink);
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
 
         .error-message {
-            color: #e74c3c;
+            color: var(--rlm-negative);
             font-size: 14px;
             margin-top: 10px;
             display: none;

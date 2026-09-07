@@ -1,14 +1,47 @@
-.spacebar-icon {
-  display: inline-block;
-  padding: 0.4vmin 0.6vmin;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
+/* Max-press test - the keyboard speed check.
+   .spacebar-icon and .highlight-txt are shared widgets and live in core/styles/theme.css;
+   what is left here is the live readout, which is this task's alone. */
+
+#press-counter {
+  font-size: var(--rlm-text-lg);
+  font-weight: 600;
+  margin-top: var(--rlm-space-4);
 }
 
-.highlight-txt {
-  font-weight: bold;
-  color: #0066cc;
+#speed-display {
+  color: var(--rlm-accent);
+  font-size: var(--rlm-text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar fills as the participant speeds up; its width is set from the trial's keypress
+   handler (tasks/max-press-test/task.js) */
+#speed-track {
+  width: min(300px, 80vw);
+  height: 14px;
+  margin: var(--rlm-space-4) auto;
+  border-radius: 999px;
+  background-color: var(--rlm-accent-soft);
+  overflow: hidden;
+}
+
+#speed-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background-color: var(--rlm-accent);
+  transition: width 0.1s ease;
+}
+
+#countdown {
+  margin: var(--rlm-space-5) 0;
+}
+
+/* The live screen is a readout - a counter, a speed, a bar - rather than something to read,
+   so it stays centred while the instruction pages around it follow the shared left-aligned
+   column (core/styles/theme.css). Qualified by the id the block also carries, which is what
+   the shared rule sets its alignment through. */
+#instruction-text.max-press-live {
+  text-align: center;
 }

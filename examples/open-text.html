@@ -22,27 +22,26 @@
     
     <!-- CSS Styles -->
     <link href="./core/jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <link href="./core/styles/theme.css" rel="stylesheet" type="text/css" />
 
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: var(--rlm-font);
         }
         
         #display_element {
             width: 100vw;
             height: 100vh;
             display: flex;
-            justify-content: center;
+            /* flex-start, not center - see experiment.html: a centred flex line clips the
+               overflow above its top, which lost the first line of a landscape instruction
+               screen. .jspsych-content's own `margin: auto` still centres what fits. */
+            justify-content: flex-start;
             align-items: center;
         }
         
-        .instructions p {
-            width: 700px;
-            text-align: left;
-            margin: 1em 0;
-        }
     </style>
 </head>
 <body>
@@ -66,7 +65,6 @@
                 console.log('Experiment data:', data.values());
             }
         });
-
 
         // Function to run the experiment
         async function runExperiment() {

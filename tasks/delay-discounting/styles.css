@@ -1,12 +1,23 @@
+/* Delay discounting - the two offers a participant chooses between.
+   The button itself is the shared one (core/styles/theme.css); these are the two things
+   this task needs on top of it. */
+
+/* An offer is a sum and a delay, so the pair of buttons is set larger than a "Continue"
+   and given room to breathe */
 .dd-btn {
-  font-size: large;
-  padding: 12px 16px;
+  min-width: min(180px, 40vw);
+  padding: 16px 24px;
+  font-size: var(--rlm-text-lg);
 }
 
+/* enable_button_after holds the buttons disabled for the first 300ms of the trial, to stop
+   a carried-over press from answering it. That is a response guard, not something to show
+   the participant - so a disabled offer looks exactly like an enabled one. */
 .dd-btn:disabled {
-  opacity: 1; /* Remove the dimmed effect */
-  pointer-events: auto; /* Allow clicks (though it won't trigger form submission) */
-  cursor: pointer; /* Keep the pointer cursor */
-  background-color: inherit; /* Ensure background color stays the same */
-  color: inherit; /* Keep text color */
+  background-color: var(--rlm-accent);
+  border-color: var(--rlm-accent);
+  color: var(--rlm-surface);
+  box-shadow: var(--rlm-shadow-sm);
+  cursor: pointer;
+  pointer-events: auto;
 }

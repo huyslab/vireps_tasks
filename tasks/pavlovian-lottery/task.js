@@ -148,7 +148,7 @@ export function createPavlovianLotteryTimeline(settings) {
       `
         <p>Each spin reveals a pattern that will either reward you with a £1, 50p, or 1p coin, or break a coin.</p>
         <div style='display: grid;'>
-            <table style='width: 200px; grid-column: 2;'>
+            <table class='rlm-coin-table'>
                 <tr>
                     <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
                     <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
