@@ -47,6 +47,7 @@
     
     <!-- CSS Styles -->
     <link href="./core/jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <link href="./core/styles/theme.css" rel="stylesheet" type="text/css" />
 
     <style>
         html, body {
@@ -59,7 +60,7 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: var(--rlm-font);
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
@@ -70,7 +71,7 @@
             height: 100vh;
             height: 100dvh;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             /* Respect iPhone Dynamic Island and Home Indicator safe areas */
             padding-top: env(safe-area-inset-top);
@@ -78,12 +79,6 @@
             padding-left: env(safe-area-inset-left);
             padding-right: env(safe-area-inset-right);
             box-sizing: border-box;
-        }
-
-        .instructions p {
-            max-width: min(700px, 92vw);
-            text-align: left;
-            margin: 1em 0;
         }
 
         /* Orientation gate: block the wrong orientation for the active task on any touch
@@ -100,7 +95,7 @@
             bottom: 0;
             left: 0;
             z-index: 100000;
-            background: #ffffff;
+            background: var(--rlm-surface);
             align-items: center;
             justify-content: center;
             text-align: center;
@@ -109,7 +104,7 @@
         }
         #rotate-overlay p {
             font-size: clamp(18px, 5vw, 24px);
-            color: #182b4b;
+            color: var(--rlm-ink);
             line-height: 1.4;
             max-width: 90vw;
             margin: 0;

@@ -1,12 +1,4 @@
-.spacebar-icon {
-  display: inline-block;
-  padding: 0.4vmin 0.6vmin;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
-}
+/* .spacebar-icon and .highlight-txt are shared widgets - see core/styles/theme.css */
 
 /* Base layout and container styles */
 .instruction-stage {
@@ -159,33 +151,20 @@
   margin: 0;
 }
 
-/* Navigation controls */
-.jspsych-instructions-nav {
-  display: flex;
+/* Navigation controls.
+   These rules used to be written against the bare .jspsych-instructions-nav, which is
+   jsPsych's own class - and since task stylesheets are appended to the document and never
+   removed, they went on styling the instruction nav of every task that ran after control
+   in the same module. Scoped to control's own stage screens, which carry
+   `instructions-wide`; the buttons themselves are the shared ones from
+   core/styles/theme.css. */
+.instructions-wide .jspsych-instructions-nav {
+  /* Full width of the stage above it, so Previous and Next sit under its two edges */
   justify-content: space-between;
+  width: 100%;
+  margin: 10px auto 0;
   padding: 15px 0 0 0;
-  margin-top: 10px;
-  border-top: 1px solid rgba(0,0,0,0.1);
-}
-
-.jspsych-instructions-nav button {
-  background-color: #2B6CB0;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.jspsych-instructions-nav button:hover {
-  background-color: #2C5282;
-}
-
-.jspsych-instructions-nav button:disabled {
-  background-color: #CBD5E0;
-  cursor: not-allowed;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Progress bar styling */
@@ -563,11 +542,6 @@
 /* New styles for the highlighting and fuel animation */
 .highlight {
   filter: brightness(0) saturate(100%) invert(87%) sepia(19%) saturate(4059%) hue-rotate(358deg) brightness(101%) contrast(106%);
-}
-
-.highlight-txt{
-  font-weight: bold;
-  color: #0066cc;
 }
 
 .fuel-icon {

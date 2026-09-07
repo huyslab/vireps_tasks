@@ -146,7 +146,8 @@ vireps_tasks/
 │   └── reversal/
 ├── core/
 │   ├── utils/                   # Shared helpers: data handling, validation, quiz, setup
-│   └── jspsych/                 # jsPsych library and plugins
+│   ├── jspsych/                 # jsPsych library and plugins
+│   └── styles/                  # Shared participant-facing visual theme
 ├── assets/
 │   ├── images/                  # Task images
 │   └── sounds/                  # Task audio
@@ -177,7 +178,7 @@ This approach gives you maximum flexibility to customize which tasks to include 
    - Required jsPsych plugins (varies by task)
    - Task-specific plugin files (check task requirements)
    - Core utilities as ES6 modules
-   - CSS files (jsPsych core + task-specific styles)
+   - CSS files (jsPsych core, shared theme, then task-specific styles)
 
 3. **Initialize jsPsych** with display settings and completion handlers
 
@@ -281,7 +282,7 @@ export const ModuleRegistry = {
 1. **jsPsych core files**: Always load `jspsych.js` and required plugins
 2. **Core utilities**: Load `/core/utils/index.js` as a module
 3. **Task-specific files**: Check each task's requirements in the task registry
-4. **CSS files**: Include `jspsych.css` and task-specific stylesheets
+4. **CSS files**: Include `jspsych.css`, then `/core/styles/theme.css`, then task-specific stylesheets. The shared theme keeps participant-facing typography, instructions, buttons, and feedback consistent; task styles remain responsible for stimuli and task-specific layouts.
 
 **Task-specific requirements** (check `api/task-registry.js` for complete details):
 - **PILT/WM**: Requires `plugin-card-choosing.js` and `styles.css`

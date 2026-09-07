@@ -15,12 +15,12 @@ const maxPressRateTrial = (settings) => {
         stimulus: function() {
             return `
             <div id="instruction-container">
-                <div id="instruction-text" style="text-align: center;">
-                    <h3><div id="countdown" style="margin: 20px;">Place your finger on the <span class="spacebar-icon">J</span> key.<br>When you are ready, start pressing it repeatedly as fast as you can!</div></h3>
+                <div id="instruction-text" class="max-press-live">
+                    <h3 id="countdown">Place your finger on the <span class="spacebar-icon">J</span> key.<br>When you are ready, start pressing it repeatedly as fast as you can!</h3>
                     <div id="press-counter">Presses: 0</div>
-                    <div id="speed-display" style="color: #0066cc;">Speed: 0.00 presses/sec</div>
-                    <div style="width: 300px; margin: 20px auto; border: 1px solid black;">
-                        <div id="speed-bar" style="height: 20px; width: 0%; background-color: #0066cc; transition: width 0.1s ease;"></div>
+                    <div id="speed-display">Speed: 0.00 presses/sec</div>
+                    <div id="speed-track">
+                        <div id="speed-bar"></div>
                     </div>
                 </div>
             </div>
@@ -119,7 +119,7 @@ const maxPressInstructions = {
     css_classes: ["instructions"],
     stimulus: `
     <div id="instruction-container">
-        <div id="instruction-text" style="text-align: center;">
+        <div id="instruction-text">
             <p>Before we start the first game, we need to complete a short test of your keyboard.</p>
             <p>On the next screen, you will need to <span class="highlight-txt">press the <span class="spacebar-icon">J</span> key repeatedly as fast as you can</span>, as shown below.</p>
             <img src="./assets/images/max_press_key.gif" alt="Max Press Key Example" style="width:250px;">
@@ -135,7 +135,7 @@ const maxPressFeedback = {
         const avgSpeed = jsPsych.data.get().select("avgSpeed").values.reverse()[0];
         return `
         <div id="instruction-container">
-            <div id="instruction-text" style="text-align: center;">
+            <div id="instruction-text">
                 <h2><span class="highlight-txt">Well done!</span></h2>
                 <p>On average, you pressed <strong>${avgSpeed.toFixed(2)} times per second</strong> during the keyboard test.</p>
                 <p>Press <strong>Continue</strong> to proceed to the first game.</p>
@@ -155,9 +155,9 @@ const maxPressRetakeMessage = (settings) => {
                 const avgSpeed = jsPsych.data.get().select("avgSpeed").values.reverse()[0];
                 return `
             <div id="instruction-container">
-                <div id="instruction-text" style="text-align: center;">
+                <div id="instruction-text">
                     <p>On average, you pressed <strong>${avgSpeed.toFixed(2)} times per second</strong> during the keyboard test.</p>
-                    <p>To ensure the accuracy of the test,</br>we kindly ask you to retake it <span class="highlight-txt">with your best effort as much as possible</span>.</p>
+                    <p>To ensure the accuracy of the test,<br>we kindly ask you to retake it <span class="highlight-txt">with your best effort as much as possible</span>.</p>
                     <p>Press <strong>Continue</strong> to retake the test.</p>
                 </div>
             </div>
@@ -201,4 +201,3 @@ export const createMaxPressTimeline = (settings) => {
         maxPressFeedback
     ];
 };
-

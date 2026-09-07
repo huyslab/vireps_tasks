@@ -9,7 +9,7 @@
 .trial-content-wrapper h3 {
   position: relative;
   top: 5%;
-  color: #2c3e50;
+  color: var(--rlm-ink);
   margin-top: 3vh;
   margin-bottom: 20px;
   text-align: center
@@ -31,7 +31,7 @@
   height: 34vw;
   overflow: hidden;
   border-radius: 10px;
-  box-shadow: 0 0 8px rgb(0 0 0 / .2);
+  box-shadow: var(--rlm-shadow);
   margin: 0 auto
 }
 
@@ -97,7 +97,7 @@
   height: 34vw;
   overflow: hidden;
   border-radius: 10px;
-  box-shadow: 0 0 8px rgb(0 0 0 / .2);
+  box-shadow: var(--rlm-shadow);
   margin: 0 auto
 }
 
@@ -136,15 +136,15 @@
 }
 
 .positive {
-  color: #28a745;
-  font-size: 36px;
+  color: var(--rlm-positive);
+  font-size: clamp(28px, 7vw, 36px);
   font-weight: 700;
   margin: 15px 0
 }
 
 .negative {
-  color: #dc3545;
-  font-size: 36px;
+  color: var(--rlm-negative);
+  font-size: clamp(28px, 7vw, 36px);
   font-weight: 700;
   margin: 15px 0
 }

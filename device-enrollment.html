@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Approve data-collection device</title>
+    <link href="core/styles/theme.css" rel="stylesheet" type="text/css">
     <style>
         * { box-sizing: border-box; }
         body {
@@ -13,16 +14,16 @@
             align-items: center;
             justify-content: center;
             padding: 24px;
-            background: #eef2f7;
-            color: #182b4b;
-            font-family: Arial, sans-serif;
+            background: var(--rlm-accent-soft);
+            color: var(--rlm-ink);
+            font-family: var(--rlm-font);
         }
         main {
             width: min(520px, 100%);
-            padding: 32px;
-            border-radius: 12px;
-            background: #ffffff;
-            box-shadow: 0 12px 32px rgba(24, 43, 75, 0.12);
+            padding: clamp(24px, 6vw, 32px);
+            border-radius: var(--rlm-radius-lg);
+            background: var(--rlm-surface);
+            box-shadow: var(--rlm-shadow);
         }
         h1 { margin-top: 0; font-size: 26px; }
         p { line-height: 1.5; }
@@ -30,30 +31,55 @@
         input, button, .button-link {
             width: 100%;
             padding: 13px 15px;
-            border-radius: 8px;
+            border-radius: var(--rlm-radius-sm);
             font-size: 16px;
+            font-family: var(--rlm-font);
         }
-        input { border: 2px solid #ccd5e0; }
+        input {
+            border: 2px solid var(--rlm-line);
+            color: var(--rlm-ink);
+            outline: none;
+            transition: border-color var(--rlm-transition), box-shadow var(--rlm-transition);
+        }
+        input:focus {
+            border-color: var(--rlm-accent);
+            box-shadow: 0 0 0 var(--rlm-focus-ring) rgba(74, 111, 165, 0.18);
+        }
         #enrollment-code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-family: var(--rlm-font-mono);
             letter-spacing: 0.12em;
             text-transform: uppercase;
         }
-        .hint { margin-top: 8px; color: #475467; font-size: 14px; }
+        .hint { margin-top: 8px; color: var(--rlm-ink-muted); font-size: 14px; }
         button, .button-link {
             margin-top: 16px;
             border: 0;
-            background: #5a67d8;
-            color: white;
+            background: var(--rlm-accent);
+            color: var(--rlm-surface);
             font-weight: 600;
             cursor: pointer;
+            min-height: var(--rlm-tap-target);
+            transition: background var(--rlm-transition), transform var(--rlm-transition);
         }
         .button-link { display: block; text-align: center; text-decoration: none; }
         .button-link[hidden] { display: none; }
-        button:disabled { opacity: 0.6; cursor: wait; }
+        @media (hover: hover) {
+            button:hover, .button-link:hover { background: var(--rlm-accent-dark); }
+        }
+        button:focus-visible, .button-link:focus-visible {
+            outline: var(--rlm-focus-ring) solid var(--rlm-accent);
+            outline-offset: var(--rlm-focus-offset);
+        }
+        button:active, .button-link:active { transform: scale(0.98); }
+        button:disabled {
+            background: var(--rlm-disabled);
+            color: var(--rlm-disabled-ink);
+            cursor: wait;
+            transform: none;
+        }
         #status { min-height: 24px; margin-top: 18px; }
-        .error { color: #b42318; }
-        .success { color: #067647; }
+        .error { color: var(--rlm-negative); }
+        .success { color: var(--rlm-positive); }
     </style>
 </head>
 <body>

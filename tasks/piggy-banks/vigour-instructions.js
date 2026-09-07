@@ -138,7 +138,7 @@ const ruleInstruction = {
   data: {trialphase: 'vigour_instructions'},
   show_clickable_nav: true,
   pages: [`
-  <div id="instruction-text" style="text-align: left">
+  <div id="instruction-text">
     <p><strong>You will now play a few minutes of this game, collecting coins!</strong></p>
     
     <p>Throughout the game, you will see different piggy banks with unique appearances:</p>
@@ -148,7 +148,7 @@ const ruleInstruction = {
     </ul>
     </div>
     `,
-    `<div id="instruction-text" style="text-align: left">
+    `<div id="instruction-text">
     <p>Types of coins you can win:</p>
     <div class="instruct-coin-container">
         <div class="instruct-coin">
@@ -314,4 +314,3 @@ function updateInstructionText(shakeCount) {
   }
   document.getElementById('instruction-text').innerHTML = messages[messageIndex];
 }
-

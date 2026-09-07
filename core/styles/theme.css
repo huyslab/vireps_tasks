@@ -1,0 +1,684 @@
+/**
+ * RELMED task battery - shared visual theme
+ *
+ * One place for the things every task shows a participant: body text, instruction pages,
+ * buttons, and the small inline widgets (key caps, highlighted phrases, the "missed a
+ * response" toast). Before this file each task carried its own copy, so the same screen
+ * looked different depending on which task it belonged to - and, because task stylesheets
+ * are appended to the document and never removed (core/utils/setup.js loadCSS), depending
+ * on which tasks had already run in the module. `.spacebar-icon` was defined four times,
+ * `#instruction-text` only in the piggy-banks stylesheet even though max-press-test and
+ * pavlovian-lottery use it, and control's stylesheet restyled the shared instructions nav
+ * for every task that followed it.
+ *
+ * Loaded once from experiment.html, after jspsych.css and before any task stylesheet, so a
+ * task can still override anything here for its own screens.
+ *
+ * Scope: prose, controls and chrome. Stimulus surfaces - cards, piggy banks, ships, slot
+ * machines - stay in their own task stylesheets and are deliberately untouched.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Design tokens
+ * ------------------------------------------------------------------ */
+
+:root {
+    /* Palette. Taken from the question screens (tasks/question-screen, tasks/self-report),
+       which were already the most finished-looking part of the battery. */
+    --rlm-ink: #182b4b;
+    --rlm-ink-muted: #5b6b83;
+    --rlm-ink-faint: #9aa8bd;
+    --rlm-accent: #4a6fa5;
+    --rlm-accent-dark: #3a5a8a;
+    --rlm-accent-soft: #eef2f8;
+    --rlm-line: #d3dbe8;
+    --rlm-surface: #ffffff;
+    --rlm-surface-sunken: #f7f9fc;
+    --rlm-disabled: #c7d1e0;
+    --rlm-disabled-ink: #f2f5fa;
+    --rlm-positive: #28a745;
+    --rlm-negative: #dc3545;
+    /* The negative hue as a button ground: dark enough to carry white text */
+    --rlm-danger: #c0392f;
+    --rlm-danger-dark: #a32f26;
+    --rlm-caution: rgba(244, 206, 92, 0.9);
+
+    --rlm-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --rlm-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    /* Type scale. Every size is fluid because the same screens are read on a phone held in
+       one hand and on a lab desktop. */
+    --rlm-text-sm: clamp(14px, 3.4vw, 16px);
+    --rlm-text-base: clamp(16px, 3.9vw, 18px);
+    --rlm-text-lg: clamp(18px, 4.4vw, 21px);
+    --rlm-text-xl: clamp(21px, 5vw, 26px);
+    --rlm-text-2xl: clamp(24px, 5.6vw, 30px);
+    --rlm-leading: 1.55;
+
+    /* The reading column. Instruction prose is centred on the screen as a block but set
+       ragged-right inside it, the way a page of an app reads. */
+    --rlm-measure: min(700px, 92vw);
+
+    --rlm-radius-sm: 8px;
+    --rlm-radius: 12px;
+    --rlm-radius-lg: 16px;
+
+    --rlm-space-1: 4px;
+    --rlm-space-2: 8px;
+    --rlm-space-3: 12px;
+    --rlm-space-4: 16px;
+    --rlm-space-5: 24px;
+    --rlm-space-6: 32px;
+
+    --rlm-shadow-sm: 0 1px 2px rgba(24, 43, 75, 0.06), 0 2px 6px rgba(24, 43, 75, 0.06);
+    --rlm-shadow: 0 4px 16px rgba(24, 43, 75, 0.1);
+
+    --rlm-focus-ring: 3px;
+    --rlm-focus-offset: 2px;
+    --rlm-transition: 150ms ease;
+
+    /* Smallest target both Apple's and Google's guidance accept; the rendering tests check
+       option buttons against the same number. */
+    --rlm-tap-target: 48px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Base typography
+ * ------------------------------------------------------------------ */
+
+/* jspsych.css sets Open Sans here and experiment.html set Arial on the body, while the
+   question screens used the system stack - three fonts across one session. The system
+   stack wins: it is what the questionnaires already used, and it is the one that looks
+   native on the phone the participant is holding. */
+.jspsych-display-element {
+    font-family: var(--rlm-font);
+    font-size: var(--rlm-text-base);
+    line-height: var(--rlm-leading);
+    color: var(--rlm-ink);
+    -webkit-font-smoothing: antialiased;
+}
+
+.jspsych-display-element button {
+    font-family: var(--rlm-font);
+}
+
+/* A form field takes none of the page's type by default - the browser gives it its own
+   ~13px face - and jspsych.css pinned text inputs to 14px, which iOS Safari answers by
+   zooming the page in as soon as the field is focused. Both are fixed here.
+
+   The element part sits in :where() so this whole selector weighs the same as a single
+   class: a task styling its own fields (.qsc-input, .srq-* and friends) then wins on
+   source order rather than losing to an element selector it cannot outrank. */
+.jspsych-display-element :where(input, select, textarea) {
+    font-family: var(--rlm-font);
+    /* The floor is 16px, which is what stops the iOS zoom */
+    font-size: var(--rlm-text-base);
+}
+
+/* ------------------------------------------------------------------ *
+ * Instruction pages
+ *
+ * `css_classes: ['instructions']` puts this class on jsPsych's content div, so these
+ * rules cover every instruction, quiz-feedback, bonus and sign-off screen in the battery.
+ * ------------------------------------------------------------------ */
+
+.instructions {
+    /* Bare text between paragraphs - the bonus screen's opening line, the "please read the
+       instructions carefully" note - inherited jsPsych's centring while the paragraphs
+       around it were left-aligned. That mixture is the thing that reads as unfinished, so
+       the column is set once, here, for everything the screen contains. */
+    max-width: var(--rlm-measure);
+    text-align: left;
+    /* A phone in landscape is around 390px tall, so a page of instructions has to scroll.
+       This is the room that keeps the first line and the buttons off the screen edges when
+       it does; when the page fits, it just sits inside the centred block. */
+    padding: var(--rlm-space-5) 0;
+    /* No margin here: jspsych.css centres .jspsych-content with `margin: auto`, which is
+       also what centres it vertically. */
+}
+
+/* Screens that are a fixed-size stage rather than a page of prose (control's ocean scene)
+   opt out of the reading column. */
+.instructions-wide {
+    max-width: none;
+}
+
+.instructions h1,
+.instructions h2,
+.instructions h3,
+.instructions h4 {
+    line-height: 1.25;
+    margin: 0 0 var(--rlm-space-4);
+    color: var(--rlm-ink);
+}
+
+.instructions h1 { font-size: var(--rlm-text-2xl); font-weight: 700; }
+.instructions h2 { font-size: var(--rlm-text-xl); font-weight: 700; }
+.instructions h3 { font-size: var(--rlm-text-lg); font-weight: 600; }
+.instructions h4 { font-size: var(--rlm-text-base); font-weight: 600; }
+
+.instructions p {
+    margin: 0 0 1em;
+}
+
+.instructions p:last-child {
+    margin-bottom: 0;
+}
+
+/* Lists sit in the same column as the paragraphs around them, rather than stretching
+   across the centred instructions container */
+.instructions ul,
+.instructions ol {
+    margin: 0 0 1em;
+    padding-left: 1.4em;
+}
+
+.instructions li {
+    margin: 0.4em 0;
+}
+
+/* Pictures are the exception to the left-aligned column: a coin or a photo of a hand on
+   the keyboard reads as an illustration and belongs on the centre line. */
+.instructions img {
+    display: block;
+    max-width: 100%;
+    margin: var(--rlm-space-4) auto;
+}
+
+/* No `height` above, deliberately: an image that sets only a width already keeps its
+   aspect ratio, while `height: auto` here would outrank a task's own `height: 20%` on a
+   positioned scene image and blow it up to its natural size.
+
+   ...and images set inside a line of text (the piggy-bank icons in a bullet, a key cap), or
+   laid out by a table - where a percentage max-width resolves against a cell whose own width
+   the image is what decides, squashing a 100px coin into a sliver - keep their own flow. */
+.instructions li img,
+.instructions p img,
+.instructions td img,
+.instructions .spacebar-icon img {
+    display: inline;
+    max-width: none;
+    margin: 0;
+}
+
+/* A stage screen positions its own images to the pixel, so it takes none of the above */
+.instructions-wide img {
+    display: inline;
+    max-width: none;
+    margin: 0;
+}
+
+.instructions table {
+    margin: var(--rlm-space-4) auto;
+    border-collapse: collapse;
+}
+
+.instructions td {
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+/* A full URL is longer than a phone is wide */
+.instructions a {
+    color: var(--rlm-accent);
+    word-break: break-word;
+}
+
+/* ------------------------------------------------------------------ *
+ * Buttons
+ *
+ * jsPsych's stock button is a 14px grey rectangle. Every button a participant meets in
+ * this battery is "go on" or "pick this one", so the shared button is a filled primary
+ * action, sized to be hit with a thumb.
+ * ------------------------------------------------------------------ */
+
+.jspsych-btn {
+    display: inline-block;
+    box-sizing: border-box;
+    min-height: var(--rlm-tap-target);
+    padding: 12px 22px;
+    margin: var(--rlm-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--rlm-radius);
+    background-color: var(--rlm-accent);
+    background-image: none;
+    color: var(--rlm-surface);
+    font-family: var(--rlm-font);
+    font-size: clamp(15px, 3.6vw, 17px);
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: var(--rlm-shadow-sm);
+    transition: background-color var(--rlm-transition), border-color var(--rlm-transition),
+                box-shadow var(--rlm-transition), transform 80ms ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Only on devices with a pointer that can actually hover - jsPsych issue #977 */
+@media (hover: hover) and (pointer: fine) {
+    .jspsych-btn:hover:not(:disabled) {
+        background-color: var(--rlm-accent-dark);
+        border-color: var(--rlm-accent-dark);
+        box-shadow: var(--rlm-shadow);
+    }
+}
+
+.jspsych-btn:active:not(:disabled) {
+    background-color: var(--rlm-accent-dark);
+    border-color: var(--rlm-accent-dark);
+    transform: scale(0.98);
+    box-shadow: var(--rlm-shadow-sm);
+}
+
+.jspsych-btn:focus-visible {
+    outline: var(--rlm-focus-ring) solid var(--rlm-accent);
+    outline-offset: var(--rlm-focus-offset);
+}
+
+.jspsych-btn:disabled {
+    background-color: var(--rlm-disabled);
+    border-color: var(--rlm-disabled);
+    color: var(--rlm-disabled-ink);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* A quieter companion to the primary button: "Previous" on an instructions page, or a way
+   back out of a screen. Same size and shape, so a pair of them still lines up. */
+.jspsych-btn-quiet,
+#jspsych-instructions-back {
+    background-color: var(--rlm-surface);
+    border-color: var(--rlm-line);
+    color: var(--rlm-ink);
+    box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .jspsych-btn-quiet:hover:not(:disabled),
+    #jspsych-instructions-back:hover:not(:disabled) {
+        background-color: var(--rlm-accent-soft);
+        border-color: var(--rlm-accent);
+        box-shadow: none;
+    }
+}
+
+.jspsych-btn-quiet:active:not(:disabled),
+#jspsych-instructions-back:active:not(:disabled) {
+    background-color: var(--rlm-accent-soft);
+    border-color: var(--rlm-accent);
+}
+
+.jspsych-btn-quiet:disabled,
+#jspsych-instructions-back:disabled {
+    background-color: var(--rlm-surface);
+    border-color: var(--rlm-line);
+    color: var(--rlm-ink-faint);
+}
+
+/* "Start again" rather than "go on" - control's Restart, which sits beside Next. Its own
+   class rather than an inline background, so it keeps the hover and press feedback every
+   other button has. */
+.jspsych-btn-danger {
+    background-color: var(--rlm-danger);
+    border-color: var(--rlm-danger);
+    color: var(--rlm-surface);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .jspsych-btn-danger:hover:not(:disabled) {
+        background-color: var(--rlm-danger-dark);
+        border-color: var(--rlm-danger-dark);
+    }
+}
+
+.jspsych-btn-danger:active:not(:disabled) {
+    background-color: var(--rlm-danger-dark);
+    border-color: var(--rlm-danger-dark);
+}
+
+.jspsych-btn-danger:focus-visible {
+    outline-color: var(--rlm-danger);
+}
+
+/* Groups of buttons: jspsych.css centres them but leaves the spacing to each button's own
+   margin, which is what makes button rows sit at different heights from screen to screen.
+   The gap belongs to the group, so a row of two choices is spaced the same as a row of six. */
+.jspsych-btn-group-flex,
+.jspsych-btn-group-grid {
+    gap: var(--rlm-space-3);
+    margin-top: var(--rlm-space-5);
+}
+
+.jspsych-btn-group-flex {
+    flex-wrap: wrap;
+}
+
+.jspsych-btn-group-flex .jspsych-btn,
+.jspsych-btn-group-grid .jspsych-btn {
+    margin: 0;
+}
+
+/* The instructions plugin's nav is a plain div of inline-block buttons, so it followed the
+   surrounding text-align. Centred, with a gap, it lands in the same place on every page. */
+.jspsych-instructions-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--rlm-space-2);
+    margin-top: var(--rlm-space-5);
+}
+
+/* The nav's spacing is the group's gap above. The plugin used to write a 5px margin on
+   each of these as an inline style; that is deleted at source in
+   core/jspsych/plugin-instructions.js, so no !important is needed to beat it. */
+.jspsych-instructions-nav .jspsych-btn {
+    margin: 0;
+}
+
+.jspsych-instructions-pagenum {
+    color: var(--rlm-ink-muted);
+    font-size: var(--rlm-text-sm);
+}
+
+/* ------------------------------------------------------------------ *
+ * Survey plugins on instruction screens (the comprehension quizzes)
+ * ------------------------------------------------------------------ */
+
+.instructions .jspsych-survey-multi-choice-preamble {
+    margin-bottom: var(--rlm-space-5);
+}
+
+.instructions .jspsych-survey-multi-choice-question {
+    margin: 0 0 var(--rlm-space-5);
+    padding: var(--rlm-space-4) var(--rlm-space-4) var(--rlm-space-2);
+    border: 1px solid var(--rlm-line);
+    border-radius: var(--rlm-radius);
+    background-color: var(--rlm-surface-sunken);
+}
+
+.instructions .jspsych-survey-multi-choice-text {
+    font-size: var(--rlm-text-base);
+}
+
+.instructions p.jspsych-survey-multi-choice-text {
+    font-weight: 600;
+    margin-bottom: var(--rlm-space-3);
+}
+
+/* The label wraps the radio and its text, so the wording is part of the target too */
+.instructions label.jspsych-survey-multi-choice-text {
+    display: flex;
+    align-items: center;
+    gap: var(--rlm-space-3);
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.instructions label.jspsych-survey-multi-choice-text input[type="radio"] {
+    /* A browser's default radio is about 13px across - fiddly with a mouse, harder with a
+       fingertip. The margin replaces the 1em the plugin writes into the <style> block it
+       injects with each trial. */
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--rlm-accent);
+    cursor: pointer;
+}
+
+/* A button sitting straight in the content div - a survey's submit, the fullscreen
+   plugin's "return to full screen" - has no group wrapper to centre it, so it would
+   follow the reading column's left alignment. It is a button; it belongs on the centre
+   line like every other one. */
+.instructions > .jspsych-btn,
+.instructions input[type="submit"].jspsych-btn {
+    display: block;
+    margin: var(--rlm-space-5) auto 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Instruction screens built by hand (piggy banks, max-press-test)
+ *
+ * These predate the `instructions` class and address the same block by id. The id lived in
+ * the piggy-banks stylesheet, so max-press-test's screens - which use it too - were styled
+ * only when a piggy-bank task happened to have run first. The inline widgets below had the
+ * same problem the other way round: pavlovian-lottery uses .spacebar-icon and
+ * .highlight-txt without ever having defined them.
+ * ------------------------------------------------------------------ */
+
+#instruction-text {
+    max-width: var(--rlm-measure);
+    margin: clamp(1em, 3vw, 1.5em) auto;
+    box-sizing: border-box;
+    font-size: var(--rlm-text-base);
+    line-height: var(--rlm-leading);
+    text-align: left;
+}
+
+#instruction-text p {
+    margin: 0 0 1em;
+}
+
+#instruction-text p:last-child {
+    margin-bottom: 0;
+}
+
+#instruction-text ul {
+    margin: 0 0 1em;
+    padding-left: 1.4em;
+}
+
+#instruction-text li {
+    margin: 0.4em 0;
+}
+
+/* An illustration in its own right - the clouds, the animated key press - rather than an
+   icon set into a line of text */
+#instruction-text > img {
+    display: block;
+    max-width: 100%;
+    margin: var(--rlm-space-4) auto;
+}
+
+/* A line or two of prompting over a live game surface, rather than a page to read: centred
+   over the piggy bank it refers to. This is what splits the two "ready to begin" screens:
+   vigour's sits inside .experiment-wrapper, over the piggy bank the participant is about to
+   tap, and stays centred; PIT's is four paragraphs and an illustration with no game surface
+   behind it, so it reads as a page and is set left like every other page of prose. */
+.experiment-wrapper #instruction-text {
+    text-align: center;
+}
+
+/* ------------------------------------------------------------------ *
+ * Questionnaire screens built from stock jsPsych survey plugins
+ *
+ * The Likert and free-text plugins were written for a desktop browser: the plugin lays the
+ * five scale points out as inline blocks sized to whatever their labels say, and puts no
+ * width limit on the content, so with labels as long as "Not difficult at all" the row comes
+ * out wider than a phone screen. jsPsych centres the content with `margin: auto`, and an
+ * overflowing element centred that way is clipped on BOTH sides - which is what takes the
+ * question text off the edge of the screen.
+ *
+ * These rules started life scoped to the session feedback questionnaire, which meant the
+ * acceptability judgment - the same two plugins, met right after every game in both pilot
+ * modules - kept the broken layout. They are shared now: add `survey-screen` to a trial's
+ * css_classes and its scale fits the phone it is read on.
+ * ------------------------------------------------------------------ */
+
+/* jsPsych puts css_classes on the content div itself, so this is that div */
+.survey-screen {
+    max-width: min(700px, 100%);
+    box-sizing: border-box;
+    /* Side room for the scale, top and bottom room for the landscape phone this has to
+       scroll on */
+    padding: var(--rlm-space-5) var(--rlm-space-4);
+    color: var(--rlm-ink);
+}
+
+/* The plugin gives each point an equal share of the row as an inline width, so all this
+   adds is room for a long label to wrap inside its own column rather than against its
+   neighbour's */
+.survey-screen .jspsych-survey-likert-opts li {
+    box-sizing: border-box;
+    padding: 0 2px;
+}
+
+/* A browser's default radio is around 13px across, which is small to hit with a fingertip
+   and fiddly with a mouse. The plugin centres it over its column with `left: 50%` and a
+   margin of minus half its width, written for that default - so the offset has to grow
+   with the dot, or the whole scale sits off to one side. */
+.survey-screen .jspsych-survey-likert-opts li input[type="radio"] {
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    accent-color: var(--rlm-accent);
+    cursor: pointer;
+}
+
+/* The label wraps the radio and its text, so the number and the anchor wording are part of
+   the target too - worth having on a phone, where the dot alone is the hardest part to hit */
+.survey-screen .jspsych-survey-likert-opt-label {
+    display: block;
+    padding: 4px 0 2px;
+    color: var(--rlm-ink-muted);
+    cursor: pointer;
+}
+
+/* The grey line the points sit on is drawn by the plugin at a fixed offset chosen for the
+   default-sized radio, so a bigger dot leaves it grazing the tops rather than running
+   through the middle. Measured against the enlarged radio's centre. */
+.survey-screen .jspsych-survey-likert-opts:before {
+    top: 21px;
+}
+
+/* Questions read as prose, so they are set left rather than centred under the scale */
+.survey-screen .jspsych-survey-likert-preamble,
+.survey-screen .jspsych-survey-likert-statement,
+.survey-screen .jspsych-survey-text-preamble,
+.survey-screen .jspsych-survey-text-question p {
+    text-align: left;
+}
+
+.survey-screen .jspsych-survey-likert-statement {
+    /* 40px of it is the plugin's own padding above each statement, which stacks up over
+       three questions on a screen that has to fit in a phone */
+    padding-top: var(--rlm-space-5);
+    font-size: var(--rlm-text-base);
+    font-weight: 600;
+}
+
+/* The answer box is sized in columns, which on a narrow screen is wider than the screen */
+.survey-screen textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 2px solid var(--rlm-line);
+    border-radius: var(--rlm-radius);
+    color: var(--rlm-ink);
+    line-height: 1.5;
+}
+
+.survey-screen textarea:focus {
+    outline: none;
+    border-color: var(--rlm-accent);
+}
+
+/* Submit is a button, wherever the surrounding text happens to be aligned */
+.survey-screen input[type="submit"].jspsych-btn {
+    display: block;
+    margin: var(--rlm-space-5) auto 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Inline widgets shared across tasks
+ * ------------------------------------------------------------------ */
+
+/* A key cap, used for "press the J key" / "press the Spacebar" wording */
+.spacebar-icon {
+    display: inline-block;
+    padding: 0.15em 0.45em;
+    border: 1px solid var(--rlm-line);
+    border-bottom-width: 2px;
+    border-radius: var(--rlm-radius-sm);
+    background-color: var(--rlm-surface-sunken);
+    color: var(--rlm-ink);
+    font-family: var(--rlm-font-mono);
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.spacebar-icon-pressed {
+    display: inline-block;
+    padding: 0.15em 0.45em;
+    border: 1px solid var(--rlm-line);
+    border-bottom-width: 1px;
+    border-radius: var(--rlm-radius-sm);
+    background-color: var(--rlm-accent-soft);
+    color: var(--rlm-ink);
+    font-family: var(--rlm-font-mono);
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+    box-shadow: inset 0 2px 4px rgba(24, 43, 75, 0.2);
+    transform: translateY(1.5px);
+}
+
+/* The phrase in a paragraph that carries the instruction */
+.highlight-txt {
+    color: var(--rlm-accent);
+    font-weight: 700;
+}
+
+/* "Didn't catch a response - moving on". Built by four different files (api/messages.js,
+   core/utils/participation-validation.js, and the card-choosing and reversal plugins) from
+   four copies of the same declaration block; they all use this class now. */
+.rlm-toast {
+    box-sizing: border-box;
+    width: min(92vw, 440px);
+    padding: var(--rlm-space-4) var(--rlm-space-5);
+    border-radius: var(--rlm-radius);
+    background-color: var(--rlm-caution);
+    color: var(--rlm-ink);
+    font-family: var(--rlm-font);
+    font-size: var(--rlm-text-lg);
+    font-weight: 500;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: var(--rlm-shadow);
+}
+
+/* Shown over a running trial rather than in the page flow */
+.rlm-toast-floating {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/* An example of the toast, sitting in a paragraph of instructions */
+.rlm-toast-inline {
+    margin: var(--rlm-space-4) auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jspsych-btn {
+        transition: none;
+    }
+
+    .jspsych-btn:active:not(:disabled) {
+        transform: none;
+    }
+}

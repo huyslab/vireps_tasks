@@ -11,7 +11,7 @@ function PITMainInstructions(settings) {
     data: { trialphase: 'vigour_instructions' },
     show_clickable_nav: true,
     pages: [`
-    <div id="instruction-text" style="text-align: left">
+    <div id="instruction-text">
       <p><strong>You will now play the same game again for the next few minutes. The rules remain the same:</strong></p>
 
       <ul>
@@ -36,14 +36,14 @@ function PITMainInstructions(settings) {
       </div>
       </div>
       `,
-      `<div id="instruction-text" style="text-align: left">
+      `<div id="instruction-text">
         <p><strong>But this time, you'll play in a cloudy place.</strong></p>
         <img src="./assets/images/piggy-banks/occluding_clouds.png" style="height:12em">
         <p><span class="highlight-txt">Coins will drop and be collected as usual, but they'll be hidden behind clouds.<br>You won't see them during the game.</span></p>
         <p>We will also pay you the bonus in the same way as in the previous game at the end.</p>
       </div>`,
       `
-      <div id="instruction-text" style="text-align: left">
+      <div id="instruction-text">
         <p><span class="highlight-txt">In this cloudy place, the background will also change occasionally.</span></p>
         <p>These are the backgrounds you will see. Each time you see a background, <strong>one</strong> coin will either be added or removed from your earnings.</p>
 
@@ -59,7 +59,7 @@ function PITMainInstructions(settings) {
             </div>
       </div>
       `, `
-      <div id="instruction-text" style="text-align: left">
+      <div id="instruction-text">
             <p><strong>Here's how each background affects your earnings:</strong></p>
             <p>The backgrounds on the left will <strong>add</strong> £1, 50p, or 1p, while the backgrounds on the right will <strong>remove</strong> 1p, 50p, or £1.</p>
 

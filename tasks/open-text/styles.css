@@ -1,41 +1,43 @@
 /*------- Generic styles -------*/
+/* Type comes from the shared scale in core/styles/theme.css. It used to be set in vw, which
+   reads as 16px on the desktop it was written on and as 4px on a phone. */
 .open-text h1 {
-    font-size: 2vw;
+    font-size: var(--rlm-text-2xl);
 }
 
 .open-text h2 {
-    font-size: 1.85vw;
+    font-size: var(--rlm-text-xl);
 }
 
 .open-text h3 {
-    font-size: 1.5vw;
+    font-size: var(--rlm-text-lg);
 }
 
 .open-text h4 {
-    font-size: 1.25vw;
+    font-size: var(--rlm-text-base);
 }
 
 .open-text p {
-    font-size: 1.15vw;
-    line-height: normal;
+    font-size: var(--rlm-text-base);
+    line-height: var(--rlm-leading);
 }
 
 .open-text a {
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
 }
 
 .open-text ul {
-    line-height: normal;
-    font-size: 1.15vw;
+    line-height: var(--rlm-leading);
+    font-size: var(--rlm-text-base);
 }
 
 .open-text li {
-    line-height: normal;
-    font-size: 1.15vw;
+    line-height: var(--rlm-leading);
+    font-size: var(--rlm-text-base);
 }
 
 .open-text label {
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
 }
 
 #study_subtitle {
@@ -61,7 +63,7 @@
     cursor: pointer;
     align-self: flex-end; /* Aligns the button to the bottom of the container */
     margin-top: 10px; /* Adds space above the button */
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
     font-weight: bold;
     /*transform: translate(-50%, -50%); !* Adjusts to perfectly center *!*/
 }
@@ -83,7 +85,7 @@
     /*padding: 20px;*/
     z-index: 9999;
     text-align: center;
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
     border-radius: 5px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     border: 2px solid gray;
@@ -108,7 +110,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
     border-radius: 5px;
 }
 
@@ -128,7 +130,7 @@
 
 #consentmine label {
     line-height: 1.5;
-    font-size: 1.3vw;
+    font-size: var(--rlm-text-base);
 }
 
 /* ------- Open question styles -------*/
@@ -146,8 +148,8 @@
 
 
 #instr_req_warning {
-    color: red;
-    font-size: 1.15vw;
+    color: var(--rlm-negative);
+    font-size: var(--rlm-text-base);
 }
 
 #qs_preamble {
@@ -203,7 +205,7 @@
 }
 
 #qs_avoid_qsn label {
-    font-size: 1vw;
+    font-size: var(--rlm-text-sm);
 }
 
 #qs_words {
@@ -225,25 +227,17 @@
 }
 
 .lvlx_qs textarea {
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
 }
 
+/* Submit is the shared primary button (core/styles/theme.css); all this adds is the room it
+   needs on these long, scrolling screens. There used to be a second, unscoped
+   `input[type="submit"]` rule here, which from the moment this stylesheet loaded turned the
+   submit button of every survey screen in the rest of the module green; it is deleted rather
+   than rescoped, because .lvlx_qs is the class this task's screens actually carry
+   (tasks/open-text/utils.js). */
 .lvlx_qs input[type="submit"] {
-    /*font-size: 1.05vw;*/
-    margin-top: -0.5vw;
-    color: green;
-    font-weight: bold;
-    /*pointer-events: none;*/
-    margin-bottom: 5vw;
-}
-
-
-input[type="submit"] {
-    /*font-size: 1.05vw;*/
-    margin-top: 2.5vw;
-    color: green;
-    font-weight: bold;
-    /*pointer-events: none;*/
+    margin-top: 0;
     margin-bottom: 5vw;
 }
 
@@ -380,7 +374,7 @@ input[type="submit"] {
 }
 
 .feedback_trial textarea {
-    font-size: 1.15vw;
+    font-size: var(--rlm-text-base);
 }
 
 /*!* ------- Quiz ------- *!*/
@@ -470,4 +464,3 @@ input[type="submit"] {
 /*    color: green;*/
 /*    font-weight: bold;*/
 /*}*/
-

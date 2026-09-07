@@ -100,27 +100,7 @@
     border: 1px solid darkgrey;
 }
 
-.spacebar-icon {
-  display: inline-block;
-  padding: 0.4vmin 0.6vmin;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
-}
-
-.spacebar-icon-pressed {
-  display: inline-block;
-  padding: 0.3vmin 0.6vmin; /* Slightly reduce padding */
-  background-color: #e0e0e0; /* Darker shade for pressed effect */
-  border: 1px solid #aaa; /* Darker border */
-  border-radius: 6px;
-  font-weight: bold;
-  font-family: monospace;
-  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2); /* Inner shadow for pressed effect */
-  transform: translateY(1.5px); /* Moves key down */
-}
+/* .spacebar-icon / .spacebar-icon-pressed are shared widgets - see core/styles/theme.css */
 
 /* --- Touch/pointer response targets --- */
 

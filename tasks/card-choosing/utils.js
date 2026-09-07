@@ -495,7 +495,7 @@ function interBlockStimulus(settings){
         txt +=  n_groups > 1 ? "these cards." : "this card."
         
         if (valence != 0){
-             txt += `<p>Altogether, these coins were ${valence == 1 ? "added to your safe" : "broken in your safe"} on this round:<p>`;
+             txt += `<p>Altogether, these coins were ${valence == 1 ? "added to your safe" : "broken in your safe"} on this round:</p>`;
         }
        
         
@@ -570,7 +570,7 @@ function buildCardChoosingTask(structure, insert_msg = true, settings = {task_na
                 createReadyTrial(
                     `
                         <h3>Round ${i + 1} out of ${structure.length}</h3>` +
-                        (valence != 0 ? `<p>On the next round you will play to <b>${valence > 0 ? "win" : "avoid losing"} coins</b>.<p>` : ""),
+                        (valence != 0 ? `<p>On the next round you will play to <b>${valence > 0 ? "win" : "avoid losing"} coins</b>.</p>` : ""),
                     "pre_block",
                     {
                         keyboardPrompt: n_stimuli === 2
