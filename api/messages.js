@@ -52,6 +52,18 @@ export const messages = {
             on_start: endExperiment
         }
     },
+    questionnaires: {
+        start_message: [
+            `<p><b>Questionnaires</b></p>
+            <p>Please follow the instructions shown before each questionnaire.</p>
+            <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
+        ],
+        end_message: {
+            message: `<p><b>You have completed the questionnaires.</b></p>
+                <p>Please call the experimenter.</p>`,
+            on_start: endExperiment
+        }
+    },
     full_battery: {
         start_message: (settings) => { 
             return [`<p><b>Thank you for taking part in this session!</b></p>

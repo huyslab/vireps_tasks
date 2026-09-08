@@ -11,6 +11,7 @@ import { createControlTimeline, computeRelativeControlBonus } from '@tasks/contr
 import { createOpenTextTimeline } from '@tasks/open-text/index.js';
 import { createReversalTimeline, computeRelativeReversalBonus } from '@tasks/reversal/index.js';
 import { createAcceptabilityTimeline } from '@tasks/acceptability-judgment/index.js';
+import { createSelfReportTimeline } from '@tasks/self-report/index.js';
 
 export const TaskRegistry = {
   PILT: {
@@ -460,6 +461,31 @@ export const TaskRegistry = {
     },
     resumptionRules: {
         enabled: false,
+    }
+  },
+  self_report: {
+    name: 'Self-Report Questionnaires',
+    description: 'Touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires presented one item per screen',
+    createTimeline: createSelfReportTimeline,
+    computeBonus: () => 0,
+    defaultConfig: {
+      questionnaires: ['BIS', 'ARI', 'STAXI2', 'STAI'],
+      save_every: 5,
+      transition_duration: 250,
+      input_mode: 'auto'
+    },
+    configOptions: {
+      questionnaires: "Questionnaires to present in order. Available: 'BIS', 'ARI', 'STAXI2', 'STAI'.",
+      save_every: 'Save after this many items as well as at the end of each questionnaire. Default is 5.',
+      transition_duration: 'Transition duration between item screens in milliseconds. Default is 250.',
+      input_mode: "Input mode: 'touch', 'keyboard', or 'auto'. Default is 'auto'."
+    },
+    requirements: {
+      css: ['@tasks/self-report/styles.css']
+    },
+    resumptionRules: {
+      // Resuming by task would skip unanswered items and leave incomplete scales.
+      enabled: false
     }
   }
 };

@@ -43,6 +43,20 @@ export const ModuleRegistry = {
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
+    questionnaires: {
+        name: "Questionnaires",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0"
+        },
+        elements: [
+            { type: "instructions", config: { text: "start_message" } },
+            // State anxiety is asked first, before the longer and more emotionally loaded
+            // measures can influence it. STAXI-2 is last because it is the longest measure.
+            { type: "task", name: "self_report", config: { questionnaires: ["STAI", "ARI", "BIS", "STAXI2"] } },
+            { type: "instructions", config: { text: "end_message" } }
+        ]
+    },
     full_battery: {
         name: "Full RELEMD Task Battery",
         moduleConfig: { // Settings that apply to all tasks in the module unless overridden
