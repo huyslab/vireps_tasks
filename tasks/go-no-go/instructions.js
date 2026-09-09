@@ -3,7 +3,7 @@ import {
   updateState,
   kickOut,
   fullscreen_prompt,
-} from '@utils/index.js';
+    isTouchDevice } from '@utils/index.js';
 
 const COIN_IMAGES = {
   pound: './assets/images/card-choosing/outcomes/1pound.png',
@@ -46,7 +46,7 @@ const FINAL_PRACTICE_CORRECT_PER_ITEM = 2;
 /** Safety cap, so a participant who cannot reach criterion is not stuck here. */
 const FINAL_PRACTICE_MAX_BLOCKS = 4;
 
-const isTouch = () => navigator.maxTouchPoints > 0;
+const isTouch = isTouchDevice;
 
 const actionText = () => (isTouch() ? 'touch the picture' : 'press the space bar');
 

@@ -285,7 +285,7 @@ jsPsychCardChoosing = (function (jspsych) {
 
             // Tap targets are only rendered on touch-capable devices; desktop stays
             // keyboard-only so mouse clicks can't substitute for an arrow key.
-            this.touchCapable = navigator.maxTouchPoints > 0;
+            this.touchCapable = (window.isTouchDevice ? window.isTouchDevice() : navigator.maxTouchPoints > 0);
 
             // Single timestamp for both RT computation (pointer responses) and
             // orientation-offset tracking

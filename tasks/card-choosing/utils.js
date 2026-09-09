@@ -8,15 +8,15 @@ import {
   createReadyTrial,
   updateState,
   isValidNumber,
-  countOccurrences
-} from '@utils/index.js'; // Adjust path as needed
+  countOccurrences,
+    isTouchDevice } from '@utils/index.js'; // Adjust path as needed
 
 
 // CONSTANTS
 const STIMULI_PATH = './assets/images/card-choosing/stimuli/';
 
 // Touch devices tap the cards (or the WM response buttons) rather than using arrow keys.
-const touchCapable = navigator.maxTouchPoints > 0;
+const touchCapable = isTouchDevice();
 
 const preloadAssets = (settings) => {
             // Base coin images

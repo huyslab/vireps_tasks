@@ -1,4 +1,4 @@
-import { loadSequence, loadCSS, bonusTrial } from '@utils/index.js';
+import { loadSequence, loadCSS, bonusTrial, isTouchDevice } from '@utils/index.js';
 import { TaskRegistry, globalConfig, globalConfigOptions } from './task-registry.js';
 import { messages } from './messages.js';
 import { ModuleRegistry } from './module-registry.js';
@@ -80,7 +80,7 @@ export async function createTaskTimeline(taskName, config = {}) {
     // vigour's wrong_orientation logging keys off the overlay's actual visibility.
     const orientation = mergedConfig.preferredOrientation;
     // Only gate orientation on touch-capable devices (phones/tablets); desktop is exempt
-    const touchCapable = navigator.maxTouchPoints > 0;
+    const touchCapable = isTouchDevice();
     if (touchCapable && (orientation === 'portrait' || orientation === 'landscape')) {
         // Phone SVG shapes shared by both orientations
         const shapes = `
