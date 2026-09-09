@@ -34,7 +34,7 @@ const KEYBOARD_ONLY_COPY = [
  * the right gesture for them anyway. Both dispatch the pointer events the tasks
  * listen for, so the "no keyboard needed" question is asked the same way on each.
  */
-async function pointerPress(page, locator, options = {}) {
+export async function pointerPress(page, locator, options = {}) {
   const canTap = await page.evaluate(() => 'ontouchstart' in window).catch(() => false);
   if (canTap) return locator.tap(options).catch(() => {});
   return locator.click(options).catch(() => {});
@@ -45,13 +45,45 @@ async function pointerPress(page, locator, options = {}) {
  * it asks for. Phone projects default to portrait, so a landscape-preferring task
  * would otherwise sit behind the rotate-overlay for the whole walk.
  */
-async function openInPreferredOrientation(page, config, participantId) {
+export async function openInPreferredOrientation(page, config, participantId) {
   const viewport = page.viewportSize();
   if (viewport && config.preferredOrientation && orientationOf(viewport) !== config.preferredOrientation) {
     await page.setViewportSize({ width: viewport.height, height: viewport.width });
   }
   const separator = config.url.includes('?') ? '&' : '?';
   await page.goto(`${config.url}${separator}participant_id=${participantId}`);
+}
+
+
+/**
+ * Advances a task with pointer input alone until `target` is visible, collecting the
+ * text of every screen passed through. Never presses "Previous" or "Re-read", which
+ * loop back; when a screen offers no forward button at all (the piggy-bank "tap to
+ * begin" screens), it presses `config.tapToAdvance` instead.
+ *
+ * @returns {string[]} The text of each screen walked past, for wording assertions
+ */
+export async function walkWithPointer(page, target, config) {
+  const seen = [];
+  for (let step = 0; step < (config.steps ?? 40); step++) {
+    await page.waitForTimeout(250);
+    if (await target.isVisible().catch(() => false)) break;
+
+    const body = await page.locator('body').innerText().catch(() => '');
+    if (body.trim()) seen.push(body);
+
+    const forward = page.locator('button:visible, input[type=submit]:visible')
+      .filter({ hasNotText: /Previous|Re-read/ });
+    if (await forward.count() > 0) {
+      await pointerPress(page, forward.last(), { noWaitAfter: true });
+      continue;
+    }
+    if (config.tapToAdvance) {
+      const advance = page.locator(config.tapToAdvance).first();
+      if (await advance.isVisible().catch(() => false)) await pointerPress(page, advance);
+    }
+  }
+  return seen;
 }
 
 /**
@@ -84,28 +116,7 @@ export function defineTouchOperabilityTest(taskKey, config) {
     }
 
     const trial = page.locator(config.readySelector).first();
-    const seen = [];
-
-    for (let step = 0; step < (config.steps ?? 40); step++) {
-      await page.waitForTimeout(250);
-      if (await trial.isVisible().catch(() => false)) break;
-
-      // Record instruction copy so a keyboard-only demand is reported with its text.
-      const body = await page.locator('body').innerText().catch(() => '');
-      if (body.trim()) seen.push(body);
-
-      // Forward buttons only - never "Previous" or "Re-read", which loop.
-      const forward = page.locator('button:visible, input[type=submit]:visible')
-        .filter({ hasNotText: /Previous|Re-read/ });
-      if (await forward.count() > 0) {
-        await pointerPress(page, forward.last(), { noWaitAfter: true });
-        continue;
-      }
-      if (config.tapToAdvance) {
-        const target = page.locator(config.tapToAdvance).first();
-        if (await target.isVisible().catch(() => false)) await pointerPress(page, target);
-      }
-    }
+    const seen = await walkWithPointer(page, trial, config);
 
     // No screen along the way may have demanded a key.
     for (const screen of seen) {
@@ -142,20 +153,7 @@ export function defineTouchResponseTest(taskKey, config) {
     await openInPreferredOrientation(page, config, participantId);
 
     const trial = page.locator(config.readySelector).first();
-    for (let step = 0; step < (config.steps ?? 40); step++) {
-      await page.waitForTimeout(250);
-      if (await trial.isVisible().catch(() => false)) break;
-      const forward = page.locator('button:visible, input[type=submit]:visible')
-        .filter({ hasNotText: /Previous|Re-read/ });
-      if (await forward.count() > 0) {
-        await pointerPress(page, forward.last(), { noWaitAfter: true });
-        continue;
-      }
-      if (config.tapToAdvance) {
-        const target = page.locator(config.tapToAdvance).first();
-        if (await target.isVisible().catch(() => false)) await pointerPress(page, target);
-      }
-    }
+    await walkWithPointer(page, trial, config);
     await expect(trial, `${taskKey}: never reached a real trial`).toBeVisible({ timeout: 20000 });
 
     for (let i = 0; i < 12; i++) {

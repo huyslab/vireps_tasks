@@ -27,7 +27,7 @@ export const ModuleRegistry = {
         elements: [
             { type: "instructions", config: { text: "start_message" } },
             { type: "task", name: "max_press_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "maximum key-press task" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "tapping test" } },
             { type: "task", name: "pavlovian_lottery" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
             { type: "task", name: "PILT" },

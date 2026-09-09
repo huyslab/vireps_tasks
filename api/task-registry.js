@@ -365,19 +365,21 @@ export const TaskRegistry = {
     }
   },
   max_press_test: {
-    name: 'Max Press Test',
-    description: 'A test of maximum key press speed',
+    name: 'Max Tap Test',
+    description: 'A test of maximum tapping speed, calibrating the piggy-bank tasks',
     createTimeline: createMaxPressTimeline,
     computeBonus: () => 0, // No bonus computation for this task
     defaultConfig: {
       duration: 7000,  
-      validKey: 'j',
       minSpeed: 3.0 
     },
     configOptions: {
-        duration: "Duration of the max press test in milliseconds. Default is 7000 (7 seconds).",
-        validKey: "The key that participants should press during the test. Default is 'j'.",
-        minSpeed: "Minimum speed in presses per second required to pass the test. Default is 3.0, which was the 5th percentile in pilots 7 & 8."
+        duration: "Duration of the max tap test in milliseconds. Default is 7000 (7 seconds).",
+        // NOTE: 3.0 was the 5th percentile of pilots 7 & 8, which measured J-key presses.
+        // The task now measures tapping - which is what vigour and PIT actually ask for -
+        // so this threshold governs a different action from the one it was derived from
+        // and should be re-piloted before it is trusted to trigger a retake.
+        minSpeed: "Minimum speed in taps per second required to pass the test. Default is 3.0, inherited from keypress pilots 7 & 8 and pending re-piloting against tapping."
     },
     requirements: {
       css: ['@tasks/max-press-test/styles.css'],

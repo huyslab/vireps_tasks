@@ -1,5 +1,11 @@
-import { test } from '@playwright/test';
-import { defineTouchOperabilityTest, defineTouchResponseTest } from './support/touch-check.js';
+import { expect, test } from '@playwright/test';
+import {
+  defineTouchOperabilityTest,
+  defineTouchResponseTest,
+  openInPreferredOrientation,
+  pointerPress,
+  walkWithPointer,
+} from './support/touch-check.js';
 
 /**
  * Every task a participant meets on the study tablet, across all three modules,
@@ -66,9 +72,13 @@ defineTouchOperabilityTest('max_press_test', {
   readySelector: '#max-press-pad',
 });
 
+// Anchored on the result screen's Continue button, not the spin animation: the
+// animation renders on its own and would let the walk stop one screen short of the
+// control that replaced the per-trial Spacebar. `button#continue-msg` also
+// distinguishes it from the hidden <p> of the same id inside the animation.
 defineTouchOperabilityTest('pavlovian_lottery', {
   url: '/examples/pavlovian-lottery.html',
-  readySelector: '.slot-machine-container',
+  readySelector: 'button#continue-msg',
 });
 
 // --- Questionnaires ---
@@ -112,4 +122,47 @@ defineTouchResponseTest('vigour_test', {
   preferredOrientation: 'landscape',
   readySelector: '#piggy-container-left',
   trialphase: 'vigour_test',
+});
+
+/**
+ * The lottery's result screen replaced a "press Spacebar to continue" listener with a
+ * Continue button that is revealed after a delay. The trial also self-advances on
+ * MAX_RESULT_DISPLAY_TIME, so merely reaching the next spin proves nothing - a broken
+ * button would look identical. Asserting the recorded response is 'continue' is what
+ * separates "the participant advanced it" from "it timed out on its own".
+ */
+test('pavlovian_lottery advances from a result screen by tapping Continue', async ({ page }, testInfo) => {
+  test.setTimeout(120000);
+  const config = { url: '/examples/pavlovian-lottery.html' };
+  await openInPreferredOrientation(page, config, `lottery_continue_${testInfo.project.name.replace(/\W+/g, '_')}`);
+
+  const continueBtn = page.locator('button#continue-msg');
+  await walkWithPointer(page, continueBtn, config);
+
+  // Revealed only after CONTINUE_MESSAGE_DELAY, which is what stops an accidental
+  // double-tap on the previous screen from skipping the outcome unseen.
+  await expect(continueBtn, 'the result screen should offer a Continue button').toBeVisible({ timeout: 20000 });
+  await pointerPress(page, continueBtn);
+
+  await page.waitForFunction(
+    () => window.jsPsych
+      && jsPsych.data.get().filter({ trialphase: 'prepilt_conditioning' })
+        .values().some((row) => row.response === 'continue'),
+    undefined,
+    { timeout: 20000 }
+  );
+
+  const rows = await page.evaluate(
+    () => jsPsych.data.get().filter({ trialphase: 'prepilt_conditioning' }).values()
+  );
+  expect(
+    rows.filter((row) => row.response === 'continue').length,
+    'no conditioning trial was ended by the Continue button - it either did nothing or the trial timed out instead'
+  ).toBeGreaterThan(0);
+
+  // And the task moves on rather than stalling on the outcome it just showed.
+  await expect(
+    page.locator('.slot-machine-container'),
+    'tapping Continue should start the next spin'
+  ).toBeVisible({ timeout: 20000 });
 });
