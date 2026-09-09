@@ -1,4 +1,4 @@
-import { saveDataREDCap, updateState, kickOut, fullscreen_prompt } from '@utils/index.js';
+import { saveDataREDCap, updateState, kickOut, fullscreen_prompt, pressVerb, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 
 // Trial plan for the vigour test task
 const POST_VIGOUR_PAIRS =
@@ -87,13 +87,17 @@ function updateDualPiggyTails(magnitude, ratio, side) {
 
 
 // Comparison trial
+let testTapListeners = [];
+
 const postVigourTrial = {
   type: jsPsychHtmlKeyboardResponse,
   stimulus: function () {
     const pair = jsPsych.evaluateTimelineVariable('pair');
     return generateComparisonStimulus(pair.left, pair.right);
   },
-  choices: ['ArrowLeft', 'ArrowRight'],
+  // Chosen by tapping a piggy bank; the arrow keys this used to read are not on
+  // the study tablet, and the piggy banks were never tappable.
+  choices: 'NO_KEYS',
   data: function () {
     const pair = jsPsych.evaluateTimelineVariable('pair');
     return {
@@ -108,8 +112,35 @@ const postVigourTrial = {
     const pair = jsPsych.evaluateTimelineVariable('pair');
     updateDualPiggyTails(pair.left.magnitude, pair.left.ratio, "left");
     updateDualPiggyTails(pair.right.magnitude, pair.right.ratio, "right");
+
+    const trialStartTime = performance.now();
+    let answered = false;
+
+    // 'ArrowLeft'/'ArrowRight' are kept as the recorded response values so the
+    // stored data and on_finish below are unchanged by the move to tapping.
+    const choose = (side, event) => {
+      if (answered) return;
+      answered = true;
+      jsPsych.finishTrial({
+        response: side === 'left' ? 'ArrowLeft' : 'ArrowRight',
+        rt: Math.round(performance.now() - trialStartTime),
+        pointer_type: event?.pointerType || 'unknown'
+      });
+    };
+
+    testTapListeners = ['left', 'right'].map((side) => setupTapListener(
+      document.getElementById(`piggy-container-${side}`),
+      (event) => choose(side, event)
+    ));
+
+    if (window.simulating) {
+      const side = jsPsych.randomization.sampleWithoutReplacement(['left', 'right'], 1)[0];
+      simulateTap(document.getElementById(`piggy-container-${side}`), 100);
+    }
   },
   on_finish: function (data) {
+    testTapListeners.forEach(cleanupTapListener);
+    testTapListeners = [];
     const pair = jsPsych.evaluateTimelineVariable('pair');
     if (data.response === 'ArrowLeft') {
       data.chosen_magnitude = pair.left.magnitude;
@@ -128,17 +159,15 @@ const postVigourTrial = {
 
 // Instructions for comparison task
 const postVigourInstructions = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: `
-    <div id="instruction-text">
-      <p><strong>Next you will see pairs of piggy banks that you have seen before.</strong></p>
-      <p><span class="highlight-txt">Your job is to choose which one you would prefer to play with in the future.</span></p>
-      <p>Use the <span class="spacebar-icon">←</span> [left arrow] to choose the left piggy bank.</p>
-      <p>Use the <span class="spacebar-icon">→</span> [right arrow] to choose the right piggy bank.</p>
-      <p>When you're ready, press <span class="spacebar-icon">B</span> to begin.</p>
-    </div>
+  type: jsPsychHtmlButtonResponse,
+  css_classes: ['instructions'],
+  stimulus: () => `
+    <p><strong>You will now see two piggy banks at a time. You have seen them all before.</strong></p>
+    <p><span class="highlight-txt">Pick the one you would rather play with next time.</span></p>
+    <p>${pressVerb(true)} the piggy bank you choose.</p>
   `,
-  choices: ['b'],
+  choices: ["I'm ready"],
+  simulation_options: { data: { response: 0 } },
   post_trial_gap: 400,
   on_start: () => {
     updateState(`vigour_test_instructions_start`);

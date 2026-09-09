@@ -124,7 +124,7 @@ var jsPsychSelfReportItem = (function (jspsych) {
             if (trial.input_mode === 'keyboard') return true;
             if (trial.input_mode === 'touch') return false;
             const finePointer = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
-            return navigator.maxTouchPoints === 0 || finePointer;
+            return !(window.isTouchDevice ? window.isTouchDevice() : navigator.maxTouchPoints > 0) || finePointer;
         }
 
         buildFrame(trial) {

@@ -179,7 +179,7 @@ var jsPsychGoNoGo = (function (jspsych) {
 
     trial(display_element, trial) {
       const simulating = window.simulating || false;
-      const touchCapable = navigator.maxTouchPoints > 0;
+      const touchCapable = (window.isTouchDevice ? window.isTouchDevice() : navigator.maxTouchPoints > 0);
       const trialOnset = performance.now();
 
       // Viewport / orientation covariates, matching reversal and vigour.

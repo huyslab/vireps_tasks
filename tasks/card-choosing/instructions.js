@@ -4,8 +4,8 @@ import {
     updateState,
     createReadyTrial,
     createInstructionQuiz,
-    shuffleArray
-} from '@utils/index.js';
+    shuffleArray,
+    isTouchDevice } from '@utils/index.js';
 import { 
     buildCardChoosingTask,
     getPavlovianImages 
@@ -16,7 +16,7 @@ const small_coin_size = 100; // Size of coin images in pixels
 
 // Touch devices tap the cards directly; keyboard devices use the arrow keys. Read once at
 // module load, matching how the plugin decides whether to render tap targets.
-const touchCapable = navigator.maxTouchPoints > 0;
+const touchCapable = isTouchDevice();
 
 /**
  * Spells out a response deadline in words, from the configured value in ms.

@@ -1,3 +1,4 @@
+import { isTouchDevice } from './touch.js';
 import { saveDataREDCap } from './data-handling.js';
 
 /**
@@ -447,7 +448,7 @@ function createReadyTrial(stimulus, trialphase, options = {}) {
         buttonLabel = "I'm ready"
     } = options;
 
-    if (navigator.maxTouchPoints > 0) {
+    if (isTouchDevice()) {
         return {
             type: jsPsychHtmlButtonResponse,
             css_classes: ['instructions'],

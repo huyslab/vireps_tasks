@@ -16,7 +16,8 @@ import {
     canBeWarned,
     updateState,
     updateBonusState,
-    saveDataREDCap } from "@utils/index.js"
+    saveDataREDCap,
+    isTouchDevice } from "@utils/index.js"
 
 // First preload for task
 const reversal_preload = createPreloadTrial(
@@ -169,7 +170,7 @@ function generateReversalBlocks(settings) {
  */
 function reversalInstructions(settings) {
     var _revReadyCleanup = null;
-    var touchCapable = navigator.maxTouchPoints > 0;
+    var touchCapable = isTouchDevice();
 
     var sessionPrefix = settings.session !== "screening" ? "<p>Let's start with the first game!</p>" : "";
     var duration = settings.n_trials == 50 ? "three" : "five";

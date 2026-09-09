@@ -1,4 +1,4 @@
-import { updateState} from '@utils/index.js';
+import { updateState, pressVerb, simulateTap } from '@utils/index.js';
 
 /**
  * Creates the main instruction pages for the PIT (Pavlovian-Instrumental Transfer) task
@@ -15,8 +15,8 @@ function PITMainInstructions(settings) {
       <p><strong>You will now play the same game again for the next few minutes. The rules remain the same:</strong></p>
 
       <ul>
-          <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Vividness</span> of piggy colors: Indicates how hard you need to shake it.</li>
-          <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Tail length</span>: Longer piggy tails = more valuable coins.</li>
+          <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
+          <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
       </ul>
 
       <p>Types of coins you can win:</p>
@@ -89,24 +89,72 @@ function PITMainInstructions(settings) {
 }
 
 /**
- * Confirmation screen before starting the PIT task
- * Shows instructions for key placement and allows user to start or review instructions
+ * Confirmation screen before starting the PIT task.
+ *
+ * Deliberately the same screen as the vigour task's, down to the piggy bank the
+ * participant taps to start: PIT is the same game under cloud cover, and its own
+ * instructions say so ("the rules remain the same"). It previously asked for the
+ * B key and an index finger, which the study tablet cannot offer.
  */
 const startPITconfirmation = {
   type: jsPsychHtmlKeyboardResponse,
-  choices: ['b', 'r'], // 'b' to begin, 'r' to review instructions
-  stimulus: `
-  <div id="instruction-text">
-      <p>You will now play the piggy-bank game in the clouds for about <strong>eight minutes</strong>.</p>
-      <p>When you're ready, place the <strong>index finger of the hand you write with</strong> comfortably on the <span class="spacebar-icon">B</span> key, as shown below.</p>
-      <p>Use only this finger to press during the game.</p>
-      <p>Press it once to begin.</p>
-      <img src="./assets/images/piggy-banks/vigour_key.png" style="width:250px;" alt="Key press illustration">
-      <p>If you want to read the rules again, press <span class="spacebar-icon">R</span>.</p>
+  choices: 'NO_KEYS',
+  stimulus: () => `
+  <div class="experiment-wrapper">
+    <div id="instruction-container">
+      <div id="instruction-text">
+        <p>You will now play the piggy-bank game in the clouds for about <strong>eight minutes</strong>.</p>
+        <p>When you're ready, <span class="highlight-txt">${pressVerb()} the piggy bank</span> to begin.</p>
+      </div>
+    </div>
+    <div id="experiment-container">
+      <div id="piggy-container">
+        <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png"
+             alt="${pressVerb(true)} the piggy bank to begin">
+      </div>
+    </div>
+    <div id="bottom-container" style="visibility: visible;">
+      <button id="reread-button" class="jspsych-btn">Re-read instructions</button>
+    </div>
   </div>
     `,
   post_trial_gap: 300,
-  data: { trialphase: 'pit_instructions' }
+  data: { trialphase: 'pit_instructions' },
+  simulation_options: { data: { response: 'b' } },
+  on_load: function () {
+    let confirmed = false;
+
+    const finishOnce = function (response) {
+      if (confirmed) return;
+      confirmed = true;
+      jsPsych.finishTrial({ response });
+    };
+
+    // Tap the piggy bank to begin
+    const piggyContainer = document.getElementById('piggy-container');
+    if (piggyContainer) {
+      piggyContainer.addEventListener('pointerdown', function handler(event) {
+        if (!event.isPrimary || event.button !== 0) return;
+        event.preventDefault();
+        finishOnce('b');
+        piggyContainer.removeEventListener('pointerdown', handler);
+      });
+    }
+
+    // Button to re-read the rules; 'r' is what the loop_function below looks for.
+    const rereadButton = document.getElementById('reread-button');
+    if (rereadButton) {
+      rereadButton.addEventListener('click', function () {
+        finishOnce('r');
+      });
+    }
+
+    // This trial has no timeout and ends only on a real tap, so an automated run
+    // needs a synthetic one to get past it.
+    if (window.simulating) {
+      simulateTap(piggyContainer, 100);
+    }
+  }
 }
 
 /**

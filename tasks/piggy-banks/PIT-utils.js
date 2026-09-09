@@ -1,5 +1,5 @@
 // Import functions 
-import { saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt } from '@utils/index.js';
+import { saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 import { updatePiggyTails, shakePiggy } from './utils.js';
 
 // Define trial sequence - each trial specifies piggy properties and background stimulus
@@ -85,6 +85,7 @@ let PITtrialCounter = 0;
 let taskTotalPresses = 0;
 let taskTotalReward = 0;
 let fsChangeHandler = null;
+let pitTapListener = null;
 
 /**
  * Creates a single PIT trial with vigour task mechanics and Pavlovian background
@@ -96,7 +97,9 @@ function PITTrial(settings) {
   const trialState = {
     trialPresses: 0,
     trialReward: 0,
-    responseTime: []
+    responseTime: [],
+    pointerType: null,
+    pointerTypeCounts: {}
   };
 
   return {
@@ -113,6 +116,11 @@ function PITTrial(settings) {
       pit_coin: jsPsych.timelineVariable('coin'),
       trial_duration: jsPsych.timelineVariable('trialDuration'),
       response_time: () => { return trialState.responseTime },
+      // Matches the vigour trial's telemetry: the two tasks are compared press
+      // for press, so they have to record input the same way.
+      pointer_type: () => { return trialState.pointerType },
+      pointer_type_counts: () => { return trialState.pointerTypeCounts },
+      pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 },
       trial_presses: () => { return trialState.trialPresses },
       trial_reward: () => { return trialState.trialReward },
       // Record global data
@@ -124,42 +132,13 @@ function PITTrial(settings) {
       if (window.simulating) {
         trial.trial_duration = 500;
       }
-      
-      // Reset trial state
+
+      // Reset trial state. Input is bound in on_load, once the piggy bank exists.
       trialState.trialPresses = 0;
       trialState.trialReward = 0;
       trialState.responseTime = [];
-
-      let lastPressTime = 0;
-      let pressCount = 0;
-
-      const ratio = jsPsych.evaluateTimelineVariable('ratio');
-      const magnitude = jsPsych.evaluateTimelineVariable('magnitude');
-
-      // Set up keyboard listener for vigour responses
-      const keyboardListener = jsPsych.pluginAPI.getKeyboardResponse({
-        callback_function: function (info) {
-          trialState.responseTime.push(info.rt - lastPressTime);
-          lastPressTime = info.rt;
-          // wigglePiggy();
-          shakePiggy();
-          pressCount++;
-          trialState.trialPresses++;
-          taskTotalPresses++;
-
-          // Check if ratio requirement is met for reward
-          if (pressCount === ratio) {
-            trialState.trialReward += magnitude;
-            taskTotalReward += magnitude;
-            pressCount = 0;
-          }
-        },
-        valid_responses: ['b'],
-        rt_method: 'performance',
-        persist: true,
-        allow_held_key: false,
-        minimum_valid_rt: 0
-      });
+      trialState.pointerType = null;
+      trialState.pointerTypeCounts = {};
     },
     on_load: function () {
       const currentMag = jsPsych.evaluateTimelineVariable('magnitude');
@@ -180,17 +159,53 @@ function PITTrial(settings) {
       document.addEventListener('fullscreenchange', fsChangeHandler);
       document.addEventListener('webkitfullscreenchange', fsChangeHandler);
 
-      // Simulate keypresses for testing mode
+      // Shake the piggy bank by tapping it, exactly as in the vigour task - PIT is
+      // the same surface under cloud cover, so it takes the same input. It used to
+      // read the B key, which the study tablet does not have.
+      let pressCount = 0;
+      let lastPressTime = null;
+      const trialStartTime = performance.now();
+      const piggyContainer = document.getElementById('piggy-container');
+
+      pitTapListener = setupTapListener(piggyContainer, (event) => {
+        const now = performance.now();
+
+        const ptype = event.pointerType || 'unknown';
+        if (trialState.pointerType === null) {
+          trialState.pointerType = ptype; // modality the trial was started with
+        }
+        trialState.pointerTypeCounts[ptype] = (trialState.pointerTypeCounts[ptype] || 0) + 1;
+
+        // First entry is RT from trial onset; the rest are inter-press intervals.
+        trialState.responseTime.push(lastPressTime === null ? now - trialStartTime : now - lastPressTime);
+        lastPressTime = now;
+
+        shakePiggy();
+        pressCount++;
+        trialState.trialPresses++;
+        taskTotalPresses++;
+
+        // Coins are still earned on ratio, but stay hidden behind the clouds.
+        if (pressCount === currentRatio) {
+          trialState.trialReward += currentMag;
+          taskTotalReward += currentMag;
+          pressCount = 0;
+        }
+      });
+
+      // Simulate taps for testing mode
       if (window.simulating) {
         const trial_presses = jsPsych.randomization.randomInt(1, 8);
         const avg_rt = 500/trial_presses;
         for (let i = 0; i < trial_presses; i++) {
-          jsPsych.pluginAPI.pressKey('b', avg_rt * i + 1);
+          simulateTap(piggyContainer, avg_rt * i + 1);
         }
       }
     },
     on_finish: function (data) {
-      // Clean up listener
+      // Clean up listeners
+      cleanupTapListener(pitTapListener);
+      pitTapListener = null;
       jsPsych.pluginAPI.cancelAllKeyboardResponses();
       PITtrialCounter += 1;
       data.pit_trial_number = PITtrialCounter;

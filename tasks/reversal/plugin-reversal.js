@@ -470,7 +470,7 @@ var jsPsychReversal = (function (jspsych) {
                 '<div id="rev-deadline-warning">' +
                 '</div>' +
                 // Tap zones only on touch devices; keyboard users interact via arrow keys only
-                (navigator.maxTouchPoints > 0 ?
+                ((window.isTouchDevice ? window.isTouchDevice() : navigator.maxTouchPoints > 0) ?
                     '<div id="rev-tap-left" class="rev-tap-zone rev-tap-left"></div>' +
                     '<div id="rev-tap-right" class="rev-tap-zone rev-tap-right"></div>' : '');
 

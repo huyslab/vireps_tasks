@@ -148,3 +148,11 @@
   font-weight: 700;
   margin: 15px 0
 }
+
+/* The result screen's Continue button. It replaces a "press Spacebar" line in the
+   same slot, so it keeps that line's reveal-after-a-delay behaviour and only needs
+   room around it. */
+#continue-msg {
+  margin-top: var(--rlm-space-3);
+  min-height: var(--rlm-tap-target);
+}

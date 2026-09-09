@@ -1,7 +1,7 @@
 # Max Press Test Task
 
 ## Overview
-The max press test task is a simple keyboard calibration and motor assessment tool that measures participants' maximum key press rate. Participants repeatedly press the 'J' key as fast as possible for a fixed duration while receiving real-time feedback on their pressing speed. This task serves multiple purposes: calibrating keyboard responsiveness, assessing motor function, and establishing baseline performance metrics for analysing subsequent experimental tasks.
+The max press test task is a simple motor calibration tool that measures participants' maximum tapping rate. Participants repeatedly tap an on-screen pad as fast as possible for a fixed duration while receiving real-time feedback on their speed. It calibrates the effort tasks that follow: vigour and PIT are driven by tapping the piggy bank, so the baseline is measured with the same action. It previously read the 'J' key, which the study tablet does not have.
 
 ## File Structure
 
@@ -22,15 +22,15 @@ The max press test task is a simple keyboard calibration and motor assessment to
   - Returns array of jsPsych trial objects for the full assessment sequence
 
 **Core Trial Functions**:
-- **`maxPressRateTrial(settings)`**: Creates the main key pressing trial
+- **`maxPressRateTrial(settings)`**: Creates the main tapping trial
   - Implements press counting and speed calculation
   - Displays live feedback with progress bar and timer
   - Records detailed response time data and performance metrics
-  - Handles first-press trigger to start timing and countdown
+  - Handles first-tap trigger to start timing and countdown
 
 **Instruction and Feedback Functions**:
 - **`maxPressInstructions`**: Initial instruction screen with visual demonstration
-  - Shows animated GIF example of key pressing technique
+  - Describes the tap pad shown on the next screen
   - Explains the task requirements clearly
   
 - **`maxPressFeedback`**: Post-test feedback displaying performance results
@@ -54,7 +54,7 @@ The max press test task is a simple keyboard calibration and motor assessment to
 
 #### `styles.css`
 **Purpose**: CSS styling for the max press test interface.
-- Defines styling for keyboard key indicators (`.spacebar-icon`)
+- Defines styling for the circular tap pad (`#max-press-pad`)
 - Styles for highlighted text and important instructions
 - Maintains visual consistency with other tasks in the battery
 - Ensures clear readability of performance feedback elements
@@ -63,12 +63,12 @@ The max press test task is a simple keyboard calibration and motor assessment to
 
 ### Assessment Protocol
 - **Duration**: Configurable test duration (typically 10 seconds)
-- **Key**: Uses 'J' key for right-hand pressing
-- **Trigger**: First key press starts the countdown timer
+- **Target**: A circular on-screen pad, sized well past the shared minimum tap target
+- **Trigger**: First tap starts the countdown timer
 - **Feedback**: Real-time display of press count, speed, and progress bar
 
 ### Performance Metrics
-- **Press Count**: Total number of valid key presses minus initial trigger press
+- **Press Count**: Total number of valid taps minus the initial trigger tap
 - **Average Speed**: Presses per second over the test duration
 - **Response Times**: Array of inter-press intervals for rhythm analysis
 - **Progress Visualization**: Live speed bar showing performance relative to target
@@ -76,7 +76,7 @@ The max press test task is a simple keyboard calibration and motor assessment to
 ### Quality Control
 - **Minimum Speed Threshold**: Configurable minimum performance requirement
 - **Retake Logic**: Up to 2 attempts allowed if initial performance is insufficient
-- **Held Key Protection**: Prevents cheating by holding the key down
+- **Multi-touch protection**: Secondary touches are ignored, so a second finger cannot inflate the count
 - **Minimum Response Time**: 10ms minimum to filter out mechanical bouncing
 
 ### Real-time Feedback System
@@ -92,7 +92,6 @@ import { createMaxPressTimeline } from './tasks/max-press-test/index.js';
 
 // Create max press test timeline
 const settings = {
-  validKey: 'j',           // Key to press (default: 'j')
   duration: 10000,         // Test duration in milliseconds
   minSpeed: 2.0           // Minimum acceptable speed (presses/sec)
 };
@@ -106,14 +105,12 @@ jsPsych.run(maxPressTimeline);
 ## Settings Configuration
 
 ### Required Parameters
-- **`validKey`**: The keyboard key participants should press (string)
 - **`duration`**: Test duration in milliseconds (number)
 - **`minSpeed`**: Minimum acceptable pressing speed in presses/second (number)
 
 ### Example Settings
 ```javascript
 const defaultSettings = {
-  validKey: 'j',
   duration: 10000,    // 10 seconds
   minSpeed: 2.0       // 2 presses/second minimum
 };
@@ -122,7 +119,7 @@ const defaultSettings = {
 ## Dependencies
 - Core utilities from `/core/utils/index.js`
 - jsPsych framework and plugins (html-keyboard-response, html-button-response)
-- Asset image: `/assets/images/max_press_key.gif` for instruction demonstration
+- `core/utils/touch.js` for the shared tap listener and device-matched wording
 - Custom CSS styling for consistent visual presentation
 
 ## Data Output
