@@ -24,7 +24,14 @@ var jsPsychSelfReportItem = (function (jspsych) {
             },
             button_label: { type: jspsych.ParameterType.STRING, default: "Continue" },
             transition_duration: { type: jspsych.ParameterType.INT, default: 250 },
-            input_mode: { type: jspsych.ParameterType.STRING, default: "auto" }
+            input_mode: { type: jspsych.ParameterType.STRING, default: "auto" },
+            /** Whether this screen offers a way back to the previous one. The caller
+             *  decides: the first screen of a questionnaire has nowhere to go. */
+            allow_back: { type: jspsych.ParameterType.BOOL, default: false },
+            back_label: { type: jspsych.ParameterType.STRING, default: "Back" },
+            /** The answer this item already holds, when the participant has navigated
+             *  back to it. Shown as selected so they can see what they are changing. */
+            initial_value: { type: jspsych.ParameterType.INT, default: null }
         },
         data: {
             questionnaire: { type: jspsych.ParameterType.STRING },
@@ -34,7 +41,12 @@ var jsPsychSelfReportItem = (function (jspsych) {
             response: { type: jspsych.ParameterType.INT },
             response_label: { type: jspsych.ParameterType.STRING },
             input_mode: { type: jspsych.ParameterType.STRING },
-            rt: { type: jspsych.ParameterType.INT }
+            rt: { type: jspsych.ParameterType.INT },
+            /** 'forward' when an answer was given, 'back' when the participant stepped
+             *  back to the previous screen. A 'back' row carries no response. */
+            navigation: { type: jspsych.ParameterType.STRING },
+            /** True when this screen was revisited, i.e. it already had an answer. */
+            revisited: { type: jspsych.ParameterType.BOOL }
         }
     };
 
@@ -56,13 +68,15 @@ var jsPsychSelfReportItem = (function (jspsych) {
             screen.classList.add(keyboardMode ? 'srq-keyboard' : 'srq-touch');
             requestAnimationFrame(() => screen.classList.add('srq-screen-in'));
 
-            const endTrial = (response) => {
+            const endTrial = (response, navigation = 'forward') => {
                 if (finished) return;
                 finished = true;
                 document.removeEventListener('keydown', onKeyDown);
                 body.querySelectorAll('button').forEach((button) => { button.disabled = true; });
                 screen.classList.remove('srq-screen-in');
-                screen.classList.add('srq-screen-out');
+                // Stepping back slides the screen the other way, so the direction of travel
+                // is visible rather than every screen appearing to advance.
+                screen.classList.add(navigation === 'back' ? 'srq-screen-out-back' : 'srq-screen-out');
 
                 const data = {
                     questionnaire: trial.questionnaire,
@@ -72,6 +86,8 @@ var jsPsychSelfReportItem = (function (jspsych) {
                     response: response.value,
                     response_label: response.label,
                     input_mode: keyboardMode ? 'keyboard' : 'touch',
+                    navigation,
+                    revisited: trial.initial_value !== null,
                     rt: Math.round(performance.now() - started)
                 };
                 this.jsPsych.pluginAPI.setTimeout(() => this.jsPsych.finishTrial(data), duration);
@@ -81,9 +97,13 @@ var jsPsychSelfReportItem = (function (jspsych) {
                 body.innerHTML = `<button type="button" class="srq-btn srq-btn-primary">${trial.button_label}</button>`;
                 body.querySelector('button').addEventListener('click', () => endTrial({ value: null, label: null }));
             } else if (trial.question_type === 'likert') {
-                body.innerHTML = `<div class="srq-options">${trial.options.map((option, index) =>
-                    `<button type="button" class="srq-btn srq-option" data-index="${index}">${option.label}</button>`
-                ).join('')}</div>`;
+                body.innerHTML = `<div class="srq-options" role="group" aria-labelledby="srq-prompt">${trial.options.map((option, index) => {
+                    // On a revisit, the standing answer is shown selected - otherwise the
+                    // participant cannot tell what they came back to change.
+                    const isPrevious = trial.initial_value !== null && option.value === trial.initial_value;
+                    return `<button type="button" class="srq-btn srq-option${isPrevious ? ' srq-option-previous' : ''}"`
+                        + ` data-index="${index}" aria-pressed="${isPrevious ? 'true' : 'false'}">${option.label}</button>`;
+                }).join('')}</div>`;
                 body.querySelectorAll('.srq-option').forEach((button) => {
                     button.addEventListener('click', () => {
                         const option = trial.options[Number(button.dataset.index)];
@@ -95,7 +115,24 @@ var jsPsychSelfReportItem = (function (jspsych) {
                 throw new Error(`Unknown self-report question type: ${trial.question_type}`);
             }
 
+            // Deliberately outside .srq-options and never .srq-option: it must not be
+            // reachable by the number-key shortcuts, and simulation must never click it
+            // (a simulated run that pressed Back would not terminate).
+            if (trial.allow_back) {
+                const nav = document.createElement('div');
+                nav.className = 'srq-nav';
+                nav.innerHTML = `<button type="button" class="srq-btn srq-btn-back">${trial.back_label}</button>`;
+                body.appendChild(nav);
+                nav.querySelector('button').addEventListener('click', () => {
+                    endTrial({ value: null, label: null }, 'back');
+                });
+            }
+
+            // Every focusable control, for arrow-key cycling...
             const buttons = [...body.querySelectorAll('.srq-btn')];
+            // ...but the number shortcuts address answers only, so Back never sits in
+            // the numbered run.
+            const answerButtons = [...body.querySelectorAll('.srq-option, .srq-btn-primary')];
             const onKeyDown = (event) => {
                 if (!keyboardMode || event.repeat || event.defaultPrevented || finished) return;
                 const current = buttons.indexOf(document.activeElement);
@@ -105,18 +142,18 @@ var jsPsychSelfReportItem = (function (jspsych) {
                 } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
                     event.preventDefault();
                     buttons[current <= 0 ? buttons.length - 1 : current - 1].focus();
-                } else if (/^[1-9]$/.test(event.key) && buttons[Number(event.key) - 1]) {
+                } else if (/^[1-9]$/.test(event.key) && answerButtons[Number(event.key) - 1]) {
                     event.preventDefault();
-                    buttons[Number(event.key) - 1].click();
-                } else if (event.key === 'Enter' && current === -1 && buttons.length === 1) {
+                    answerButtons[Number(event.key) - 1].click();
+                } else if (event.key === 'Enter' && current === -1 && answerButtons.length === 1) {
                     event.preventDefault();
-                    buttons[0].click();
+                    answerButtons[0].click();
                 }
             };
             document.addEventListener('keydown', onKeyDown);
 
             if (keyboardMode && trial.question_type === 'message') {
-                buttons[0].focus({ preventScroll: true });
+                answerButtons[0].focus({ preventScroll: true });
             }
         }
 
@@ -141,7 +178,7 @@ var jsPsychSelfReportItem = (function (jspsych) {
                 ${progress}
                 <div class="srq-card">
                     ${trial.context ? `<div class="srq-context">${trial.context}</div>` : ''}
-                    <div class="srq-prompt">${trial.prompt}</div>
+                    <div class="srq-prompt" id="srq-prompt">${trial.prompt}</div>
                     <div class="srq-body"></div>
                 </div>
             </div>`;
@@ -158,6 +195,8 @@ var jsPsychSelfReportItem = (function (jspsych) {
                 item_text: trial.prompt,
                 response: trial.question_type === 'message' ? null : option?.value,
                 response_label: trial.question_type === 'message' ? null : option?.label,
+                navigation: 'forward',
+                revisited: trial.initial_value !== null,
                 input_mode: this.usesKeyboard(trial) ? 'keyboard' : 'touch',
                 rt: this.jsPsych.randomization.sampleExGaussian(1200, 300, 1 / 800, true)
             };

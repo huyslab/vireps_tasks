@@ -24,9 +24,20 @@
     transform: translateX(-8vw);
 }
 
+/* Stepping back leaves the way it came in, so going back does not look like
+   advancing to another question. */
+.srq-screen-out-back {
+    opacity: 0;
+    transform: translateX(8vw);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .srq-screen {
         transition-duration: 1ms;
+        transform: none;
+    }
+
+    .srq-screen-out-back {
         transform: none;
     }
 }
@@ -163,5 +174,47 @@
     .srq-btn-primary:hover:not(:disabled) {
         border-color: var(--rlm-accent-dark);
         background: var(--rlm-accent-dark);
+    }
+}
+
+/* The answer this item already holds, shown when the participant steps back to it.
+   An outline rather than the filled .srq-option-chosen: that fill is the momentary
+   flash of a tap just made, and a standing answer should not impersonate one. */
+.srq-option-previous {
+    border-color: var(--rlm-accent);
+    background: var(--rlm-accent-soft);
+    color: var(--rlm-accent-dark);
+}
+
+/* Back sits apart from the answers and reads quieter than them - it is a way out of
+   a mis-tap, not one of the choices. Matched to the shared secondary-button treatment
+   used for "Previous" on instruction pages (core/styles/theme.css). */
+.srq-nav {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: var(--rlm-space-2);
+}
+
+.srq-btn-back {
+    width: auto;
+    min-width: 96px;
+    min-height: var(--rlm-tap-target);
+    padding: 10px 20px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--rlm-ink-muted);
+    font-size: var(--rlm-text-base);
+    text-align: center;
+}
+
+.srq-btn-back:active {
+    background: var(--rlm-surface-sunken);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .srq-btn-back:hover:not(:disabled) {
+        border-color: var(--rlm-line);
+        background: var(--rlm-surface-sunken);
+        color: var(--rlm-ink);
     }
 }

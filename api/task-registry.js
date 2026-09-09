@@ -471,7 +471,7 @@ export const TaskRegistry = {
   },
   self_report: {
     name: 'Self-Report Questionnaires',
-    description: 'Touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires presented one item per screen',
+    description: 'Touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires presented one item per screen, with a way back to correct an answer',
     createTimeline: createSelfReportTimeline,
     computeBonus: () => 0,
     defaultConfig: {
@@ -492,7 +492,21 @@ export const TaskRegistry = {
     resumptionRules: {
       // Resuming by task would skip unanswered items and leave incomplete scales.
       enabled: false
-    }
+    },
+    /**
+     * READING THE DATA. Each questionnaire runs as a loop with a cursor rather than a
+     * flat list of trials, because a participant can step back and change an answer.
+     * One screen still writes one row, so an item that was revisited has more than one:
+     *
+     *   navigation  'forward' for an answer, 'back' for a step backwards (response null)
+     *   superseded  true on an answer that a later one replaced
+     *   revisited   true when the screen already held an answer when it was shown
+     *
+     * The live answers are the rows where navigation === 'forward' and superseded is
+     * falsy - exactly one per item_id. Corrections are kept rather than overwritten, so
+     * a first tap and its correction can both be seen, but only one of them counts.
+     */
+    dataNotes: 'One row per screen. Live answers are navigation === "forward" && !superseded, one per item_id.'
   }
 };
 
