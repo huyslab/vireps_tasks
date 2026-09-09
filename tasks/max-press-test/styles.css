@@ -1,6 +1,6 @@
-/* Max-press test - the keyboard speed check.
-   .spacebar-icon and .highlight-txt are shared widgets and live in core/styles/theme.css;
-   what is left here is the live readout, which is this task's alone. */
+/* Max-press test - the tapping speed check that calibrates the piggy-bank tasks.
+   .highlight-txt is a shared widget and lives in core/styles/theme.css; what is left
+   here is the live readout and the tap pad, which are this task's alone. */
 
 #press-counter {
   font-size: var(--rlm-text-lg);
@@ -44,4 +44,55 @@
    the shared rule sets its alignment through. */
 #instruction-text.max-press-live {
   text-align: center;
+}
+
+/* The tap pad. Big and round so it reads as the thing to hit, and comfortably past
+   the shared --rlm-tap-target minimum even on a small phone: this is the one screen
+   where the participant is asked to hit it as fast as they physically can. */
+#max-press-pad {
+  width: min(220px, 55vw);
+  height: min(220px, 55vw);
+  margin: var(--rlm-space-5) auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--rlm-accent);
+  background-color: var(--rlm-accent-soft);
+  color: var(--rlm-accent);
+  font-size: var(--rlm-text-xl);
+  font-weight: 700;
+  cursor: pointer;
+  /* Rapid repeat taps must not select text, pop the iOS callout, or double-tap zoom */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 60ms ease, transform 60ms ease;
+}
+
+/* Added on every tap and removed on the next, so the pad still flashes when taps
+   arrive faster than the animation would otherwise restart. */
+#max-press-pad.max-press-pad-hit {
+  background-color: var(--rlm-accent);
+  color: var(--rlm-surface);
+  transform: scale(0.96);
+}
+
+/* Once the countdown expires the pad stops responding, so it stops looking live too */
+#max-press-pad.max-press-pad-done {
+  border-color: var(--rlm-line);
+  background-color: var(--rlm-surface-sunken);
+  color: var(--rlm-ink-muted);
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #max-press-pad {
+    transition: background-color 60ms ease;
+  }
+  #max-press-pad.max-press-pad-hit {
+    transform: none;
+  }
 }

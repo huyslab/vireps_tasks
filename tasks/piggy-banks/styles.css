@@ -55,6 +55,11 @@
   width: 90%;
   top: 28%;
   z-index: 3;
+  /* PIT's clouds sit ON TOP of the piggy bank (z-index 3 over the piggy's 2), so
+     they intercepted every tap aimed at it once PIT moved from the B key to
+     tapping. They are decoration - the thing that hides the coins - and must never
+     take input. */
+  pointer-events: none;
 }
 
 #piggy-container {
@@ -93,7 +98,15 @@
   justify-content: center;
   height: 40%;
   width: 40%;
-  top: 0%
+  top: 0%;
+  /* Each container is the tap target for its side in the vigour test, so it gets
+     the same affordances as the single piggy bank above. */
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #instruction-container {
@@ -123,11 +136,19 @@
   z-index: 2;
 }
 
+/* Route taps to the containing #piggy-container* (the listener target) and block
+   image callout/drag on a long press. */
+#piggy-bank-left, #piggy-bank-right {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 #piggy-bank {
   /* In flow so #piggy-container's fit-content width measures the image; overrides
      the shared position:absolute rule above. Tails are still absolute children. */
   position: relative;
-  /* Route taps to #piggy-container (the listener target) and block image callout/drag */
   pointer-events: none;
   -webkit-user-select: none;
   user-select: none;

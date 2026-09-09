@@ -1,6 +1,6 @@
-import { updatePersistentCoinContainer, observeResizing, dropCoin, setupPointerListener, cleanupPointerListener, simulatePointerTap } from './vigour-utils.js';
+import { updatePersistentCoinContainer, observeResizing, dropCoin } from './vigour-utils.js';
 import { shakePiggy } from './utils.js';
-import { updateState } from '@utils/index.js';
+import { updateState, pressVerb, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 
 let instructionPointerListener = null;
 let instructionResizeObserver = null;
@@ -28,13 +28,13 @@ const instructionPage = {
     const bottomContainer = document.getElementById('bottom-container');
     const experimentContainer = document.getElementById('experiment-container');
     const buttonInstruction = document.getElementById('button-instruction');
-    instructionPointerListener = setupPointerListener(handleSpacebar);
+    instructionPointerListener = setupTapListener(document.getElementById('piggy-container'), handleTap);
 
     /**
-     * Handles spacebar presses during the instruction demo
+     * Handles taps on the piggy bank during the instruction demo
      * Provides immediate feedback and coin rewards
      */
-    function handleSpacebar() {
+    function handleTap() {
       shakeCount++;
       shakePiggy();
       updateInstructionText(shakeCount);
@@ -78,9 +78,9 @@ const instructionPage = {
       buttonInstruction.style.fontSize = '';
       buttonInstruction.style.color = '';
       if (instructionPointerListener) {
-        cleanupPointerListener(instructionPointerListener.handler, instructionPointerListener.element);
+        cleanupTapListener(instructionPointerListener);
       }
-      instructionPointerListener = setupPointerListener(handleSpacebar);
+      instructionPointerListener = setupTapListener(document.getElementById('piggy-container'), handleTap);
       const coinContainer = document.getElementById('coin-container');
       coinContainer.innerHTML = '';
     }
@@ -99,7 +99,7 @@ const instructionPage = {
           const scheduledTime = 100 * i + 1;
           tapPromises.push(
             new Promise(resolve => {
-              simulatePointerTap(piggy, scheduledTime);
+              simulateTap(piggy, scheduledTime);
               setTimeout(resolve, scheduledTime);
             })
           );
@@ -118,7 +118,7 @@ const instructionPage = {
   },
   on_finish: function () {
     if (instructionPointerListener) {
-      cleanupPointerListener(instructionPointerListener.handler, instructionPointerListener.element);
+      cleanupTapListener(instructionPointerListener);
       instructionPointerListener = null;
     }
     if (instructionResizeObserver) {
@@ -143,8 +143,8 @@ const ruleInstruction = {
     
     <p>Throughout the game, you will see different piggy banks with unique appearances:</p>
     <ul>
-        <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Vividness</span> of piggy colors: Indicates how fast you need to shake it.</li>
-        <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Tail length</span>: Longer piggy tails = more valuable coins.</li>
+        <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
+        <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
     </ul>
     </div>
     `,
@@ -177,18 +177,18 @@ const ruleInstruction = {
 const startConfirmation = {
   type: jsPsychHtmlKeyboardResponse,
   choices: 'NO_KEYS',
-  stimulus: `
+  stimulus: () => `
   <div class="experiment-wrapper">
     <div id="instruction-container">
       <div id="instruction-text">
         <p>You will now play the piggy-bank game without a break for about <strong>four minutes</strong>.</p>
-        <p>When you're ready, <span class="highlight-txt">tap the piggy bank</span> to begin.</p>
+        <p>When you're ready, <span class="highlight-txt">${pressVerb()} the piggy bank</span> to begin.</p>
       </div>
     </div>
     <div id="experiment-container">
       <div id="piggy-container">
         <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png"
-             alt="Tap the piggy bank to start">
+             alt="${pressVerb(true)} the piggy bank to begin">
       </div>
     </div>
     <div id="bottom-container" style="visibility: visible;">
@@ -216,6 +216,7 @@ const startConfirmation = {
     const piggyContainer = document.getElementById('piggy-container');
     if (piggyContainer) {
       piggyContainer.addEventListener('pointerdown', function handler(event) {
+        if (!event.isPrimary || event.button !== 0) return;
         event.preventDefault();
         finishOnce('b');
         piggyContainer.removeEventListener('pointerdown', handler);
@@ -233,7 +234,7 @@ const startConfirmation = {
     // Auto-advance in simulation mode: this trial has no timeout and ends only on a
     // real tap/click, so dispatch a simulated tap on the piggy bank to begin the task.
     if (window.simulating) {
-      simulatePointerTap(piggyContainer, 100);
+      simulateTap(piggyContainer, 100);
     }
   },
   on_finish: function (data) {
@@ -300,9 +301,9 @@ function generateInstructStimulus() {
  */
 function updateInstructionText(shakeCount) {
   const messages = [
-    '<p>Welcome to the piggy bank game!</p><p>Tap the piggy bank to shake it!</p>',
-    '<p>Tap the piggy bank to shake it!</p><p>You can tap it again to keep on shaking...</p>',
-    '<p>Well done, You just got a coin out of the piggy bank!</p><p><span class="highlight-txt">You can always tap again for more coins.</span> Try getting some more!</p>'
+    `<p>Welcome to the piggy bank game!</p><p>${pressVerb(true)} the piggy bank to shake it!</p>`,
+    `<p>${pressVerb(true)} the piggy bank to shake it!</p><p>You can ${pressVerb()} it again to keep on shaking...</p>`,
+    `<p>Well done, you just got a coin out of the piggy bank!</p><p><span class="highlight-txt">You can always ${pressVerb()} again for more coins.</span> Try getting some more!</p>`
   ];
   let messageIndex = 0;
   if (shakeCount < 1) {

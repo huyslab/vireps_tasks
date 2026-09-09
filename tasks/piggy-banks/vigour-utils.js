@@ -1,5 +1,5 @@
 // Import functions 
-import { postToParent, saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt } from '@utils/index.js';
+import { postToParent, saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt , setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 import { shakePiggy, updatePiggyTails} from "./utils.js";
 
 // Trial sequence for vigour task - each trial specifies piggy properties and duration
@@ -169,52 +169,11 @@ function generateTrialStimulus(magnitude, ratio) {
   `;
 }
 
-/**
- * Sets up a pointerdown (touch/tap) listener on the piggybank element.
- * @param {Function} callback - Function to call when piggybank is tapped
- * @returns {{element: HTMLElement, handler: Function}|null} Listener reference for cleanup, or null if element not found
- */
-function setupPointerListener(callback) {
-  const piggyContainer = document.getElementById('piggy-container');
-  if (!piggyContainer) return null;
-  const handler = function (event) {
-    if (!event.isPrimary) return; // ignore secondary touches (multi-touch contamination)
-    event.preventDefault();
-    callback(event);
-  };
-  piggyContainer.addEventListener('pointerdown', handler);
-  return { element: piggyContainer, handler };
-}
-
-/**
- * Removes a pointerdown listener set up by setupPointerListener.
- * @param {Function|null} handler - The handler function to remove
- * @param {HTMLElement|null} element - The DOM element the listener is attached to
- */
-function cleanupPointerListener(handler, element) {
-  if (handler && element) {
-    element.removeEventListener('pointerdown', handler);
-  }
-}
-
-/**
- * Simulates a tap on an element by dispatching a PointerEvent after a delay.
- * Used only in simulation mode.
- * @param {HTMLElement} element - The element to simulate a tap on
- * @param {number} delay - Delay in milliseconds before dispatching
- */
-function simulatePointerTap(element, delay) {
-  setTimeout(() => {
-    if (element) {
-      element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true, pointerType: 'touch' }));
-    }
-  }, delay);
-}
-
 // Global trial tracking variables
 let vigourTrialCounter = 0;
 let fsChangeHandler = null;
 let vigourPointerHandler = null;
+let vigourTapListener = null;
 let vigourPiggyContainer = null;
 let vigourResizeHandler = null;
 let vigourResizeTimer = null;
@@ -343,8 +302,6 @@ function piggyBankTrial(settings) {
       vigourPiggyContainer = piggyContainer;
 
       vigourPointerHandler = function (event) {
-        if (!event.isPrimary) return; // ignore secondary touches (multi-touch contamination)
-        event.preventDefault();
         const now = performance.now();
 
         const ptype = event.pointerType || 'unknown';
@@ -375,22 +332,21 @@ function piggyBankTrial(settings) {
         }
       };
 
-      if (piggyContainer) {
-        piggyContainer.addEventListener('pointerdown', vigourPointerHandler);
-      }
+      vigourTapListener = setupTapListener(piggyContainer, vigourPointerHandler);
 
       // Simulate taps for testing mode
       if (window.simulating) {
         const trial_presses = jsPsych.randomization.randomInt(1, 8);
         const avg_rt = 500 / trial_presses;
         for (let i = 0; i < trial_presses; i++) {
-          simulatePointerTap(piggyContainer, avg_rt * i + 1);
+          simulateTap(piggyContainer, avg_rt * i + 1);
         }
       }
     },
     on_finish: function (data) {
       // Clean up pointerdown listener
-      cleanupPointerListener(vigourPointerHandler, vigourPiggyContainer);
+      cleanupTapListener(vigourTapListener);
+      vigourTapListener = null;
       vigourPointerHandler = null;
       vigourPiggyContainer = null;
       // Also clean up any lingering keyboard listeners from other trials
@@ -483,8 +439,5 @@ export {
   updatePersistentCoinContainer,
   observeResizing,
   dropCoin,
-  setupPointerListener,
-  cleanupPointerListener,
-  simulatePointerTap,
   VIGOUR_PRELOAD_IMAGES
 }

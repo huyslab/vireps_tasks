@@ -1,4 +1,4 @@
-import { updateState } from '@utils/index.js';
+import { updateState, pressVerb, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 
 // Function to get each key press RT
 function getDifferences(array) {
@@ -8,6 +8,12 @@ function getDifferences(array) {
     }).slice(1); // remove first element if you don't want the 0/null
 }
 
+// Handles for whatever the live trial started, so on_finish can release them
+// however the trial ends (countdown expiry, or the trial being cut short).
+let maxPressTapListener = null;
+let countdownInterval = null;
+let animationFrameId = null;
+
 // Trial to measure maximum press rate
 const maxPressRateTrial = (settings) => {
     return {
@@ -16,11 +22,14 @@ const maxPressRateTrial = (settings) => {
             return `
             <div id="instruction-container">
                 <div id="instruction-text" class="max-press-live">
-                    <h3 id="countdown">Place your finger on the <span class="spacebar-icon">J</span> key.<br>When you are ready, start pressing it repeatedly as fast as you can!</h3>
+                    <h3 id="countdown">${pressVerb(true)} the circle below.<br>When you are ready, ${pressVerb()} it over and over as fast as you can!</h3>
                     <div id="press-counter">Presses: 0</div>
                     <div id="speed-display">Speed: 0.00 presses/sec</div>
                     <div id="speed-track">
                         <div id="speed-bar"></div>
+                    </div>
+                    <div id="max-press-pad" role="button" tabindex="-1" aria-label="${pressVerb(true)} as fast as you can">
+                        <span id="max-press-pad-label">${pressVerb(true)}</span>
                     </div>
                 </div>
             </div>
@@ -32,46 +41,48 @@ const maxPressRateTrial = (settings) => {
             if (window.simulating) {
                 trial.trial_duration = 1000;
             }
-            // Create a shared state object
+        },
+        on_load: function () {
+            // Shared state for the run
             let pressCount = 0;
             let isStarted = false;
             let startTime;
             let timeLeft;
-            let countdownInterval;
             let RTs = [];
-        
-            const keyboardListener = jsPsych.pluginAPI.getKeyboardResponse({
-            callback_function: function (info) {
-                const updateSpeed = () => {
-                    if (!isStarted) return;
-                    const currentTime = performance.now();
-                    const elapsedSeconds = (currentTime - startTime) / 1000;
-                    const speed = (pressCount - 1) / Math.min(elapsedSeconds, settings.duration/1000); // Subtract initial press
-                    const speedDisplay = document.getElementById('speed-display');
-                    const speedBar = document.getElementById('speed-bar');
-                    if (speedDisplay) {
-                        speedDisplay.textContent = `Speed: ${speed.toFixed(2)} presses/sec`;
-                        // Assume max speed is 10 presses/sec for 100% bar width
-                        const barWidth = Math.min(speed * 10, 110);
-                        speedBar.style.width = `${barWidth}%`;
-                    }
-                };
+            const trialStart = performance.now();
+            const pad = document.getElementById('max-press-pad');
 
+            const updateSpeed = () => {
+                if (!isStarted) return;
+                const currentTime = performance.now();
+                const elapsedSeconds = (currentTime - startTime) / 1000;
+                const speed = (pressCount - 1) / Math.min(elapsedSeconds, settings.duration/1000); // Subtract initial press
+                const speedDisplay = document.getElementById('speed-display');
+                const speedBar = document.getElementById('speed-bar');
+                if (speedDisplay) {
+                    speedDisplay.textContent = `Speed: ${speed.toFixed(2)} presses/sec`;
+                    // Assume max speed is 10 presses/sec for 100% bar width
+                    const barWidth = Math.min(speed * 10, 110);
+                    speedBar.style.width = `${barWidth}%`;
+                }
+            };
+
+            const handleTap = function () {
                 if (!isStarted) {
                     // First press - start the countdown
                     isStarted = true;
                     startTime = performance.now();
                     timeLeft = settings.duration/1000;
                     updateState('max_press_rate_start');
-                    
+
                     // Start animation loop
-                    let animationFrameId = requestAnimationFrame(updateSpeed);
+                    animationFrameId = requestAnimationFrame(updateSpeed);
 
                     // Set trial duration from first press
                     jsPsych.pluginAPI.setTimeout(function() {
                         jsPsych.finishTrial({responseTime: getDifferences(RTs), trialPresses: pressCount - 1, avgSpeed: (pressCount - 1) / (settings.duration / 1000)});
                     }, settings.duration + 1000);
-                    
+
                     // Start countdown
                     countdownInterval = setInterval(() => {
                         timeLeft = timeLeft - 0.1;
@@ -82,30 +93,53 @@ const maxPressRateTrial = (settings) => {
                                 updateSpeed();
                             } else {
                                 clearInterval(countdownInterval);
+                                countdownInterval = null;
                                 cancelAnimationFrame(animationFrameId);
                                 updateSpeed();
                                 countdownElement.textContent = 'Time\'s up!';
-                                jsPsych.pluginAPI.cancelAllKeyboardResponses();
+                                cleanupTapListener(maxPressTapListener);
+                                maxPressTapListener = null;
+                                if (pad) pad.classList.add('max-press-pad-done');
                             }
                         }
                     }, 100);
                 }
-                
+
                 pressCount++;
-                RTs.push(info.rt);
+                // Time from trial onset, matching what the keyboard listener recorded;
+                // getDifferences turns these into inter-press intervals.
+                RTs.push(performance.now() - trialStart);
+                if (pad) {
+                    // Restart the press animation even on rapid repeat taps
+                    pad.classList.remove('max-press-pad-hit');
+                    void pad.offsetWidth;
+                    pad.classList.add('max-press-pad-hit');
+                }
                 const pressCounter = document.getElementById('press-counter');
                 if (pressCounter) {
                     pressCounter.textContent = `Presses: ${pressCount-1}`;
                 }
-            },
-            valid_responses: [settings.validKey],
-            rt_method: 'performance',
-            persist: true,
-            allow_held_key: false,
-            minimum_valid_rt: 10
-            });
+            };
+
+            maxPressTapListener = setupTapListener(pad, handleTap);
+
+            if (window.simulating) {
+                for (let i = 0; i < 5; i++) {
+                    simulateTap(pad, 20 * i + 1);
+                }
+            }
         },
         on_finish: function (data) {
+            cleanupTapListener(maxPressTapListener);
+            maxPressTapListener = null;
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
             if (window.simulating) {
                 data.avgSpeed = 5.0;
             }
@@ -117,12 +151,11 @@ const maxPressRateTrial = (settings) => {
 const maxPressInstructions = {
     type: jsPsychHtmlButtonResponse,
     css_classes: ["instructions"],
-    stimulus: `
+    stimulus: () => `
     <div id="instruction-container">
         <div id="instruction-text">
-            <p>Before we start the first game, we need to complete a short test of your keyboard.</p>
-            <p>On the next screen, you will need to <span class="highlight-txt">press the <span class="spacebar-icon">J</span> key repeatedly as fast as you can</span>, as shown below.</p>
-            <img src="./assets/images/max_press_key.gif" alt="Max Press Key Example" style="width:250px;">
+            <p>First, a quick warm-up. We want to see how fast you can ${pressVerb()}.</p>
+            <p>On the next screen you will see a circle. <span class="highlight-txt">${pressVerb(true)} it over and over, as fast as you can</span>, until the time runs out.</p>
         </div>
     </div>
     `,
@@ -137,8 +170,8 @@ const maxPressFeedback = {
         <div id="instruction-container">
             <div id="instruction-text">
                 <h2><span class="highlight-txt">Well done!</span></h2>
-                <p>On average, you pressed <strong>${avgSpeed.toFixed(2)} times per second</strong> during the keyboard test.</p>
-                <p>Press <strong>Continue</strong> to proceed to the first game.</p>
+                <p>Your speed was <strong>${avgSpeed.toFixed(2)} times per second</strong>.</p>
+                <p>${pressVerb(true)} <strong>Continue</strong> to go on to the first game.</p>
             </div>
         </div>
         `;
@@ -156,9 +189,9 @@ const maxPressRetakeMessage = (settings) => {
                 return `
             <div id="instruction-container">
                 <div id="instruction-text">
-                    <p>On average, you pressed <strong>${avgSpeed.toFixed(2)} times per second</strong> during the keyboard test.</p>
-                    <p>To ensure the accuracy of the test,<br>we kindly ask you to retake it <span class="highlight-txt">with your best effort as much as possible</span>.</p>
-                    <p>Press <strong>Continue</strong> to retake the test.</p>
+                    <p>Your speed was <strong>${avgSpeed.toFixed(2)} times per second</strong>.</p>
+                    <p>Let's try that once more. <span class="highlight-txt">Please go as fast as you can this time.</span></p>
+                    <p>${pressVerb(true)} <strong>Continue</strong> to try again.</p>
                 </div>
             </div>
             `;

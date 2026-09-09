@@ -171,6 +171,7 @@ export const TaskRegistry = {
     createTimeline: createVigourTestTimeline,
     computeBonus: () => 0, // No bonus computation for this task
     defaultConfig: {
+      preferredOrientation: "landscape",
     },
     requirements: {
       css: ['@tasks/piggy-banks/styles.css'],
@@ -179,6 +180,7 @@ export const TaskRegistry = {
       enabled: true
     },
     configOptions: {
+      preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). Default is 'landscape': the two piggy banks being compared sit side by side, and each has to stay big enough to tap."
     }
   },
   go_no_go: {
@@ -321,9 +323,11 @@ export const TaskRegistry = {
     computeBonus: () => computeRelativePiggyTasksBonus('pit_trial'),
     defaultConfig: {
       task_name: "PIT",
+      preferredOrientation: "portrait",
     },
     configOptions: {
-      task_name: "The name of the task as it would appear in the bonus object. Default is 'PIT'."
+      task_name: "The name of the task as it would appear in the bonus object. Default is 'PIT'.",
+      preferredOrientation: "Preferred device orientation on phones ('portrait' or 'landscape'). Default is 'portrait', matching the vigour task - PIT presents the same piggy bank, tapped the same way."
     },
     requirements: {
       css: ['@tasks/piggy-banks/styles.css'],

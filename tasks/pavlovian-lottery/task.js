@@ -8,7 +8,7 @@
  * followed by its associated coin reward with animation effects.
  */
 
-import { createPreloadTrial, updateState } from '@utils/index.js';
+import { createPreloadTrial, updateState, pressVerb } from '@utils/index.js';
 
 /**
  * Creates the complete timeline for the Pavlovian Lottery experiment.
@@ -141,12 +141,13 @@ export function createPavlovianLotteryTimeline(settings) {
     pages: [
       // Welcome and task overview
       `
-        <h2>Welcome to the Lucky Lottery Game!</h2>
-        <p>Spin the lottery wheel to discover which patterns earn or lose coins.</p>
+        <h2>The lucky lottery</h2>
+        <p>Each go, the pictures spin and stop on one of them.</p>
+        <p>Find out which pictures win you coins, and which ones break them.</p>
       `,
       // Visual guide showing all possible coin outcomes
       `
-        <p>Each spin reveals a pattern that will either reward you with a £1, 50p, or 1p coin, or break a coin.</p>
+        <p>Each spin stops on one picture. The picture either gives you a coin - £1, 50p or 1p - or breaks one.</p>
         <div style='display: grid;'>
             <table class='rlm-coin-table'>
                 <tr>
@@ -161,7 +162,7 @@ export function createPavlovianLotteryTimeline(settings) {
                 </tr>
             </table>
         </div>
-        <p>Your bonus payment will depend on the coins you find in this task and the next ones. Each coin adds to your bonus, but broken coins reduce it.</p>
+        <p>The coins you win here and in the next games add to your bonus. Broken coins take some away.</p>
       `
     ],
     show_clickable_nav: true,
@@ -169,14 +170,14 @@ export function createPavlovianLotteryTimeline(settings) {
   },
   {
     // Final instruction screen with start prompt
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     css_classes: ['instructions'],
-    stimulus: `
-    <p>The game consists of ${parseInt(PREPILT_CONFIG.sequence.length)} spins in total.</p>
-    <p>When you're ready, place your fingers comfortably on the <span class="spacebar-icon">Spacebar</span>.</p>
-    <p class="highlight-txt">Press down the <span class="spacebar-icon">Spacebar</span> to begin your first spin!</p>
+    stimulus: () => `
+    <p>There are ${parseInt(PREPILT_CONFIG.sequence.length)} spins in total.</p>
+    <p class="highlight-txt">${pressVerb(true)} the button below to start your first spin.</p>
     `,
-    choices: [' '], // Only spacebar accepted
+    choices: ['Start'],
+    simulation_options: { data: { response: 0 } },
     data: { trialphase: 'prepilt_instruction' },
     on_start: () => {updateState("prepilt_conditioning_start")} // Update experiment state
   }
@@ -201,7 +202,7 @@ export function createPavlovianLotteryTimeline(settings) {
           </div>
           <div class="lower-message-area">
             <p style="font-size: 28px; font-weight: bold; margin: 10px 0; visibility: hidden;"></p>
-            <p id="continue-msg" style="visibility: hidden;">Press <span class="spacebar-icon">Spacebar</span> to continue</p>
+            <p id="continue-msg" style="visibility: hidden;"></p>
           </div>
         </div>
       `;
@@ -386,7 +387,7 @@ export function createPavlovianLotteryTimeline(settings) {
           </div>
           <div class="lower-message-area">
             <p class="${value.includes('-') ? 'negative' : 'positive'}">${value}</p>
-            <p id="continue-msg" style="visibility: hidden;">Press <span class="spacebar-icon">Spacebar</span> to continue</p>
+            <button id="continue-msg" class="jspsych-btn" style="visibility: hidden;">Continue</button>
           </div>
         </div>
       `;
@@ -397,27 +398,33 @@ export function createPavlovianLotteryTimeline(settings) {
     },
     save_timeline_variables: true, // Save trial variables for data analysis
     data: { trialphase: 'prepilt_conditioning'},
-    on_start: function (trial) {
-      // Show continue message after delay
+    on_load: function () {
+      const trialStart = performance.now();
+
+      // The button is revealed rather than rendered late, so the result stays on
+      // screen for a fixed minimum first. That delay is what the keyboard version
+      // enforced with minimum_valid_rt; here the target simply is not there to hit.
       jsPsych.pluginAPI.setTimeout(() => {
         const continueMsg = document.querySelector('#continue-msg');
-        continueMsg.style.visibility = 'visible';
-      }, PREPILT_CONFIG.CONSTANTS.CONTINUE_MESSAGE_DELAY); // Delay before showing the prompt
-      
-      // Set up keyboard response with minimum RT requirement
-      jsPsych.pluginAPI.getKeyboardResponse({
-        callback_function: (info) => {
+        if (continueMsg) continueMsg.style.visibility = 'visible';
+      }, PREPILT_CONFIG.CONSTANTS.CONTINUE_MESSAGE_DELAY);
+
+      const continueBtn = document.querySelector('#continue-msg');
+      if (continueBtn) {
+        continueBtn.addEventListener('click', () => {
+          if (continueBtn.style.visibility !== 'visible') return;
           jsPsych.finishTrial({
-            response: info.key,
-            rt: info.rt
+            response: 'continue',
+            rt: Math.round(performance.now() - trialStart)
           });
-        },
-        valid_responses: [' '], // Only spacebar accepted
-        rt_method: 'performance',
-        persist: false,
-        allow_held_key: false,
-        minimum_valid_rt: PREPILT_CONFIG.CONSTANTS.CONTINUE_MESSAGE_DELAY, // Prevent accidental fast responses
-      });
+        });
+      }
+
+      if (window.simulating) {
+        jsPsych.pluginAPI.clickTarget(continueBtn, PREPILT_CONFIG.CONSTANTS.CONTINUE_MESSAGE_DELAY + 50);
+      }
+    },
+    on_start: function (trial) {
       
       // Update experiment state for resumption capability
       if (jsPsych.evaluateTimelineVariable('prepilt_trial') < PREPILT_CONFIG.sequence.length) {
@@ -458,12 +465,14 @@ export function createPavlovianLotteryTimeline(settings) {
    * Task completion message displayed after all trials.
    */
   const endMessage = {
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
+    css_classes: ['instructions'],
     stimulus: `
       <h2>Great job!</h2>
-      <p>You've completed all the lottery spins.</p>
-      <p>Press any key to continue to the next part of the experiment.</p>
+      <p>You have finished all the lottery spins.</p>
     `,
+    choices: ['Continue'],
+    simulation_options: { data: { response: 0 } },
     post_trial_gap: 800 // Brief pause before next part of experiment
   };
 
