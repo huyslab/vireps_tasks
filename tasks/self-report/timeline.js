@@ -10,8 +10,17 @@ import { getQuestionnaire } from './questionnaires.js';
  * questionnaireTimeline). A flat array of trials cannot step backwards, and stepping
  * backwards is the point: 115 items, one per screen, each previously committed by a
  * single tap with no way to correct a mis-hit.
+ *
+ * The list ends with a completion screen, which is what makes the LAST item of a
+ * questionnaire correctable. Each questionnaire owns its own cursor and the next one
+ * starts at zero with no way back, so without a screen after it, the final answer of
+ * every questionnaire - and of the whole module - could not be revisited.
+ *
+ * @param {object} questionnaire - From questionnaires.js
+ * @param {number} position - 1-based place in the module, for the completion screen
+ * @param {number} total - How many questionnaires the module runs
  */
-function questionnaireScreens(questionnaire) {
+function questionnaireScreens(questionnaire, position, total) {
     const screens = [];
 
     questionnaire.sections.forEach((section, sectionIndex) => {
@@ -46,6 +55,27 @@ function questionnaireScreens(questionnaire) {
                 trialphase: questionnaire.key
             });
         });
+    });
+
+    // The screen that keeps the last item reachable. It doubles as the only pause in a
+    // block that is otherwise 121 screens without one.
+    const isFinal = position === total;
+    screens.push({
+        question_type: 'message',
+        prompt: isFinal
+            ? `<p>You have finished the last set of questions.</p>
+               <p>Tap <b>Back</b> if you want to change your last answer, or <b>Continue</b> to finish.</p>`
+            : `<p>You have finished set ${position} of ${total}.</p>
+               <p>Take a moment if you need one.</p>
+               <p>Tap <b>Back</b> if you want to change your last answer, or <b>Continue</b> for the next set.</p>`,
+        progress_label: `Set ${position} of ${total}`,
+        button_label: 'Continue',
+        context: '',
+        item_id: null,
+        item_index: null,
+        n_items: null,
+        options: [],
+        trialphase: `${questionnaire.key}_complete`
     });
 
     return screens;
@@ -96,8 +126,8 @@ function supersedeEarlierAnswers(questionnaireKey, itemId, currentTrialIndex) {
  * moves the cursor either way. The cursor is bounded by construction - Back is only
  * offered above 0, and the loop ends once it reaches the end - so it cannot run away.
  */
-function questionnaireTimeline(questionnaire, settings) {
-    const screens = questionnaireScreens(questionnaire);
+function questionnaireTimeline(questionnaire, settings, position, total) {
+    const screens = questionnaireScreens(questionnaire, position, total);
     let index = 0;
 
     // Every screen-varying parameter is a function of the cursor. jsPsych evaluates
@@ -162,7 +192,7 @@ function questionnaireTimeline(questionnaire, settings) {
 }
 
 export function createSelfReportTimeline(settings) {
-    return settings.questionnaires
-        .map(getQuestionnaire)
-        .map((questionnaire) => questionnaireTimeline(questionnaire, settings));
+    const questionnaires = settings.questionnaires.map(getQuestionnaire);
+    return questionnaires.map((questionnaire, position) =>
+        questionnaireTimeline(questionnaire, settings, position + 1, questionnaires.length));
 }

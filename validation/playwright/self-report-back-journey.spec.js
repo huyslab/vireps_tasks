@@ -11,6 +11,19 @@ import { patchWebkitTouchPoints, trackPageErrors } from './support/helpers.js';
 const FIRST_ITEM = 'I plan tasks carefully';
 const SECOND_ITEM = 'I do things without thinking';
 
+/**
+ * Items per questionnaire, in module order. Asserted individually so a cursor or
+ * section-boundary regression names the questionnaire it broke rather than just
+ * moving a total.
+ *
+ * BIS is 31 rather than the canonical 30 because the source data dictionary repeats
+ * "I plan trips well ahead of time" under two ids. That is a known content issue
+ * raised separately; this test pins current reality so a silently dropped item
+ * cannot hide behind it.
+ */
+const EXPECTED_ITEMS = { BIS: 31, ARI: 7, STAXI2: 57, STAI: 20 };
+const EXPECTED_TOTAL = Object.values(EXPECTED_ITEMS).reduce((a, b) => a + b, 0); // 115
+
 async function openQuestionnaire(page, participantId) {
   await patchWebkitTouchPoints(page);
   await page.addInitScript(() => {
@@ -102,17 +115,28 @@ test('a simulated run still terminates with one live answer per item', async ({ 
   const summary = await page.evaluate(() => {
     const rows = jsPsych.data.get().filter({ trial_type: 'self-report-item' }).values();
     const live = rows.filter((row) => row.navigation === 'forward' && !row.superseded && row.item_id);
+    const perQuestionnaire = {};
+    live.forEach((row) => {
+      perQuestionnaire[row.questionnaire] = (perQuestionnaire[row.questionnaire] || 0) + 1;
+    });
     return {
       live: live.length,
       unique: new Set(live.map((row) => row.item_id)).size,
       back: rows.filter((row) => row.navigation === 'back').length,
-      questionnaires: [...new Set(live.map((row) => row.questionnaire))].sort(),
+      perQuestionnaire,
     };
   });
 
   expect(summary.back, 'simulation must never press Back, or a run would not terminate').toBe(0);
-  expect(summary.live, 'every item should have exactly one live answer').toBe(summary.unique);
-  expect(summary.questionnaires).toEqual(['ARI', 'BIS', 'STAI', 'STAXI2']);
+
+  // Counting, not just de-duplicating: uniqueness alone would still pass if the cursor
+  // skipped most of the battery, as long as whatever survived had distinct ids.
+  expect(
+    summary.perQuestionnaire,
+    'every questionnaire should deliver all of its items'
+  ).toEqual(EXPECTED_ITEMS);
+  expect(summary.live, `the battery should record ${EXPECTED_TOTAL} answers`).toBe(EXPECTED_TOTAL);
+  expect(summary.unique, 'each answer should belong to a distinct item').toBe(EXPECTED_TOTAL);
   expect(errors).toEqual([]);
 });
 
@@ -135,4 +159,76 @@ test('number-key shortcuts still address answers, not the Back button', async ({
   await page.keyboard.press(String(optionCount + 1));
   await page.waitForTimeout(400);
   await expect(page.locator('.srq-prompt'), 'a number past the scale should do nothing').toHaveText(FIRST_ITEM);
+});
+
+test('the last item of a questionnaire is still correctable', async ({ page }) => {
+  test.setTimeout(180000);
+  const errors = trackPageErrors(page);
+  await openQuestionnaire(page, 'back_boundary');
+
+  // Walk BIS to its end. Each questionnaire owns its own cursor and the next one opens
+  // with no way back, so without a screen after the final item that answer would be
+  // sealed the moment it was given.
+  const LAST_BIS_ITEM = 'I plan for the future [I am future oriented].';
+  for (let step = 0; step < 40; step++) {
+    if ((await page.locator('.srq-prompt').innerText()) === LAST_BIS_ITEM) break;
+    const primary = page.locator('.srq-btn-primary');
+    if (await primary.count()) await primary.click();
+    else await page.locator('.srq-option').first().click();
+    await page.waitForTimeout(400);
+  }
+  await expect(page.locator('.srq-prompt'), 'should reach the final BIS item').toHaveText(LAST_BIS_ITEM);
+
+  await page.locator('.srq-option').first().click();
+
+  // The completion screen stands between the last item and the next questionnaire.
+  await expect(
+    page.locator('.srq-prompt'),
+    'a completion screen should follow the last item'
+  ).toContainText('You have finished set 1 of 4');
+  await expect(
+    page.locator('.srq-btn-back'),
+    'the completion screen must offer a way back, or the last answer is sealed'
+  ).toHaveCount(1);
+
+  await page.locator('.srq-btn-back').click();
+  await expect(page.locator('.srq-prompt'), 'Back should return to the final item').toHaveText(LAST_BIS_ITEM);
+  await expect(page.locator('.srq-option-previous'), 'the standing answer should be shown').toHaveCount(1);
+
+  await page.locator('.srq-option').nth(3).click();
+
+  // The row is written after the screen transition, so wait for the next screen rather
+  // than reading the data straight after the tap.
+  await expect(page.locator('.srq-prompt')).toContainText('You have finished set 1 of 4');
+
+  const live = await liveAnswers(page);
+  const finalItem = live.filter((row) => row.item_text === LAST_BIS_ITEM);
+  expect(finalItem, 'the corrected final item should have one live answer').toHaveLength(1);
+  expect(finalItem[0].response, 'the correction should stand').toBe(4);
+  expect(errors).toEqual([]);
+});
+
+test('crossing into the next questionnaire closes the previous one', async ({ page }) => {
+  test.setTimeout(180000);
+  await openQuestionnaire(page, 'back_crossing');
+
+  const LAST_BIS_ITEM = 'I plan for the future [I am future oriented].';
+  for (let step = 0; step < 40; step++) {
+    if ((await page.locator('.srq-prompt').innerText()) === LAST_BIS_ITEM) break;
+    const primary = page.locator('.srq-btn-primary');
+    if (await primary.count()) await primary.click();
+    else await page.locator('.srq-option').first().click();
+    await page.waitForTimeout(400);
+  }
+  await page.locator('.srq-option').first().click();
+  await expect(page.locator('.srq-prompt')).toContainText('You have finished set 1 of 4');
+  await page.locator('.srq-btn-primary').click();
+
+  // Past the boundary the previous questionnaire is finalised and saved, so its cursor
+  // is gone: the opening screen of the next one correctly offers no way back into it.
+  await expect(page.locator('.srq-screen')).toBeVisible();
+  await expect(
+    page.locator('.srq-btn-back'),
+    'the first screen of the next questionnaire has nowhere to go back to'
+  ).toHaveCount(0);
 });
