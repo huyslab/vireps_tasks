@@ -47,20 +47,41 @@ definitions remain available through the API.
 
 ## Input modality and devices
 
-The battery is being moved from keyboard-only to touch. Tasks converted so far
-accept a tap **and** keep the keyboard path, deciding at runtime on
-`navigator.maxTouchPoints > 0`:
+Every task in the three study modules can be completed by touch alone. Two
+patterns are in use:
+
+**Pointer-driven on every device** - one input path, taps and mouse clicks alike,
+with only the wording varying (`pressVerb()` says "tap" or "click"):
+
+| Task | Input |
+|---|---|
+| `vigour`, `PIT` | tap the piggy bank |
+| `vigour_test` | tap either piggy bank |
+| `max_press_test` | tap the pad as fast as you can |
+| `pavlovian_lottery` | Start and Continue buttons |
+| `self_report` | tap an answer; Back to correct the previous one |
+
+**Touch or keyboard, decided at runtime** - these keep a deliberate arrow-key path
+on desktop so a mouse cannot stand in for an arrow key:
 
 | Task | Touch input |
 |---|---|
-| `vigour` | tap the piggy bank |
 | `reversal` | tap either squirrel |
 | `PILT`, `WM`, `post_*_test` | tap a card; WM taps one of three response buttons |
 | `go_no_go` | tap the face |
 
-Not yet converted, and keyboard-only: `PIT`, `control`, `max_press_test`,
-`pavlovian_lottery`, `vigour_test`. `delay_discounting`, `open_text` and
-`acceptability_judgment` were already button- or form-based and work on touch.
+Still keyboard-only, and not used by the study modules: `control`.
+`delay_discounting`, `open_text` and `acceptability_judgment` were already
+button- or form-based and work on touch.
+
+Touch is detected by `isTouchDevice()` in `core/utils/touch.js`, which tests
+`navigator.maxTouchPoints`, `ontouchstart` and `pointer: coarse`. All three,
+because WebKit reports `maxTouchPoints` as 0 on emulated iPhone and iPad. That
+module also owns the shared tap listener, whose guards drop secondary touches
+(multi-touch double-counting on the press-rate tasks) and non-primary buttons.
+
+`validation/playwright/touch-operability-journey.spec.js` walks every task with
+pointer input alone and fails if any screen asks for a key.
 
 Tasks may declare `preferredOrientation`. On a touch device held the wrong way a
 rotate overlay blocks the task until it is turned; desktop is exempt. The overlay
@@ -69,6 +90,68 @@ markup lives in the entry HTML and is driven by
 
 Per-trial `pointer_type` is recorded wherever a task accepts both, so touch and
 keyboard sessions can be told apart in analysis.
+
+## Run a session full screen on the tablet
+
+Nothing in the battery calls the Fullscreen API, and Chrome on Android has no
+menu item to force it. Full screen comes from **installing the launcher as a web
+app** and starting sessions from its home-screen icon: launched that way there is
+no address bar, no tabs and no status bar. `manifest.json` sets
+`display: fullscreen` and is linked from all three entry pages.
+
+Two separate things, worth not confusing:
+
+- **Installing** removes the browser interface.
+- **Pinning** stops the participant leaving the app. Do both.
+
+### 1. Enrol first, then install
+
+Enrol the device (next section) **before** installing. Enrolment stores a P-256
+key in IndexedDB against the site's origin, which the installed app shares with
+Chrome, so enrolling once covers both. Doing it in this order means you verify
+enrolment in a window where you can still see the address bar.
+
+### 2. Install the launcher
+
+On the tablet, in Chrome:
+
+1. Open `https://huyslab.github.io/vireps_tasks/`.
+2. Chrome menu (three dots) -> **Install app** (it may read **Add to Home
+   screen**; Chrome offers *Install* when it accepts the manifest, which is the
+   one you want).
+3. Confirm. A **VIREPS** icon appears on the home screen.
+
+**Check it worked.** Launch from the icon: you should see no address bar at all.
+If an address bar is visible, Chrome made a plain shortcut rather than installing
+the app - the manifest was not accepted, and `validation/playwright/data-manifest.spec.js`
+is the first place to look.
+
+**Check enrolment survived.** Still in the installed app, start a session. If the
+"This device is not approved for data collection" notice appears, the app is not
+sharing the enrolment and **the session will not save data** - enrol again from
+inside the installed app before running a participant.
+
+### 3. Pin the app
+
+Pinning keeps the participant inside the session; without it, a swipe reaches the
+home screen. On One UI (menu names vary slightly by version):
+
+1. **Settings -> Security and privacy -> More security settings -> Pin windows**,
+   and turn it on.
+2. Turn on **Ask for PIN before unpinning**, so leaving needs a staff PIN.
+3. Open the app, then open **Recents**, tap the icon at the top of the app's card,
+   and choose **Pin this app**.
+
+To unpin, swipe up and hold (or press Back and Recents together, depending on the
+navigation setting), then enter the PIN.
+
+### What this does not do
+
+Pinning does not stop the screen turning off. Set **Settings -> Display -> Screen
+timeout** to a value longer than a module, or keep the tablet on charge with
+**Settings -> Display -> Screen saver** off. A session interrupted by a locked
+screen is recoverable - data is queued in IndexedDB and resent - but the
+participant has to be let back in.
 
 ## Enrol a data-collection device
 
