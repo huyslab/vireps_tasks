@@ -116,15 +116,31 @@ enrolment in a window where you can still see the address bar.
 On the tablet, in Chrome:
 
 1. Open `https://huyslab.github.io/vireps_tasks/`.
-2. Chrome menu (three dots) -> **Install app** (it may read **Add to Home
-   screen**; Chrome offers *Install* when it accepts the manifest, which is the
-   one you want).
-3. Confirm. A **VIREPS** icon appears on the home screen.
+2. **Tap the page once, then leave it open for about 30 seconds.** This step is
+   not optional and not about loading. Chrome only offers a real install once the
+   page has been tapped at least once *and* viewed for 30 seconds or more; before
+   that it offers a plain shortcut instead, however good the manifest is. Filling
+   in a participant ID counts as the tap.
+3. Chrome menu (three dots) -> **Install app**. If the menu only offers **Add to
+   Home screen**, the engagement gate has not been met yet - wait a little longer
+   on the page and open the menu again. Do not take the shortcut: it opens in a
+   tab, with the address bar.
+4. Confirm. A **VIREPS** icon appears on the home screen.
 
 **Check it worked.** Launch from the icon: you should see no address bar at all.
-If an address bar is visible, Chrome made a plain shortcut rather than installing
-the app - the manifest was not accepted, and `validation/playwright/data-manifest.spec.js`
-is the first place to look.
+
+If an address bar is visible, Chrome made a shortcut rather than installing the
+app. In order of likelihood:
+
+- **The engagement gate was not met** and step 3 took the shortcut. Delete the
+  icon, reopen the site, tap it, wait longer, and try again. This is much the
+  most common cause.
+- **The app is already installed**, so Chrome stops offering to install it.
+  Check the app drawer before concluding anything else.
+- **The manifest is genuinely broken** - only worth suspecting once the first two
+  are ruled out. `validation/playwright/data-manifest.spec.js` checks the parts
+  that break silently, and `chrome://inspect` from a laptop shows what Chrome
+  actually parsed.
 
 **Check enrolment survived.** Still in the installed app, start a session. If the
 "This device is not approved for data collection" notice appears, the app is not

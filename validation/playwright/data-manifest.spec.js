@@ -39,9 +39,23 @@ test('the manifest is installable and hides browser UI', async ({ page }) => {
   expect(manifest.short_name, 'the home-screen label').toBeTruthy();
   expect(manifest.start_url, 'the page the icon opens').toBeTruthy();
 
-  // Only these hide the address bar; 'browser' would defeat the whole point.
-  expect(['fullscreen', 'standalone', 'minimal-ui'])
-    .toContain(manifest.display);
+  // Nothing weaker than fullscreen will do. 'standalone' still shows the status bar
+  // and 'minimal-ui' still shows navigation controls, so both would pass a
+  // "hides the address bar" check while breaking the promise this PR actually makes -
+  // that the participant sees no browser or system furniture at all.
+  //
+  // display_override takes precedence over display, and its FIRST supported entry is
+  // what the browser uses, so that is the value to assert. display is checked too, as
+  // the fallback for browsers that ignore display_override.
+  const effectiveDisplay = manifest.display_override?.[0] ?? manifest.display;
+  expect(
+    effectiveDisplay,
+    'the effective display mode must be fullscreen, or sessions are not fully immersive'
+  ).toBe('fullscreen');
+  expect(
+    manifest.display,
+    'display is the fallback where display_override is unsupported, so it must be fullscreen too'
+  ).toBe('fullscreen');
 
   // Relative so the app keeps working under the /vireps_tasks/ Pages subpath.
   expect(manifest.start_url.startsWith('./'), 'start_url must be relative to survive the Pages subpath').toBe(true);
