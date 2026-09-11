@@ -3,6 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Installable web app. Launched from the home-screen icon the session opens with
+         no browser interface at all (manifest.json sets display: fullscreen), which is
+         how it is run on the study tablet. Deliberately no "orientation" in the
+         manifest: tasks differ (vigour wants portrait, most want landscape) and the
+         app gates orientation itself per task. -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a6fa5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
     <title>Study</title>
 
     <script type="importmap">
