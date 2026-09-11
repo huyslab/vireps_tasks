@@ -197,7 +197,7 @@ export const TaskRegistry = {
       signal_valence: false,
       feedback_tint: true,
       play_sounds: true,
-      outcome_display: 'points',
+      outcome_display: 'coins',
       response_window: 1800,
       resize_duration: 300,
       feedback_duration: 1600,
@@ -230,14 +230,14 @@ export const TaskRegistry = {
       sequence: "Trial sequence key. One sequence serves every session - sessions differ only in which faces are shown. Default is 'trial1'.",
       session: "Session identifier for session-specific behaviour. Default is 'wk0'.",
       stimulus_session: "Which face set (1-5) from stimuli-manifest.json to use. Each is a disjoint set of 24 CFD models, so a returning participant never sees a face twice. Default is 1.",
-      include_instructions: "Whether to run the Faces Game instructions, guided training, and short quiz before block 1. Default is true.",
-      signal_valence: "Whether the cue is lit by outcome domain at onset - blue for money to win, amber for money to lose - as RobotFactory's scanner light does. Signalled, the task is action learning only; unsignalled, valence has to be learnt from the outcomes too. Default is true.",
+      include_instructions: "Whether to run the people game instructions (the participant-facing name for this task), guided training, and short quiz before block 1. Default is true.",
+      signal_valence: "Whether the cue is lit by outcome domain at onset - blue for money to win, amber for money to lose - as RobotFactory's scanner light does. Signalled, the task is action learning only; unsignalled, valence has to be learnt from the outcomes too. Default is false: valence is part of what the task measures here, and the instructions teach no colour code because none is shown.",
       response_window: "Time in ms from cue onset to respond. Default is 1800. RobotFactory uses 1300 but opens its window 1500ms after onset; here the window opens immediately.",
       resize_duration: "Duration in ms of the grow (go) / shrink (no-go) animation. Default is 300.",
       feedback_duration: "How long in ms the outcome coin is shown. Default is 1600.",
-      feedback_tint: "Whether the whole screen washes green (correct) or red (incorrect) at feedback. Default is false: colour marks the outcome domain at cue onset instead, and one dimension should not mean two things in a trial. Worth turning on together with signal_valence: false.",
+      feedback_tint: "Whether the whole screen washes green (correct) or red (incorrect) at feedback. Default is true: with signal_valence off, colour is free to carry correctness, and it is the only signal of it besides the coin. Turn it off if signal_valence is ever turned on, so colour does not mean two things in one trial.",
       play_sounds: "Whether the outcome sound plays. Default is true.",
-      outcome_display: "'coins' shows the £1 / 1p / broken-coin images; 'points' shows Sam Zorowitz's values instead (+10, +1, -1, -10) and adapts the instructions to match. Default is 'coins'.",
+      outcome_display: "'coins' shows the £1 / 1p / broken-coin images; 'points' shows Sam Zorowitz's values instead (+10, +1, -1, -10) and adapts the instructions to match. Default is 'coins', which is also what Reversal pays in - the two games sit next to each other in Module 1 and should not use different currencies.",
       iti: "Blank gap in ms after feedback. Default is 400.",
       preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). Default is 'landscape'."
     }
@@ -463,7 +463,11 @@ export const TaskRegistry = {
     },
     configOptions: {
       task_name: "Short identifier for the task (used in data field names). Default is 'task'.",
-      game_description: "Human-readable description of the game/task. Default is 'game you have just completed'."
+      game_description: "Human-readable description of the game/task. Default is 'game you have just completed'. Shown to the participant verbatim, so it must be what they were actually called in the game's own instructions."
+    },
+    requirements: {
+      // Shares the questionnaire block's one-item-per-screen component, and so its styles.
+      css: ['@tasks/self-report/styles.css'],
     },
     resumptionRules: {
         enabled: false,

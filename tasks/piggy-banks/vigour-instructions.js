@@ -7,7 +7,7 @@ let instructionResizeObserver = null;
 
 /**
  * Interactive instruction page that demonstrates the piggy bank shaking mechanism
- * Allows users to practice the task with immediate feedback
+ * Allows users to practise the task with immediate feedback
  */
 const instructionPage = {
   type: jsPsychHtmlKeyboardResponse,
@@ -165,7 +165,7 @@ const ruleInstruction = {
         </div>
     </div>
     
-    <p><span class="highlight-txt">Your bonus</span>: At the end of the game, we will pay you a proportion of the total amount of coins collected across all the piggy banks.</p>
+    <p><span class="highlight-txt">Your goal</span>: collect as many coins as you can from all the piggy banks.</p>
     </div>
       `]
 };

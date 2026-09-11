@@ -26,7 +26,7 @@ export const messages = {
     module_1: {
         start_message: [
             `<p><b>Welcome to Module 1.</b></p>
-            <p>In this module, you will complete the squirrel game and the Faces Game.</p>
+            <p>In this module, you will complete the squirrel game and the people game.</p>
             <p>After each game, we will ask a few short questions about your experience of it.</p>`,
             `<p>The games are designed to measure quick, intuitive decisions, so please respond as promptly and accurately as you can. Making mistakes while you learn is completely expected.</p>
             <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
@@ -43,13 +43,26 @@ export const messages = {
             `<p><b>Welcome to Module 2.</b></p>
             <p>This module contains a series of linked learning and effort tasks, followed by short tests of what you learned.</p>
             <p>After each task, we will ask a few short questions about your experience of it.</p>`,
-            `<p>Please complete the tasks in one continuous sitting unless the experimenter tells you otherwise, and do not refresh or close this page.</p>
+            `<p>Please stay with the tasks until the end, and do not close this page.</p>
+            <p>There are two short breaks along the way. If you need to stop at any other point, just ask.</p>
             <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
         ],
         end_message: {
             message: `<p><b>You have completed Module 2.</b></p>
                 <p>Thank you for taking part. Please call the experimenter.</p>`,
             on_start: endExperiment
+        },
+        // Module 2 is the long one - seven tasks and seven sets of questions - and had
+        // no pause anywhere in it. Deliberately NOT the full_battery break_message,
+        // which advances on the 'c' key with its clickable nav switched off and so
+        // cannot be dismissed on the study tablet at all.
+        break_message: {
+            message: `<p><b>Take a short break.</b></p>
+                <p>Sit back for a moment. There is no rush.</p>
+                <p>When you are ready, tap <b>Continue</b>.</p>
+                <p>If you would like a longer break, ask the person running the study.</p>`,
+            button_label_next: 'Continue',
+            allow_backward: false
         }
     },
     questionnaires: {

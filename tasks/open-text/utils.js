@@ -10,7 +10,7 @@
 import { saveDataREDCap } from '@utils/index.js'; // or wherever this is defined
 
 /**
- * User session class for tracking participant progress and behavior
+ * User session class for tracking participant progress and behaviour
  * Stores various flags and counters for a given participant throughout the experiment
  */
 export class User {
@@ -230,11 +230,11 @@ export function question_trial(qs_list, q_index = 0, q_count, currentUser_instan
                 let instr_el = document.getElementById('qs_instr');
                 let q_no_el = document.getElementById('qs_preamble_q_p');
                 if (q_index % 2 === 0) {
-                    // Even questions: light gray background, blue text
+                    // Even questions: light grey background, blue text
                     instr_el.style.background = `rgb(211, 211, 211, 0.5)`
                     q_no_el.style.color = `rgb(65, 105, 225)`
                 } else {
-                    // Odd questions: dark gray background, blue text
+                    // Odd questions: dark grey background, blue text
                     instr_el.style.background = `rgb(85, 85, 85, 0.4)`
                     q_no_el.style.color = `blue`
                 }

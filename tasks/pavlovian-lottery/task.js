@@ -162,7 +162,7 @@ export function createPavlovianLotteryTimeline(settings) {
                 </tr>
             </table>
         </div>
-        <p>The coins you win here and in the next games add to your bonus. Broken coins take some away.</p>
+        <p>Try to collect as many coins as you can. Broken coins take some away.</p>
       `
     ],
     show_clickable_nav: true,

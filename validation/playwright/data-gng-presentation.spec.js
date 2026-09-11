@@ -68,9 +68,20 @@ async function walkTrials(page, n) {
 const trialData = (page) =>
   page.evaluate(() => window.jsPsych.data.get().filter({ trialphase: 'go_no_go' }).values());
 
-test('rim light matches the trial valence, and no wash by default', async ({ page }) => {
+/**
+ * The SIGNALLED configuration, requested explicitly.
+ *
+ * This used to rely on the registry defaults, which do not signal - so it asserted a
+ * rim light that was never drawn and a wash that was always drawn, and had been
+ * failing on both counts. Its sibling below covers the unsignalled configuration the
+ * study actually runs; between them both configurations are pinned, and neither
+ * depends on which one happens to be the default.
+ */
+test('the signalled configuration puts colour on the domain, with no wash', async ({ page }) => {
   test.setTimeout(90000);
-  await page.goto('/examples/go-no-go.html?participant_id=demo&skip_instructions=1');
+  await page.goto(
+    '/examples/go-no-go.html?participant_id=demo&skip_instructions=1&signal_valence=1&feedback_tint=0'
+  );
 
   const seen = await walkTrials(page, 8);
   const data = (await trialData(page)).slice(0, seen.length);
@@ -90,7 +101,7 @@ test('rim light matches the trial valence, and no wash by default', async ({ pag
 
   expect(
     seen.every((s) => !s.hasTint),
-    'the correctness wash is off by default - hue means the domain, and only that'
+    'with the domain signalled the wash is off - hue means the domain, and only that'
   ).toBe(true);
   expect(seen.every((s) => s.outcomeSrc), 'coins mode shows a coin image').toBe(true);
 });

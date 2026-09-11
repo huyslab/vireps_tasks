@@ -16,20 +16,26 @@ defineTaskRenderingTest('go_no_go', {
 
     expect(await page.locator('#gng-coin').count(), 'coin element should exist').toBe(1);
 
-    // The valence rim light is a drop-shadow on a wrapper, not on the image, so
-    // that the image's bottom mask cannot clip it. Both parts have to survive
-    // every device's CSS: the wrapper must exist, and it must be carrying
-    // exactly one of the two domain classes.
+    // The rim-light wrapper is always rendered, but carries a domain class only when
+    // signal_valence is on. The study runs unsignalled - valence is part of what the
+    // task measures - so across this device matrix, which exists to check what
+    // participants actually see, the wrapper should be present and unlit.
+    //
+    // This previously asserted exactly one domain class and had been failing on every
+    // device that got as far as a stimulus: it was written for a signalled default
+    // that the registry does not set. The signalled configuration is still pinned, by
+    // data-gng-presentation.spec.js, which asks for it explicitly; if signalling is
+    // ever turned on for a study module, the drop-shadow check belongs back here so it
+    // is exercised on real devices rather than one desktop browser.
     const glow = await page.evaluate(() => {
       const el = document.querySelector('.gng-glow');
       if (!el) return null;
-      return {
-        classes: [...el.classList].filter((c) => c.startsWith('gng-glow-')),
-        filter: getComputedStyle(el).filter,
-      };
+      return { classes: [...el.classList].filter((c) => c.startsWith('gng-glow-')) };
     });
     expect(glow, '.gng-glow wrapper should exist').toBeTruthy();
-    expect(glow.classes, 'exactly one domain class should be applied').toHaveLength(1);
-    expect(glow.filter, 'the domain class should resolve to a drop-shadow').toContain('drop-shadow');
+    expect(
+      glow.classes,
+      'unsignalled: the cue must not be lit by outcome domain, or valence is given away'
+    ).toHaveLength(0);
   },
 });

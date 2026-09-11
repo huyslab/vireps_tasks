@@ -3,6 +3,8 @@
 
 export const ModuleRegistry = {
     module_1: {
+        // Participants are never shown these names. To them this module is the
+        // squirrel game and the people game; "Faces Go/No-Go" is the paradigm.
         name: "Module 1: Reversal and Faces Go/No-Go",
         moduleConfig: {
             session: "wk0",
@@ -14,7 +16,7 @@ export const ModuleRegistry = {
             { type: "task", name: "reversal" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "reversal", game_description: "squirrel game" } },
             { type: "task", name: "go_no_go" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "go_no_go", game_description: "Faces Game" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "go_no_go", game_description: "people game" } },
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
@@ -32,14 +34,16 @@ export const ModuleRegistry = {
             { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
             { type: "task", name: "PILT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
+            { type: "instructions", config: { text: "break_message" } },
             { type: "task", name: "vigour" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
             { type: "task", name: "PIT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in cloudy space" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
+            { type: "instructions", config: { text: "break_message" } },
             { type: "task", name: "vigour_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank knowledge test" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank choices" } },
             { type: "task", name: "post_PILT_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "card knowledge test" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "last round of the card game" } },
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
@@ -74,7 +78,7 @@ export const ModuleRegistry = {
             { type: "task", name: "vigour" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
             { type: "task", name: "PIT"},
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in cloudy space" } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
             { type: "task", name: "vigour_test"},
             { type: "task", name: "post_PILT_test"},
             { type: "instructions", config: { text: "break_message" } },

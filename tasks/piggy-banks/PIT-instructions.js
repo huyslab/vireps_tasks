@@ -40,7 +40,7 @@ function PITMainInstructions(settings) {
         <p><strong>But this time, you'll play in a cloudy place.</strong></p>
         <img src="./assets/images/piggy-banks/occluding_clouds.png" style="height:12em">
         <p><span class="highlight-txt">Coins will drop and be collected as usual, but they'll be hidden behind clouds.<br>You won't see them during the game.</span></p>
-        <p>We will also pay you the bonus in the same way as in the previous game at the end.</p>
+        <p>You still collect the coins in the same way as before.</p>
       </div>`,
       `
       <div id="instruction-text">

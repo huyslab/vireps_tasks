@@ -3,7 +3,7 @@
  * 
  * This module provides instruction pages for the open text response task,
  * where participants answer questions by typing text responses about themselves,
- * their feelings, background, attitudes, and behaviors.
+ * their feelings, background, attitudes, and behaviours.
  */
 
 import { updateState } from "@utils/index.js"
@@ -20,7 +20,7 @@ import { updateState } from "@utils/index.js"
 const instrPage2 = (settings) => {
     return `
         <p><b>Next, you'll be answering questions by typing text responses.</b></p>
-        <p>These questions will ask about yourself, your feelings, background, attitudes, and everyday behaviors.</p>
+        <p>These questions will ask about yourself, your feelings, background, attitudes, and everyday behaviours.</p>
         <p>For each question, you'll have <b>`+settings.oq_timelimit_text+`</b> to write a response containing <b>at least `+settings.min_words.toString()+` words</b>.</p>
     `
 }

@@ -58,7 +58,6 @@ export const Questionnaires = {
             ['bis_attention', 'I don’t pay attention'],
             ['bis_racing_thoughts', 'I have racing thoughts'],
             ['bis_plan_trips', 'I plan trips well ahead of time'],
-            ['bis_plan_ahead', 'I plan trips well ahead of time'],
             ['bis_self_control', 'I am self-controlled'],
             ['bis_concentrate', 'I concentrate easily'],
             ['bis_save', 'I save regularly'],
@@ -72,16 +71,16 @@ export const Questionnaires = {
             ['bis_bored', 'I get easily bored when solving thought problems'],
             ['bis_spur', 'I act on the spur of the moment'],
             ['bis_steady_thinker', 'I am a steady thinker'],
-            ['bis_change_homes', 'I change where I live [I change residences].'],
+            ['bis_change_homes', 'I change where I live.'],
             ['bis_impulsive_buy', 'I buy things on impulse'],
             ['bis_single_prob', 'I can only think about one problem at a time'],
             ['bis_hobbies', 'I change hobbies'],
-            ['bis_spending', 'I spend more than I earn [I spend or ch‎arge more than I earn].'],
-            ['bis_thoughts', 'I have outside thoughts when thinking [I often have extraneous thoughts when thinking].'],
+            ['bis_spending', 'I spend more than I earn.'],
+            ['bis_thoughts', 'I have outside thoughts when thinking.'],
             ['bis_present_orient', 'I am more interested in the present than the future'],
             ['bis_restless', 'I am restless at lectures or talks'],
             ['bis_puzzles', 'I like puzzles'],
-            ['bis_future_orient', 'I plan for the future [I am future oriented].']
+            ['bis_future_orient', 'I plan for the future.']
         ])
     },
     ARI: {
@@ -91,16 +90,16 @@ export const Questionnaires = {
         sections: [{
             start: 0,
             context: 'In the <em>last six months,</em>',
-            instructions: 'In the <em>last six months,</em> how well does each of the following statements describe your behavior/feelings'
+            instructions: 'Think about the <em>last six months.</em> For each sentence, choose the answer that fits you best.'
         }],
         items: makeItems([
-            ['ari_annoyed', 'Gets easily annoyed by others'],
-            ['ari_temper', 'Often loses temper'],
-            ['ari_angry', 'Stays angry for a long time'],
-            ['ari_angry_pervasive', 'Is angry most of the time'],
-            ['ari_frequently_angry', 'Gets angry frequently'],
-            ['ari_loses_temper', 'Loses temper easily'],
-            ['ari_problems', 'Overall, irritability causes you problems']
+            ['ari_annoyed', 'I get easily annoyed by others'],
+            ['ari_temper', 'I often lose my temper'],
+            ['ari_angry', 'I stay angry for a long time'],
+            ['ari_angry_pervasive', 'I am angry most of the time'],
+            ['ari_frequently_angry', 'I get angry frequently'],
+            ['ari_loses_temper', 'I lose my temper easily'],
+            ['ari_problems', 'Overall, my irritability causes me problems']
         ])
     },
     STAXI2: {
@@ -170,8 +169,8 @@ export const Questionnaires = {
             ['staxi_boil', "I boil inside but I don't show it"],
             ['staxi_control_behaviour', 'I control my behaviour'],
             ['staxi_slam_door', 'I do things like slam doors'],
-            ['staxi_endev_calm', 'I endeavor to be calm again'],
-            ['staxi_harbor_grudges', "I tend to harbor grudges that I don't tell anyone about"],
+            ['staxi_endev_calm', 'I endeavour to be calm again'],
+            ['staxi_harbor_grudges', "I tend to harbour grudges that I don't tell anyone about"],
             ['staxi_stop_temper', 'I can stop myself from losing my temper'],
             ['staxi_argue', 'I argue with others'],
             ['staxi_anger_asap', 'I reduce my anger as soon as possible'],

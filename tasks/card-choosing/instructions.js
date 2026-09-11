@@ -73,7 +73,7 @@ function preparePILTInstructions(settings) {
             `<p><b>THE CARD CHOOSING GAME</b></p>
                 <p>In this game you will flip cards to collect the coins behind them.</p>
                 <p>Some cards are luckier than others. Your goal is to collect as much game money as possible${window.task == "screening" ? "" : " and avoid losing it"}.</p>
-                ${settings.session !== "screening" ? "<p>At the end of this session, you will be paid a bonus based on the sum of coins you collected.</p>" : ""}`,
+                ${settings.session !== "screening" ? "<p>Try to collect as many coins as you can.</p>" : ""}`,
             `<p>On each turn of this game, you will see two cards.
                 You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
                 <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
@@ -159,7 +159,7 @@ function preparePILTInstructions(settings) {
         data: {trialphase: "pilt_instruction"}
     },
     createReadyTrial(
-        `<p>Let's practice collecting coins. \
+        `<p>Let's practise collecting coins. \
             On the next screen, choose cards to collect as much money as you can.</p>
             <p>One of the picture cards has mostly £1 coins behind it, while the other has mostly ${settings.session === "screening" ? "50 pence coins" : "broken £1 coins"} behind it.</p>
         `,
@@ -236,7 +236,7 @@ function preparePILTInstructions(settings) {
             required: true
         },
         {
-            prompt: `My goal is to collect as much game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
+            prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
             options: ["True", "False"],
             required: true
         },
@@ -266,7 +266,7 @@ function preparePILTInstructions(settings) {
             explanation: "You can learn which cards are better by trial and error. However, cards are not 100% consistent in the coins behind them."
         },
         {
-            prompt: `My goal is to collect as much game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
+            prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
             explanation: "Your goal is to collect as much money as possible. This means learning to chose cards that give you the most money, and avoiding cards that break valuable coins."
         }
     ];
