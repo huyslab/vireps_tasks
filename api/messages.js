@@ -18,38 +18,40 @@ import { endExperiment } from '@utils/index.js';
 // the real one is recognised when it appears mid-task. Same class as the live toast the
 // tasks raise (core/styles/theme.css), so the example cannot drift from the real thing.
 const formatted_warning_msg = `
-    <div id='vigour-warning-temp' class='rlm-toast rlm-toast-inline'>Didn't catch a response - moving on</div>
+    <div id='vigour-warning-temp' class='rlm-toast rlm-toast-inline'>We missed that one. Moving on</div>
 `;
 
 
 export const messages = {
     module_1: {
         start_message: [
-            `<p><b>Welcome to Module 1.</b></p>
-            <p>In this module, you will complete the squirrel game and the people game.</p>
-            <p>After each game, we will ask a few short questions about your experience of it.</p>`,
-            `<p>The games are designed to measure quick, intuitive decisions, so please respond as promptly and accurately as you can. Making mistakes while you learn is completely expected.</p>
-            <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
+            `<p><b>Welcome back.</b></p>
+            <p>In this part you will play two games. First the squirrel game, then the people game.</p>
+            <p>After each game we will ask you a few short questions about it.</p>`,
+            `<p>Try to answer quickly. We want your first idea, not your best guess after a long think.</p>
+            <p>You will get things wrong while you are learning. That is meant to happen.</p>
+            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
         ],
         end_message: {
-            message: `<p><b>You have completed Module 1.</b></p>
-                <p>Please call the experimenter.</p>
-                <p>They will tell you when Module 2 will begin. This may be after a break today or on another day.</p>`,
+            message: `<p><b>That is the end of Part 1. Well done.</b></p>
+                <p>Please tell the person running the study that you have finished.</p>
+                <p>They will tell you when Part 2 starts. It might be after a break today, or on another day.</p>`,
             on_start: endExperiment
         }
     },
     module_2: {
         start_message: [
-            `<p><b>Welcome to Module 2.</b></p>
-            <p>This module contains a series of linked learning and effort tasks, followed by short tests of what you learned.</p>
-            <p>After each task, we will ask a few short questions about your experience of it.</p>`,
-            `<p>Please stay with the tasks until the end, and do not close this page.</p>
-            <p>There are two short breaks along the way. If you need to stop at any other point, just ask.</p>
-            <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
+            `<p><b>Welcome to Part 2.</b></p>
+            <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
+            <p>At the end there are two short quizzes about what you learned.</p>
+            <p>After each game we will ask you a few short questions about it.</p>`,
+            `<p>Please stay with the games until the end, and do not close this page.</p>
+            <p>There are two short breaks along the way. If you need to stop at any other time, just ask.</p>
+            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
         ],
         end_message: {
-            message: `<p><b>You have completed Module 2.</b></p>
-                <p>Thank you for taking part. Please call the experimenter.</p>`,
+            message: `<p><b>That is the end of Part 2. Thank you.</b></p>
+                <p>Please tell the person running the study that you have finished.</p>`,
             on_start: endExperiment
         },
         // Module 2 is the long one - seven tasks and seven sets of questions - and had
@@ -67,13 +69,16 @@ export const messages = {
     },
     questionnaires: {
         start_message: [
-            `<p><b>Questionnaires</b></p>
-            <p>Please follow the instructions shown before each questionnaire.</p>
-            <p>The experimenter is in the room. Please ask them if you need help at any point.</p>`
+            `<p><b>Questions about you</b></p>
+            <p>Now we would like to ask how you feel and how you usually act.</p>
+            <p>There are no right or wrong answers. Pick the answer that fits you best.</p>`,
+            `<p>You will see one question at a time. Tap your answer and the next one comes up.</p>
+            <p>There are four sets of questions. Each set starts with a short note telling you what to think about.</p>
+            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
         ],
         end_message: {
-            message: `<p><b>You have completed the questionnaires.</b></p>
-                <p>Please call the experimenter.</p>`,
+            message: `<p><b>That is the end of the questions. Thank you.</b></p>
+                <p>Please tell the person running the study that you have finished.</p>`,
             on_start: endExperiment
         }
     },

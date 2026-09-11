@@ -71,12 +71,11 @@ function preparePILTInstructions(settings) {
 
             let pages = [
             `<p><b>THE CARD CHOOSING GAME</b></p>
-                <p>In this game you will flip cards to collect the coins behind them.</p>
-                <p>Some cards are luckier than others. Your goal is to collect as much game money as possible${window.task == "screening" ? "" : " and avoid losing it"}.</p>
-                ${settings.session !== "screening" ? "<p>Try to collect as many coins as you can.</p>" : ""}`,
-            `<p>On each turn of this game, you will see two cards.
-                You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
-                <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
+                <p>In this game you turn over cards to find the coins behind them.</p>
+                <p>Some cards are luckier than others.</p>
+                <p>Try to collect as many coins as you can${window.task == "screening" ? "" : ", and try not to lose them"}.</p>`,
+            `<p>Each turn you see two cards. You have <b>${secondsWord(settings.default_response_deadline)} seconds</b> to turn one over.</p>
+                <p>Behind it is the coin you collect: £1, 50p or 1p.</p>
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
@@ -85,14 +84,14 @@ function preparePILTInstructions(settings) {
 
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
-            pages.push(`<p>When you flip a card, you might see broken coins like these:</p>\
+            pages.push(`<p>Sometimes you will turn over a broken coin, like these:</p>\
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1pennybroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>
-                <p>This means you lose that amount of game coins.</p>`);
-            pages.push(`<p>Sometimes, losing coins cannot be avoided. Your goal then is to lose as little money as possible.</p>
-                <p>To cover these losses, you will start the game with £100 in game coins.</p>`)
+                <p>A broken coin means you lose that much.</p>`);
+            pages.push(`<p>Sometimes you cannot help losing coins. When that happens, try to lose as little as you can.</p>
+                <p>You start with <b>£100</b> of game money, so you will not run out.</p>`)
         }
 
         return pages
@@ -152,15 +151,15 @@ function preparePILTInstructions(settings) {
         css_classes: ['instructions'],
         pages: [
             `${settings.session === "screening" ? "<p>You found a one pound coin!</p>" : ""}
-            <p>Some cards are better than others, and through trial and error, you can learn which ones are best.</p> 
-            <p>However, even the best cards may sometimes give only a penny${window.task == "screening" ? "" : " or occasionally break a one-pound coin"}.</p>`
+            <p>Some cards are better than others. You can learn which ones by trying them.</p>
+            <p>But even the best cards give just a penny sometimes${window.task == "screening" ? "" : ". Now and then they break a £1 coin"}.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "pilt_instruction"}
     },
     createReadyTrial(
-        `<p>Let's practise collecting coins. \
-            On the next screen, choose cards to collect as much money as you can.</p>
+        `<p>Let's have a go at collecting coins.</p>
+            <p>On the next screen, pick cards and collect as much as you can.</p>
             <p>One of the picture cards has mostly £1 coins behind it, while the other has mostly ${settings.session === "screening" ? "50 pence coins" : "broken £1 coins"} behind it.</p>
         `,
         "pilt_instruction"
@@ -221,9 +220,9 @@ function preparePILTInstructions(settings) {
     inst.push({
                 type: jsPsychInstructions,
                 css_classes: ['instructions'],
-                pages: [`<p>Before you start playing, you'll answer a few questions about the instructions you just read.</p>
-                        <p>You must answer all questions correctly to begin the game.</p>\
-                        <p>If not, you can review the instructions and try again.</p>`],
+                pages: [`<p>Before you start, here are a few questions about what you just read.</p>
+                        <p>You need all of them right to begin.</p>
+                        <p>If you get one wrong, you can read the rules again and try once more.</p>`],
                 show_clickable_nav: true,
                 data: {trialphase: "pilt_instruction"}
             });
@@ -267,7 +266,7 @@ function preparePILTInstructions(settings) {
         },
         {
             prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
-            explanation: "Your goal is to collect as much money as possible. This means learning to chose cards that give you the most money, and avoiding cards that break valuable coins."
+            explanation: "Your goal is to collect as much money as possible. This means learning to choose cards that give you the most money, and avoiding cards that break valuable coins."
         }
     ];
 
@@ -348,9 +347,9 @@ function preparePILTInstructions(settings) {
         [
             inst_loop,
             createReadyTrial(
-                `<p>Great! Let's start playing for real.</p>
-                <p>You will now complete ${settings.session === "screening" ? "another round" : "15 rounds"} of the card choosing game, taking ${settings.session === "screening" ? "a couple of minutes" : "10-15 minutes"} on average to complete.</p>
-                ${settings.session !== "screening" ? "<p>You will be able to take a short break between rounds, if you feel you need it.</p>" : ""}`,
+                `<p>Great. Now let's play for real.</p>
+                <p>You will play ${settings.session === "screening" ? "one more round" : "<b>15 rounds</b>"} of the card game. It takes about ${settings.session === "screening" ? "two minutes" : "<b>10 to 15 minutes</b>"}.</p>
+                ${settings.session !== "screening" ? "<p>You can take a short break between rounds if you need one.</p>" : ""}`,
                 "pilt_instruction"
             )
         ]
@@ -380,10 +379,10 @@ const testInstructions = (task) => {
         type: jsPsychInstructions,
         css_classes: ['instructions'],
         pages: [
-            `<p>You will now begin another round of the card choosing game.</p>
-            <p>In this round, you will not see the coins you collect after each choice, but your coins will still be added to your safe.</p>
-            <p>On each turn, you will choose between two cards you have already seen. Try your best to pick the card that you think is most rewarding.</p>
-            <p>This round will take about three minutes to complete.</p>`
+            `<p>Now you will play one more round of the card game.</p>
+            <p>This time you will not see the coins you win. You still collect them, and they still go in your safe.</p>
+            <p>Each turn you pick between two cards you have seen before. Pick the one you think gives more.</p>
+            <p>This round takes about three minutes.</p>`
         ],
         show_clickable_nav: true,
         on_start: () => {

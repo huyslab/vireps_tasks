@@ -129,9 +129,9 @@ function preKickOutWarning(settings) {
                 // session. kickOut() only ever shows this screen and the
                 // speed-accuracy one. Saying we would stop someone's participation
                 // was simply untrue.
-                stimulus: `<p>You seem to be taking too long to respond on the games.</p>
-                    <p>Please try to respond more quickly. Also, please keep your attention on the game window, and don't use other tabs or windows.</p>
-                    <p>Tap the button below to continue.</p>
+                stimulus: `<p>You are taking a long time to answer.</p>
+                    <p>Please try to answer a bit faster.</p>
+                    <p>Tap the button below to carry on.</p>
                 `,
                 on_start: function(trial) {
                     // Save data
@@ -170,9 +170,9 @@ function kickOutWarning(settings)  {
         css_classes: ['instructions'],
         timeline: [
             {
-            stimulus: `<p>You might be taking a little too long to make your choices.</p>
-            <p>We're interested in your quick judgments, so please try to respond a little faster—even if it feels a bit less precise.</p>
-            <p>Tap the button below to continue.</p>
+            stimulus: `<p>You are taking a little long to choose.</p>
+            <p>We want your quick answers. Try to go a bit faster, even if it feels less careful.</p>
+            <p>Tap the button below to carry on.</p>
             `
             }
         ],
@@ -313,7 +313,7 @@ function noChoiceWarning(resp_var = "response", stimulus = "", settings) {
             },
             trial_duration: 1000,
             on_load: function () {
-                showTemporaryWarning("Didn't catch a response - moving on", 800);
+                showTemporaryWarning("We missed that one. Moving on", 800);
             }
         }],
         conditional_function: function () {

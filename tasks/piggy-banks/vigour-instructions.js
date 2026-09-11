@@ -139,9 +139,9 @@ const ruleInstruction = {
   show_clickable_nav: true,
   pages: [`
   <div id="instruction-text">
-    <p><strong>You will now play a few minutes of this game, collecting coins!</strong></p>
+    <p><strong>Now you will play this game for a few minutes and collect coins.</strong></p>
     
-    <p>Throughout the game, you will see different piggy banks with unique appearances:</p>
+    <p>You will see piggy banks that look different from each other:</p>
     <ul>
         <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
         <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
@@ -149,7 +149,7 @@ const ruleInstruction = {
     </div>
     `,
     `<div id="instruction-text">
-    <p>Types of coins you can win:</p>
+    <p>These are the coins you can win:</p>
     <div class="instruct-coin-container">
         <div class="instruct-coin">
             <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny">
@@ -181,7 +181,7 @@ const startConfirmation = {
   <div class="experiment-wrapper">
     <div id="instruction-container">
       <div id="instruction-text">
-        <p>You will now play the piggy-bank game without a break for about <strong>four minutes</strong>.</p>
+        <p>Now you will play the piggy-bank game for about <strong>four minutes</strong>, with no break.</p>
         <p>When you're ready, <span class="highlight-txt">${pressVerb()} the piggy bank</span> to begin.</p>
       </div>
     </div>

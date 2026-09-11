@@ -175,9 +175,9 @@ function reversalInstructions(settings) {
     var sessionPrefix = settings.session !== "screening" ? "<p>Let's start with the first game!</p>" : "";
     var duration = settings.n_trials == 50 ? "three" : "five";
 
-    var pageRules = `<p>One squirrel has higher-value coins, and the other has lower-value coins.
-                But every few turns they secretly switch bags.</p>
-                <p>Your goal is to figure out which squirrel has the better coins and collect as many high-value ones as possible.</p>`;
+    var pageRules = `<p>One squirrel has better coins in its bag. The other has coins worth less.</p>
+                <p>Every so often they swap bags without telling you.</p>
+                <p>Work out which squirrel has the better coins right now. Keep picking that one.</p>`;
 
     var squirrelHtml =
         `<div class="reversal-stimuli">
@@ -197,15 +197,15 @@ function reversalInstructions(settings) {
         css_classes: ['instructions'],
         pages: touchCapable ? [
             `${sessionPrefix}
-            <p>Next, you will meet two friendly squirrels, each with a bag of coins to share.
-            Tap on either the left or right squirrel to choose one.
-            The squirrel you pick will give you a coin to add to your safe.</p>`,
+            <p>You will meet two squirrels. Each one has a bag of coins to share.</p>
+            <p>Tap on either the left or right squirrel to choose one.</p>
+            <p>The squirrel you pick gives you a coin. Your coins go into your safe.</p>`,
             pageRules
         ] : [
             `${sessionPrefix}
-            <p>Next, you will meet two friendly squirrels, each with a bag of coins to share.
-            Use the arrow keys to choose either the left or right squirrel.
-            The squirrel you pick will give you a coin to add to your safe.</p>`,
+            <p>You will meet two squirrels. Each one has a bag of coins to share.</p>
+            <p>Use the arrow keys to choose either the left or right squirrel.</p>
+            <p>The squirrel you pick gives you a coin. Your coins go into your safe.</p>`,
             pageRules
         ],
         show_clickable_nav: true,
