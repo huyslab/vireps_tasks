@@ -87,19 +87,33 @@ export const Questionnaires = {
         key: 'ARI',
         name: 'Affective Reactivity Index',
         scale: ariScale,
+        // ARI-S, verbatim from the supplied data dictionary. NOT TO BE REWORDED.
+        //
+        // The scale is under copyright and "should not be altered in any way without
+        // our written permission" (transatlantic-comppsych/Affective-Reactivity-Index).
+        // The self-report form is the parent form with only two adaptations: the
+        // introductory referent, and the impairment pronoun in the last item. That is
+        // exactly what is below - which is why the six stems read in the third person
+        // while the instruction and the final item address the participant. It looks
+        // like an inconsistency and is not one.
+        //
+        // An earlier pass "corrected" all seven stems to the first person and
+        // simplified the instruction. That produced an unvalidated scale and was
+        // reverted. The US spelling in "behavior/feelings" is likewise left as the
+        // dictionary has it: anglicising it would be an alteration too.
         sections: [{
             start: 0,
             context: 'In the <em>last six months,</em>',
-            instructions: 'Think about the <em>last six months.</em> For each sentence, choose the answer that fits you best.'
+            instructions: 'In the <em>last six months,</em> how well does each of the following statements describe your behavior/feelings'
         }],
         items: makeItems([
-            ['ari_annoyed', 'I get easily annoyed by others'],
-            ['ari_temper', 'I often lose my temper'],
-            ['ari_angry', 'I stay angry for a long time'],
-            ['ari_angry_pervasive', 'I am angry most of the time'],
-            ['ari_frequently_angry', 'I get angry frequently'],
-            ['ari_loses_temper', 'I lose my temper easily'],
-            ['ari_problems', 'Overall, my irritability causes me problems']
+            ['ari_annoyed', 'Gets easily annoyed by others'],
+            ['ari_temper', 'Often loses temper'],
+            ['ari_angry', 'Stays angry for a long time'],
+            ['ari_angry_pervasive', 'Is angry most of the time'],
+            ['ari_frequently_angry', 'Gets angry frequently'],
+            ['ari_loses_temper', 'Loses temper easily'],
+            ['ari_problems', 'Overall, irritability causes you problems']
         ])
     },
     STAXI2: {

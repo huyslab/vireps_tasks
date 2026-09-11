@@ -42,21 +42,37 @@ test('questionnaire definitions retain the CSV field IDs, counts, sections, and 
   });
 });
 
-test('ARI reads as self-report, in the first person', async ({ page }) => {
+test('ARI-S wording is exactly the supplied scale, unaltered', async ({ page }) => {
   await page.goto('/index.html');
   const ari = await page.evaluate(async () => {
     const { Questionnaires } = await import('/tasks/self-report/questionnaires.js');
-    return Questionnaires.ARI.items.map(({ text }) => text);
+    return {
+      items: Questionnaires.ARI.items.map(({ text }) => text),
+      instructions: Questionnaires.ARI.sections[0].instructions,
+    };
   });
 
-  // The CSV carried the parent-report wording ("Gets easily annoyed by others") for
-  // six items and switched to the second person for the seventh, while the
-  // instructions asked about the participant's own feelings. All seven are now first
-  // person, which is what the self-report ARI actually is.
-  for (const text of ari) {
-    expect(text, `"${text}" should be written in the first person`).toMatch(/\b(I|my|me)\b/);
-  }
-  expect(ari[0]).toBe('I get easily annoyed by others');
+  // The ARI is under copyright and must not be altered without written permission
+  // (transatlantic-comppsych/Affective-Reactivity-Index). The self-report form is the
+  // parent form with the introductory referent and the final item's pronoun adapted -
+  // so six stems in the third person alongside a second-person instruction is the
+  // scale as published, not a transcription slip.
+  //
+  // An earlier pass rewrote all seven stems into the first person, which produced an
+  // unvalidated instrument. This pins the wording so that cannot happen silently:
+  // changing it should require deciding to, and getting permission.
+  expect(ari.items).toEqual([
+    'Gets easily annoyed by others',
+    'Often loses temper',
+    'Stays angry for a long time',
+    'Is angry most of the time',
+    'Gets angry frequently',
+    'Loses temper easily',
+    'Overall, irritability causes you problems',
+  ]);
+  expect(ari.instructions).toBe(
+    'In the <em>last six months,</em> how well does each of the following statements describe your behavior/feelings'
+  );
 });
 
 test('no questionnaire item shows the participant a bracketed alternative wording', async ({ page }) => {

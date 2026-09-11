@@ -12,7 +12,7 @@
  * The messages support HTML formatting and can include optional fields passed on to the jsPsych instructions trial object.
  */
 
-import { endExperiment } from '@utils/index.js';
+import { endExperiment, saveDataREDCap } from '@utils/index.js';
 
 // The example of the "we didn't catch that" message, shown in the opening instructions so
 // the real one is recognised when it appears mid-task. Same class as the live toast the
@@ -57,6 +57,13 @@ export const messages = {
         // which advances on the 'c' key with its clickable nav switched off and so
         // cannot be dismissed on the study tablet at all.
         break_message: {
+            // Save on entry, not on the way out. The acceptability ratings that just
+            // finished write no snapshot of their own, so without this the three
+            // ratings for the task before the break exist only in jsPsych's in-memory
+            // data while the participant sits on a screen designed to be sat on. A
+            // page killed by Android, refreshed or closed during that pause would
+            // leave nothing containing them in the IndexedDB outbox.
+            on_start: () => { saveDataREDCap().catch(() => {}); },
             message: `<p><b>Take a short break.</b></p>
                 <p>Sit back for a moment. There is no rush.</p>
                 <p>When you are ready, tap <b>Continue</b>.</p>

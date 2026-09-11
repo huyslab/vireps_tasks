@@ -72,7 +72,10 @@ test('all three ratings are recorded under their original names', async ({ page 
     'task_enjoy',
     'task_clear',
   ]);
-  expect(rows.map((row) => row.response)).toEqual([1, 2, 3]);
+  // 0-based, matching what jsPsychSurveyLikert stored before the port: the plugin
+  // wrote the radio's index, not its label, so tapping "1" has always recorded 0.
+  // Asserting the codes here is what stops a future change shifting them silently.
+  expect(rows.map((row) => row.response), 'response codes must stay 0-based').toEqual([0, 1, 2]);
   for (const row of rows) {
     expect(row.trialphase, 'phase should still identify the task').toBe('acceptability_task');
   }

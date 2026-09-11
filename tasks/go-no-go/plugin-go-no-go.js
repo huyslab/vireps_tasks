@@ -92,6 +92,9 @@ var jsPsychGoNoGo = (function (jspsych) {
       /** Wash the whole screen green (correct) or red (incorrect) at feedback.
        *  Off by default: hue marks the outcome domain at cue onset instead, and
        *  the same dimension should not mean two things in one trial. */
+      // Plugin default only. The study registry turns this ON and signal_valence
+      // OFF (api/task-registry.js), so the participant experience is the reverse of
+      // this line - see tasks/go-no-go/README.md.
       feedback_tint: { type: jspsych.ParameterType.BOOL, default: false },
       /** Whether the outcome sound plays. Off makes the task silent. */
       play_sounds: { type: jspsych.ParameterType.BOOL, default: true },
