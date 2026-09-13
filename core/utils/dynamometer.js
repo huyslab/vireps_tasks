@@ -1,7 +1,15 @@
 // Vernier Go Direct Hand Dynamometer (GDX-HD) over Web Bluetooth.
 // Requires @vernier/godirect vendored at core/godirect/godirect.module.js:
 //   npm install @vernier/godirect
-//   cp node_modules/@vernier/godirect/dist/godirect.module.js core/godirect/
+//   cp node_modules/@vernier/godirect/dist/godirect.min.esm.js core/godirect/godirect.module.js
+//
+// API surface used from v1.8.3:
+//   GoDirect.selectDevice(true)  — shows BLE picker, opens device, returns Device
+//   device.start(periodMs)       — enables default sensors and starts streaming
+//   device.stop()                — stops streaming
+//   device.close()               — disconnects
+//   sensor.on('value-changed', (sensor) => …)  — fires on each new reading
+//   sensor.value                 — current reading (Newtons for GDX-HD)
 
 let _godirect = null;
 let _currentCallback = null;
@@ -15,30 +23,34 @@ async function getGoDirect() {
 }
 
 /**
- * Prompts the user to pair a Go Direct Hand Dynamometer over Bluetooth.
+ * Shows the browser BLE device picker and opens the selected Go Direct sensor.
  * Must be called from a user gesture (button click).
- * Returns a connected device handle, or throws on failure.
+ * Returns a connected Device handle, or throws on failure.
  */
 export async function connectDynamometer() {
     if (window.simulating) {
         return { simulated: true };
     }
     const GoDirect = await getGoDirect();
-    const device = await GoDirect.createDevice(GoDirect.TRANSPORT.WEB_BLE);
-    await device.open();
-    const sensor = device.sensors.find(s => s.number === 1) ?? device.sensors[0];
-    await device.enableSensors([sensor]);
-    return device;
+    // selectDevice(true) uses Bluetooth; it requests the device, creates the
+    // adapter, and calls device.open() before returning.
+    return GoDirect.selectDevice(true);
 }
 
 /**
- * Starts streaming force values. Only one callback is active at a time —
- * use setForceCallback() to swap it without restarting the stream.
+ * Enables the default sensors, starts the measurement stream at the given
+ * period (ms), and routes each reading to callback(forceNewtons).
+ *
+ * Only one callback is active at a time. Call setForceCallback() to swap it
+ * without restarting the stream (e.g. between calibration and vigour trials).
+ *
  * The simulated stream fires a sinusoidal pattern at 20 Hz.
- * @param {Object} device - From connectDynamometer()
+ *
+ * @param {Object}   device   - From connectDynamometer()
  * @param {Function} callback - Called with force in Newtons on each reading
+ * @param {number}   [periodMs=10]
  */
-export function startForceStream(device, callback) {
+export function startForceStream(device, callback, periodMs = 10) {
     _currentCallback = callback;
     if (device.simulated) {
         let t = 0;
@@ -49,16 +61,20 @@ export function startForceStream(device, callback) {
         }, 50);
         return;
     }
-    const sensor = device.sensors.find(s => s.number === 1) ?? device.sensors[0];
-    sensor.on('value-changed', () => {
-        if (_currentCallback) _currentCallback(sensor.value ?? 0);
-    });
-    device.start(10); // ~100 Hz
+    // Enable default sensors and start streaming.
+    device.start(periodMs);
+    // Attach listener to the first enabled sensor after start() marks it enabled.
+    const sensor = device.sensors.find(s => s.enabled) ?? device.sensors[0];
+    if (sensor) {
+        sensor.on('value-changed', (s) => {
+            if (_currentCallback) _currentCallback(s.value ?? 0);
+        });
+    }
 }
 
 /**
  * Swaps the active force callback without restarting the stream.
- * Use this to re-route readings between tasks (e.g. calibration → vigour).
+ * Use between tasks (calibration → vigour) to re-route readings.
  * @param {Function|null} callback
  */
 export function setForceCallback(callback) {
@@ -76,7 +92,7 @@ export async function disconnectDynamometer(device) {
         _simInterval = null;
         return;
     }
-    await device.stop();
+    device.stop();
     await device.close();
 }
 
@@ -94,11 +110,11 @@ export async function disconnectDynamometer(device) {
  * @param {number} maxForce - Calibrated maximum force in Newtons
  * @param {Object} opts
  * @param {number} [opts.thresholdFraction=0.75]
- * @param {number} [opts.holdDurationMs=700]
+ * @param {number} [opts.holdDurationMs=40]
  * @param {Function} opts.onPress - Called each time a press completes
  * @returns {{ update(forceN: number): void, reset(): void }}
  */
-export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDurationMs = 700, onPress } = {}) {
+export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDurationMs = 40, onPress } = {}) {
     const threshold = maxForce * thresholdFraction;
     let state = 'IDLE'; // IDLE | PRESSING | COOLDOWN
     let holdStart = null;

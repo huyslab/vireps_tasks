@@ -5,14 +5,15 @@ const N_TRIALS = 6;
 const READY_MS   = 500;
 const SQUEEZE_MS = 1000;
 const RELAX_MS   = 1500;
-// Countdown ticks shown at READY_MS, READY_MS+1000, READY_MS+2000
 const COUNTDOWN_MS = 3000;
 const TRIAL_DURATION_MS = READY_MS + COUNTDOWN_MS + SQUEEZE_MS + RELAX_MS; // 6000 ms
 
-let _peaks = []; // accumulated peak forces across calibration trials
-let _trialPeak = 0;  // peak force for the trial currently running
+let _peaks = [];
+let _trialPeak = 0;
+// Set inside calibrationResults.stimulus (before on_finish runs) so the loop
+// function can read whether a retry is needed without depending on on_start order.
+let _needsRetry = false;
 
-// Returns { maxForce, outlierIdx, outlierPeak }
 function computeMaxForce(peaks) {
     const sorted = [...peaks].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
@@ -25,6 +26,10 @@ function computeMaxForce(peaks) {
     const kept = peaks.filter((_, i) => i !== outlierIdx);
     const maxForce = kept.reduce((s, v) => s + v, 0) / kept.length;
     return { maxForce, outlierIdx, outlierPeak: peaks[outlierIdx] };
+}
+
+function calStorageKey() {
+    return `dynamometerMaxForce_${window.participantID ?? 'anon'}`;
 }
 
 // ── Connect trial ─────────────────────────────────────────────────────────────
@@ -53,7 +58,6 @@ const connectTrial = {
             status.textContent = 'Connecting…';
             try {
                 window.dynamometerSensor = await connectDynamometer();
-                // Start the stream immediately; callbacks will be swapped per-trial.
                 startForceStream(window.dynamometerSensor, () => {});
                 jsPsych.finishTrial({ connected: true });
             } catch (err) {
@@ -119,14 +123,12 @@ function makeCalibrationTrial(trialIndex) {
 
             const label = document.getElementById('cal-phase-label');
 
-            // Countdown: "3…", "2…", "1…"
             [3, 2, 1].forEach((n, i) => {
                 jsPsych.pluginAPI.setTimeout(() => {
                     if (label) label.textContent = `${n}…`;
                 }, READY_MS + i * 1000);
             });
 
-            // Squeeze phase
             jsPsych.pluginAPI.setTimeout(() => {
                 inSqueeze = true;
                 if (label) {
@@ -135,7 +137,6 @@ function makeCalibrationTrial(trialIndex) {
                 }
             }, READY_MS + COUNTDOWN_MS);
 
-            // Relax phase
             jsPsych.pluginAPI.setTimeout(() => {
                 inSqueeze = false;
                 if (label) {
@@ -146,26 +147,44 @@ function makeCalibrationTrial(trialIndex) {
         },
         on_finish: function (data) {
             if (window.simulating) {
-                _trialPeak = 70 + Math.random() * 20; // 70–90 N
+                _trialPeak = 70 + Math.random() * 20;
                 data.peak_force_n = _trialPeak;
             }
             _peaks.push(_trialPeak);
-            setForceCallback(() => {}); // idle between trials
+            setForceCallback(() => {});
         }
     };
 }
 
 // ── Results trial ─────────────────────────────────────────────────────────────
+// IMPORTANT: jsPsych evaluates stimulus() BEFORE calling on_start.
+// All computation must live inside stimulus(); on_start must not be used.
 
 const calibrationResults = {
     type: jsPsychHtmlButtonResponse,
-    on_start: function () {
-        const { maxForce } = computeMaxForce([..._peaks]);
-        window.dynamometerMaxForce = maxForce;
-        sessionStorage.setItem('dynamometerMaxForce', String(maxForce));
-    },
     stimulus: function () {
-        const maxForce  = window.dynamometerMaxForce;
+        const validPeaks = _peaks.filter(p => p > 1.0);
+        _needsRetry = validPeaks.length < 2;
+
+        if (_needsRetry) {
+            return `
+                <div id="instruction-container">
+                    <div id="instruction-text">
+                        <h2>Grip not detected</h2>
+                        <p>We did not pick up any squeezes. Check that the grip sensor is still switched on and connected.</p>
+                        <p>Tap <strong>Continue</strong> to repeat the measurement.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Use all N_TRIALS peaks when available; fall back to valid subset so
+        // computeMaxForce (which discards one outlier) still has enough data.
+        const peaks = validPeaks.length === N_TRIALS ? _peaks : validPeaks;
+        const { maxForce } = computeMaxForce(peaks);
+        window.dynamometerMaxForce = maxForce;
+        sessionStorage.setItem(calStorageKey(), String(maxForce));
+
         const threshold = (maxForce * 0.75).toFixed(1);
         return `
             <div id="instruction-container">
@@ -181,24 +200,46 @@ const calibrationResults = {
     choices: ['Continue'],
     data: {
         trialphase: 'dynamometer_calibration_results',
-        max_force_n: () => window.dynamometerMaxForce
+        max_force_n: () => window.dynamometerMaxForce,
+        had_bad_peaks: () => _peaks.some(p => p <= 1.0),
+        calibration_retry: () => _needsRetry
     },
     on_finish: function () {
-        _peaks = [];
-        setForceCallback(() => {});
-        updateState('dynamometer_calibration_end');
+        if (!_needsRetry) {
+            setForceCallback(() => {});
+            updateState('dynamometer_calibration_end');
+        }
     }
 };
 
 // ── Public timeline factory ───────────────────────────────────────────────────
 
 export function createDynamometerCalibrationTimeline(settings) {
-    _peaks = [];
+    // Clear any stale calibration stored for this participant so vigour
+    // cannot pick up a previous participant's max force.
+    sessionStorage.removeItem(calStorageKey());
+    window.dynamometerMaxForce = undefined;
+
     const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i));
+
+    // Loop repeats all calibration trials if the sensor failed to deliver data.
+    const calibrationProcedure = {
+        timeline: [...trials, calibrationResults],
+        loop_function: function () {
+            if (_needsRetry) {
+                _peaks = [];
+                return true;
+            }
+            return false;
+        },
+        on_timeline_start: function () {
+            _peaks = [];
+        }
+    };
+
     return [
         connectTrial,
         calibrationInstructions,
-        ...trials,
-        calibrationResults
+        calibrationProcedure
     ];
 }

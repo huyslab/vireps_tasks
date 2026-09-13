@@ -535,7 +535,7 @@ export const TaskRegistry = {
     defaultConfig: {
       task_name: 'dynamometer_vigour',
       thresholdFraction: 0.75,
-      holdDurationMs: 700,
+      holdDurationMs: 40,
       preferredOrientation: 'portrait'
     },
     requirements: {
@@ -544,7 +544,7 @@ export const TaskRegistry = {
     resumptionRules: { enabled: true },
     configOptions: {
       thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.75 (75%).',
-      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 700.',
+      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 40.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
     }
   }

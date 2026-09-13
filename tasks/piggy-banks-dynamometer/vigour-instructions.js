@@ -8,113 +8,114 @@ let instructionResizeObs = null;
 
 // ── Interactive demo trial ────────────────────────────────────────────────────
 
-const instructionPage = {
-    type: jsPsychHtmlKeyboardResponse,
-    choices: 'NO_KEYS',
-    trial_duration: null,
-    data: { trialphase: 'dynamometer_vigour_instructions' },
-    stimulus: function () {
-        return `
-            <div class="experiment-wrapper">
-                <div id="instruction-container">
-                    <div id="instruction-text"></div>
-                </div>
-                <div id="experiment-container">
-                    <div id="coin-container"></div>
-                    <div id="piggy-container">
-                        <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank">
+function makeInstructionPage(settings) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        choices: 'NO_KEYS',
+        trial_duration: null,
+        data: { trialphase: 'dynamometer_vigour_instructions' },
+        stimulus: function () {
+            return `
+                <div class="experiment-wrapper">
+                    <div id="instruction-container">
+                        <div id="instruction-text"></div>
+                    </div>
+                    <div id="experiment-container">
+                        <div id="coin-container"></div>
+                        <div id="piggy-container">
+                            <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank">
+                        </div>
+                    </div>
+                    <div id="bottom-container" style="visibility: hidden">
+                        <p id="button-instruction" style="margin: 24px">
+                            Press <strong>Restart</strong> to try again, or <strong>Continue</strong> to go on.
+                        </p>
+                        <div id="button-container">
+                            <button id="restart-button" class="jspsych-btn">Restart</button>
+                            <button id="continue-button" class="jspsych-btn">Continue</button>
+                        </div>
                     </div>
                 </div>
-                <div id="bottom-container" style="visibility: hidden">
-                    <p id="button-instruction" style="margin: 24px">
-                        Press <strong>Restart</strong> to try again, or <strong>Continue</strong> to go on.
-                    </p>
-                    <div id="button-container">
-                        <button id="restart-button" class="jspsych-btn">Restart</button>
-                        <button id="continue-button" class="jspsych-btn">Continue</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    },
-    on_load: function () {
-        updatePersistentCoinContainer();
-        instructionResizeObs = observeResizing('coin-container', updatePersistentCoinContainer);
+            `;
+        },
+        on_load: function () {
+            updatePersistentCoinContainer();
+            instructionResizeObs = observeResizing('coin-container', updatePersistentCoinContainer);
 
-        let squeezeCount = 0;
-        const FR = 5; // reward every 5 squeezes in the demo
-        let timerStarted = false;
-        let continueTimer;
+            let squeezeCount = 0;
+            const FR = 5;
+            let timerStarted = false;
+            let continueTimer;
 
-        updateDemoText(squeezeCount);
-
-        const bottomContainer     = document.getElementById('bottom-container');
-        const experimentContainer = document.getElementById('experiment-container');
-        const buttonInstruction   = document.getElementById('button-instruction');
-
-        function handlePress() {
-            squeezeCount++;
-            shakePiggy();
             updateDemoText(squeezeCount);
 
-            if (squeezeCount % FR === 0) dropCoin(0);
+            const bottomContainer     = document.getElementById('bottom-container');
+            const experimentContainer = document.getElementById('experiment-container');
+            const buttonInstruction   = document.getElementById('button-instruction');
 
-            if (squeezeCount === FR + 1 && !timerStarted) {
-                timerStarted = true;
-                bottomContainer.style.visibility = 'visible';
-                continueTimer = setTimeout(() => {
-                    experimentContainer.style.visibility = 'hidden';
-                    buttonInstruction.style.color = '#0066cc';
-                }, 10000);
+            function handlePress() {
+                squeezeCount++;
+                shakePiggy();
+                updateDemoText(squeezeCount);
+
+                if (squeezeCount % FR === 0) dropCoin(0);
+
+                if (squeezeCount === FR + 1 && !timerStarted) {
+                    timerStarted = true;
+                    bottomContainer.style.visibility = 'visible';
+                    continueTimer = setTimeout(() => {
+                        experimentContainer.style.visibility = 'hidden';
+                        buttonInstruction.style.color = '#0066cc';
+                    }, 10000);
+                }
             }
-        }
 
-        function startDetector() {
-            instructionDetector = createPressDetector(window.dynamometerMaxForce ?? 80, {
-                thresholdFraction: 0.75,
-                holdDurationMs:    700,
-                onPress: handlePress
-            });
-            setForceCallback(f => instructionDetector.update(f));
-        }
+            function startDetector() {
+                instructionDetector = createPressDetector(window.dynamometerMaxForce ?? 80, {
+                    thresholdFraction: settings.thresholdFraction,
+                    holdDurationMs:    settings.holdDurationMs,
+                    onPress: handlePress
+                });
+                setForceCallback(f => instructionDetector.update(f));
+            }
 
-        function restart() {
-            squeezeCount = 0;
-            timerStarted = false;
-            clearTimeout(continueTimer);
-            updateDemoText(squeezeCount);
-            experimentContainer.style.visibility = 'visible';
-            bottomContainer.style.visibility = 'hidden';
-            buttonInstruction.style.color  = '';
-            document.getElementById('coin-container').innerHTML = '';
+            function restart() {
+                squeezeCount = 0;
+                timerStarted = false;
+                clearTimeout(continueTimer);
+                updateDemoText(squeezeCount);
+                experimentContainer.style.visibility = 'visible';
+                bottomContainer.style.visibility = 'hidden';
+                buttonInstruction.style.color  = '';
+                document.getElementById('coin-container').innerHTML = '';
+                startDetector();
+            }
+
+            document.getElementById('restart-button').addEventListener('click', restart);
+            document.getElementById('continue-button').addEventListener('click', () => jsPsych.finishTrial());
+
             startDetector();
-        }
 
-        document.getElementById('restart-button').addEventListener('click', restart);
-        document.getElementById('continue-button').addEventListener('click', () => jsPsych.finishTrial());
-
-        startDetector();
-
-        if (window.simulating) {
-            // Simulate FR+1 presses then click Continue
-            for (let i = 0; i <= FR; i++) {
-                jsPsych.pluginAPI.setTimeout(handlePress, 80 * (i + 1));
+            if (window.simulating) {
+                for (let i = 0; i <= FR; i++) {
+                    jsPsych.pluginAPI.setTimeout(handlePress, 80 * (i + 1));
+                }
+                jsPsych.pluginAPI.setTimeout(() => {
+                    jsPsych.pluginAPI.clickTarget(document.getElementById('continue-button'));
+                }, 80 * (FR + 2) + 100);
             }
-            jsPsych.pluginAPI.setTimeout(() => {
-                jsPsych.pluginAPI.clickTarget(document.getElementById('continue-button'));
-            }, 80 * (FR + 2) + 100);
+        },
+        on_finish: function () {
+            setForceCallback(() => {});
+            instructionDetector = null;
+            if (instructionResizeObs) {
+                instructionResizeObs.disconnect();
+                instructionResizeObs = null;
+            }
+            jsPsych.pluginAPI.cancelAllKeyboardResponses();
         }
-    },
-    on_finish: function () {
-        setForceCallback(() => {});
-        instructionDetector = null;
-        if (instructionResizeObs) {
-            instructionResizeObs.disconnect();
-            instructionResizeObs = null;
-        }
-        jsPsych.pluginAPI.cancelAllKeyboardResponses();
-    }
-};
+    };
+}
 
 function updateDemoText(squeezeCount) {
     const el = document.getElementById('instruction-text');
@@ -168,64 +169,68 @@ const ruleInstruction = {
 
 // ── Start confirmation ────────────────────────────────────────────────────────
 
-const startConfirmation = {
-    type: jsPsychHtmlKeyboardResponse,
-    choices: 'NO_KEYS',
-    stimulus: () => `
-        <div class="experiment-wrapper">
-            <div id="instruction-container">
-                <div id="instruction-text">
-                    <p>You will now play the piggy bank game without a break for about <strong>four minutes</strong>.</p>
-                    <p>When you're ready, <span class="highlight-txt">squeeze the grip</span> to begin.</p>
+function makeStartConfirmation(settings) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        choices: 'NO_KEYS',
+        stimulus: () => `
+            <div class="experiment-wrapper">
+                <div id="instruction-container">
+                    <div id="instruction-text">
+                        <p>You will now play the piggy bank game without a break for about <strong>four minutes</strong>.</p>
+                        <p>When you're ready, <span class="highlight-txt">squeeze the grip</span> to begin.</p>
+                    </div>
+                </div>
+                <div id="experiment-container">
+                    <div id="piggy-container">
+                        <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank">
+                    </div>
+                </div>
+                <div id="bottom-container" style="visibility: visible;">
+                    <button id="reread-button" class="jspsych-btn">Re-read instructions</button>
                 </div>
             </div>
-            <div id="experiment-container">
-                <div id="piggy-container">
-                    <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank">
-                </div>
-            </div>
-            <div id="bottom-container" style="visibility: visible;">
-                <button id="reread-button" class="jspsych-btn">Re-read instructions</button>
-            </div>
-        </div>
-    `,
-    post_trial_gap: 300,
-    data: { trialphase: 'dynamometer_vigour_instructions' },
-    on_load: function () {
-        let confirmed = false;
-        const finishOnce = (response) => {
-            if (confirmed) return;
-            confirmed = true;
+        `,
+        post_trial_gap: 300,
+        data: { trialphase: 'dynamometer_vigour_instructions' },
+        on_load: function () {
+            let confirmed = false;
+            const finishOnce = (response) => {
+                if (confirmed) return;
+                confirmed = true;
+                setForceCallback(() => {});
+                jsPsych.finishTrial({ response });
+            };
+
+            const detector = createPressDetector(window.dynamometerMaxForce ?? 80, {
+                thresholdFraction: settings.thresholdFraction,
+                holdDurationMs:    settings.holdDurationMs,
+                onPress: () => finishOnce('b')
+            });
+            setForceCallback(f => detector.update(f));
+
+            document.getElementById('reread-button').addEventListener('click', () => finishOnce('r'));
+
+            if (window.simulating) {
+                jsPsych.pluginAPI.setTimeout(() => finishOnce('b'), 100);
+            }
+        },
+        on_finish: function (data) {
             setForceCallback(() => {});
-            jsPsych.finishTrial({ response });
-        };
-
-        const detector = createPressDetector(window.dynamometerMaxForce ?? 80, {
-            thresholdFraction: 0.75,
-            holdDurationMs:    700,
-            onPress: () => finishOnce('b')
-        });
-        setForceCallback(f => detector.update(f));
-
-        document.getElementById('reread-button').addEventListener('click', () => finishOnce('r'));
-
-        if (window.simulating) {
-            jsPsych.pluginAPI.setTimeout(() => finishOnce('b'), 100);
+            const seed = jsPsych.randomization.setSeed();
+            data.rng_seed = seed;
         }
-    },
-    on_finish: function (data) {
-        setForceCallback(() => {});
-        const seed = jsPsych.randomization.setSeed();
-        data.rng_seed = seed;
-    }
-};
+    };
+}
 
-// ── Exported timeline ─────────────────────────────────────────────────────────
+// ── Exported timeline factory ─────────────────────────────────────────────────
 
-export const dynamometer_vigour_instructions = {
-    timeline: [instructionPage, ruleInstruction, startConfirmation],
-    loop_function: function (data) {
-        return jsPsych.pluginAPI.compareKeys(data.last(1).values()[0].response, 'r');
-    },
-    on_timeline_start: () => updateState('dynamometer_vigour_instructions_start')
-};
+export function createDynamometerVigourInstructions(settings) {
+    return {
+        timeline: [makeInstructionPage(settings), ruleInstruction, makeStartConfirmation(settings)],
+        loop_function: function (data) {
+            return jsPsych.pluginAPI.compareKeys(data.last(1).values()[0].response, 'r');
+        },
+        on_timeline_start: () => updateState('dynamometer_vigour_instructions_start')
+    };
+}
