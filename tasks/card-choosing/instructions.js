@@ -71,12 +71,11 @@ function preparePILTInstructions(settings) {
 
             let pages = [
             `<p><b>THE CARD CHOOSING GAME</b></p>
-                <p>In this game you will flip cards to collect the coins behind them.</p>
-                <p>Some cards are luckier than others. Your goal is to collect as much game money as possible${window.task == "screening" ? "" : " and avoid losing it"}.</p>
-                ${settings.session !== "screening" ? "<p>Try to collect as many coins as you can.</p>" : ""}`,
-            `<p>On each turn of this game, you will see two cards.
-                You have ${secondsWord(settings.default_response_deadline)} seconds to flip one of the two cards.</p>
-                <p>This will reveal the coin you collect: either 1 pound, 50 pence, or 1 penny.</p>
+                <p>In this game you turn over cards to find the coins behind them.</p>
+                <p>Some cards are luckier than others.</p>
+                <p>Try to collect as many coins as you can${window.task == "screening" ? "" : ", and try not to lose them"}.</p>`,
+            `<p>Each turn you see two cards. You have <b>${secondsWord(settings.default_response_deadline)} seconds</b> to turn one over.</p>
+                <p>Behind it is the coin you collect: £1, 50p or 1p.</p>
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
@@ -85,14 +84,14 @@ function preparePILTInstructions(settings) {
 
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
-            pages.push(`<p>When you flip a card, you might see broken coins like these:</p>\
+            pages.push(`<p>Sometimes you will turn over a broken coin, like these.</p>\
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1pennybroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>
-                <p>This means you lose that amount of game coins.</p>`);
-            pages.push(`<p>Sometimes, losing coins cannot be avoided. Your goal then is to lose as little money as possible.</p>
-                <p>To cover these losses, you will start the game with £100 in game coins.</p>`)
+                <p>A broken coin means you lose that much.</p>`);
+            pages.push(`<p>Sometimes you cannot help losing coins. When that happens, try to lose as little as you can.</p>
+                <p>You start with <b>£100</b> of game money, so you will not run out.</p>`)
         }
 
         return pages
@@ -152,15 +151,15 @@ function preparePILTInstructions(settings) {
         css_classes: ['instructions'],
         pages: [
             `${settings.session === "screening" ? "<p>You found a one pound coin!</p>" : ""}
-            <p>Some cards are better than others, and through trial and error, you can learn which ones are best.</p> 
-            <p>However, even the best cards may sometimes give only a penny${window.task == "screening" ? "" : " or occasionally break a one-pound coin"}.</p>`
+            <p>Some cards are better than others. You can learn which ones by trying them.</p>
+            <p>But even the best cards give just a penny sometimes${window.task == "screening" ? "" : ". Now and then they break a £1 coin"}.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "pilt_instruction"}
     },
     createReadyTrial(
-        `<p>Let's practise collecting coins. \
-            On the next screen, choose cards to collect as much money as you can.</p>
+        `<p>Let's have a go at collecting coins.</p>
+            <p>On the next screen, pick cards and collect as much as you can.</p>
             <p>One of the picture cards has mostly £1 coins behind it, while the other has mostly ${settings.session === "screening" ? "50 pence coins" : "broken £1 coins"} behind it.</p>
         `,
         "pilt_instruction"
@@ -221,9 +220,9 @@ function preparePILTInstructions(settings) {
     inst.push({
                 type: jsPsychInstructions,
                 css_classes: ['instructions'],
-                pages: [`<p>Before you start playing, you'll answer a few questions about the instructions you just read.</p>
-                        <p>You must answer all questions correctly to begin the game.</p>\
-                        <p>If not, you can review the instructions and try again.</p>`],
+                pages: [`<p>Before you start, here are a few questions about what you just read.</p>
+                        <p>You need all of them right to begin.</p>
+                        <p>If you get one wrong, you can read the rules again and try once more.</p>`],
                 show_clickable_nav: true,
                 data: {trialphase: "pilt_instruction"}
             });
@@ -256,18 +255,18 @@ function preparePILTInstructions(settings) {
     // the review screen and loop_function below already read.
     let quiz = createInstructionQuiz(quiz_questions, {
         trialphase: "instruction_quiz",
-        preamble: `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`
+        preamble: `<div class=instructions><p>For each statement, say if it is true or false:</p></div>`
     });
 
     // Explanation for wrong answers
     let piltQuizExplanation = [
         {
             prompt: `Some cards are better than others, but even the best cards might only give a penny${settings.session !== "screening" ? " or break a £1 coin" : ''}.`,
-            explanation: "You can learn which cards are better by trial and error. However, cards are not 100% consistent in the coins behind them."
+            explanation: "The cards do not always pay out the same way. You learn which are better by trying them."
         },
         {
             prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
-            explanation: "Your goal is to collect as much money as possible. This means learning to chose cards that give you the most money, and avoiding cards that break valuable coins."
+            explanation: "Your goal is to collect as much money as possible. This means learning to choose cards that give you the most money, and avoiding cards that break valuable coins."
         }
     ];
 
@@ -296,12 +295,12 @@ function preparePILTInstructions(settings) {
                         return piltQuizExplanation.filter((item, index) => {
                             return Object.values(data)[index] !== "True";
                         }).map(item => `
-                            <p>You gave the wrong answer for the following question:</p>
-                            <h3 style="color: darkred; width: 700px; text-align: left;">Question: ${item.prompt}</h3>
+                            <p>You got this one wrong.</p>
+                            <h3 style="color: darkred; width: 700px; text-align: left;">${item.prompt}</h3>
                             <br>
-                            <p style="max-width: 700px; text-align: left;"><strong>The correct answer:</strong> True</p>
-                            <p style="max-width: 700px; text-align: left;"><strong>Explanation:</strong> ${item.explanation}</p>
-                            ${settings.session === "screening" ? "<p>Press next to review the instructions again.</p>" : "<p>Press next to try the quiz again.</p>"}
+                            <p style="max-width: 700px; text-align: left;"><strong>Right answer:</strong> True</p>
+                            <p style="max-width: 700px; text-align: left;"><strong>Why:</strong> ${item.explanation}</p>
+                            ${settings.session === "screening" ? "<p>Read the rules again and try once more.</p>" : "<p>Press next to try again.</p>"}
                         `);
                     }
                 }
@@ -348,9 +347,9 @@ function preparePILTInstructions(settings) {
         [
             inst_loop,
             createReadyTrial(
-                `<p>Great! Let's start playing for real.</p>
-                <p>You will now complete ${settings.session === "screening" ? "another round" : "15 rounds"} of the card choosing game, taking ${settings.session === "screening" ? "a couple of minutes" : "10-15 minutes"} on average to complete.</p>
-                ${settings.session !== "screening" ? "<p>You will be able to take a short break between rounds, if you feel you need it.</p>" : ""}`,
+                `<p>Great. Now let's play for real.</p>
+                <p>You will play ${settings.session === "screening" ? "one more round" : "<b>15 rounds</b>"} of the card game. It takes about ${settings.session === "screening" ? "two minutes" : "<b>10 to 15 minutes</b>"}.</p>
+                ${settings.session !== "screening" ? "<p>You can take a short break between rounds if you need one.</p>" : ""}`,
                 "pilt_instruction"
             )
         ]
@@ -380,10 +379,10 @@ const testInstructions = (task) => {
         type: jsPsychInstructions,
         css_classes: ['instructions'],
         pages: [
-            `<p>You will now begin another round of the card choosing game.</p>
-            <p>In this round, you will not see the coins you collect after each choice, but your coins will still be added to your safe.</p>
-            <p>On each turn, you will choose between two cards you have already seen. Try your best to pick the card that you think is most rewarding.</p>
-            <p>This round will take about three minutes to complete.</p>`
+            `<p>Now you will play one more round of the card game.</p>
+            <p>This time you will not see the coins you win. You still collect them, and they still go in your safe.</p>
+            <p>Each turn you pick between two cards you have seen before. Pick the one you think gives more.</p>
+            <p>This round takes about three minutes.</p>`
         ],
         show_clickable_nav: true,
         on_start: () => {
@@ -432,7 +431,7 @@ function threeResponseReadyTrial(stimulus, trialphase, warningCounter) {
     return {
         type: jsPsychHtmlKeyboardResponse,
         css_classes: ['instructions'],
-        stimulus: stimulus + `<p>When you are ready to start playing, place your fingers on the left, right, and up arrow keys as shown below, and press the up arrow key.</p>
+        stimulus: stimulus + `<p>Put your fingers on the left, right, and up arrow keys as shown. Press the up arrow key to begin.</p>
         <img src='./assets/images/3_finger_keys.jpg' style='width:250px;'></img>`,
         choices: ['arrowup'],
         data: { trialphase: trialphase },
@@ -451,14 +450,12 @@ const LTM_instructions = [
         pages: [
             '<p>You will now play another round of the card choosing game.</p>\
                 <p>Your goal remains to add as much money as you can to your safe.</p>',
-            `<p>This time, you will choose between three cards on every turn.</p>
-            <p>In every triplet, one picture card will always have £1 and 50-pence coins behind it, while the other two cards will have only pennies.</p>
-            <p>You can earn more by learning which is the better picture card in each triplet and choosing that card when you next see same triplet.</p>`,
+            `<p>This time you pick from three cards each turn.</p>
+            <p>One card in each set always has £1 and 50 pence coins. The other two have only pennies.</p>
+            <p>Learn which card is best in each set and pick it next time.</p>`,
             touchCapable
                 ? `<p><b>Tap the card you want to choose</b> - left, middle, or right.</p>`
-                : `<p>Use the right arrow key to choose the card on the right, the left arrow key to choose the card on the left,
-            and <b>use the upwards arrow key to choose the card in the middle.</b>
-            `
+                : `<p>Press the <b>left arrow</b> to pick the left card. Press the <b>right arrow</b> for the right. Press the <b>up arrow</b> for the middle.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "LTM_instructions"}
@@ -487,10 +484,10 @@ const WM_instructions = [
             <p>Below the card there are three buttons: <span class="cardChoosingResponseBtn">←</span> <span class="cardChoosingResponseBtn">↑</span> <span class="cardChoosingResponseBtn">→</span>. You can flip the card by tapping any one of them.</p>
             <p>For each card, tapping one of the three buttons will always reveal £1 and 50-pence coins, while the other two will reveal only pennies.</p>
             <p>You can earn more by learning which is the better button for each card, and tapping that button when you next see the same card.</p>`
-                : `<p>This time, you will see only one card on each turn.</p>
-            <p>You can flip this card by pressing either the left <span class="spacebar-icon">&nbsp;←&nbsp;</span>, up <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or right <span class="spacebar-icon">&nbsp;→&nbsp;</span> arrow keys on your keyboard.</p>
-            <p>For each card, pressing one of the keys will always reveal £1 and 50-pence coins, while the other two keys will reveal only pennies.</p>
-            <p>You can earn more by learning which is the better key to press for each card and pressing that key when you next see same card.</p>`
+                : `<p>This time, you see just one card each turn.</p>
+            <p>Press <span class="spacebar-icon">&nbsp;←&nbsp;</span>, <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or <span class="spacebar-icon">&nbsp;→&nbsp;</span> to flip it.</p>
+            <p>One key always shows £1 and 50 pence coins. The other two show only pennies.</p>
+            <p>Learn which key is best for each card and use it again next time.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "WM_instructions"}

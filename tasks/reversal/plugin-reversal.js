@@ -341,7 +341,7 @@ var jsPsychReversal = (function (jspsych) {
                 response.response_deadline_warning = true;
 
                 // Display message
-                showTemporaryWarning("Didn't catch a response - moving on", trial.warning_duration - 200);
+                showTemporaryWarning("We missed that one. Moving on", trial.warning_duration - 200);
 
                 // End trial
                 this.jsPsych.pluginAPI.setTimeout(() => {

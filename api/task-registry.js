@@ -434,7 +434,7 @@ export const TaskRegistry = {
       no_skip: true,
       timeout_alert_duration: 4,
       max_timeout: 5,
-      warning_text: `Didn't catch a response - moving on.`
+      warning_text: `We missed that one. Moving on.`
     },
     configOptions: {
       min_words: "Minimum number of words required for each response. Default is 30.",
@@ -446,7 +446,7 @@ export const TaskRegistry = {
       no_skip: "Whether to prevent skipping questions if no response is given or time runs out. Default is true.",
       timeout_alert_duration: "Duration in seconds of the timeout/empty response alert. Default is 4 seconds.",
       max_timeout: "Maximum number of timeouts or empty responses allowed before the participant is asked to return their submission. Default is 5.",
-      warning_text: "Text to display when a response is not captured before moving on. Default is `Didn't catch a response - moving on.`"
+      warning_text: "Text to display when a response is not captured before moving on. Default is `We missed that one. Moving on.`"
     },
     requirements: {
       css: ['@tasks/open-text/styles.css'],

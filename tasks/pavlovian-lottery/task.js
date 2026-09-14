@@ -142,8 +142,8 @@ export function createPavlovianLotteryTimeline(settings) {
       // Welcome and task overview
       `
         <h2>The lucky lottery</h2>
-        <p>Each go, the pictures spin and stop on one of them.</p>
-        <p>Find out which pictures win you coins, and which ones break them.</p>
+        <p>Each go, the pictures spin. They stop on one picture.</p>
+        <p>Find out which pictures win you coins, and which ones break a coin.</p>
       `,
       // Visual guide showing all possible coin outcomes
       `

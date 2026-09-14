@@ -279,7 +279,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       `<p>Each picture stays on screen for a moment.</p>
        <p><b>To tap:</b> ${actionText()}.</p>
        <p><b>To not tap:</b> just wait, and the picture will go away on its own.</p>
-       <p>Choose quickly - you do not have long.</p>`,
+       <p>Choose fast. You only get a moment.</p>`,
 
       // No colour on these words. The rim light that used to carry the win/lose
       // mapping is off (signal_valence: false), so colouring them would teach a
@@ -382,7 +382,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
   const quizQuestions = [
     {
-      prompt: `For each person, I choose whether to tap or not.`,
+      prompt: `For each person, I choose to tap or not to tap.`,
       correct: 'True',
     },
     {
