@@ -9,6 +9,9 @@ import { createVigourTimeline, computeRelativePiggyTasksBonus, createPITTimeline
 import { createPavlovianLotteryTimeline } from '@tasks/pavlovian-lottery/task.js';
 import { createControlTimeline, computeRelativeControlBonus } from '@tasks/control/index.js';
 import { createOpenTextTimeline } from '@tasks/open-text/index.js';
+import { createDynamometerCalibrationTimeline } from '@tasks/dynamometer-calibration/task.js';
+import { createDynamometerVigourTimeline } from '@tasks/piggy-banks-dynamometer/index.js';
+import { computeRelativePiggyTasksBonus as computeDynBonus } from '@tasks/piggy-banks/utils.js';
 import { createReversalTimeline, computeRelativeReversalBonus } from '@tasks/reversal/index.js';
 import { createAcceptabilityTimeline } from '@tasks/acceptability-judgment/index.js';
 import { createSelfReportTimeline } from '@tasks/self-report/index.js';
@@ -197,7 +200,7 @@ export const TaskRegistry = {
       signal_valence: false,
       feedback_tint: true,
       play_sounds: true,
-      outcome_display: 'points',
+      outcome_display: 'coins',
       response_window: 1800,
       resize_duration: 300,
       feedback_duration: 1600,
@@ -230,14 +233,14 @@ export const TaskRegistry = {
       sequence: "Trial sequence key. One sequence serves every session - sessions differ only in which faces are shown. Default is 'trial1'.",
       session: "Session identifier for session-specific behaviour. Default is 'wk0'.",
       stimulus_session: "Which face set (1-5) from stimuli-manifest.json to use. Each is a disjoint set of 24 CFD models, so a returning participant never sees a face twice. Default is 1.",
-      include_instructions: "Whether to run the Faces Game instructions, guided training, and short quiz before block 1. Default is true.",
-      signal_valence: "Whether the cue is lit by outcome domain at onset - blue for money to win, amber for money to lose - as RobotFactory's scanner light does. Signalled, the task is action learning only; unsignalled, valence has to be learnt from the outcomes too. Default is true.",
+      include_instructions: "Whether to run the people game instructions (the participant-facing name for this task), guided training, and short quiz before block 1. Default is true.",
+      signal_valence: "Whether the cue is lit by outcome domain at onset - blue for money to win, amber for money to lose - as RobotFactory's scanner light does. Signalled, the task is action learning only; unsignalled, valence has to be learnt from the outcomes too. Default is false: valence is part of what the task measures here, and the instructions teach no colour code because none is shown.",
       response_window: "Time in ms from cue onset to respond. Default is 1800. RobotFactory uses 1300 but opens its window 1500ms after onset; here the window opens immediately.",
       resize_duration: "Duration in ms of the grow (go) / shrink (no-go) animation. Default is 300.",
       feedback_duration: "How long in ms the outcome coin is shown. Default is 1600.",
-      feedback_tint: "Whether the whole screen washes green (correct) or red (incorrect) at feedback. Default is false: colour marks the outcome domain at cue onset instead, and one dimension should not mean two things in a trial. Worth turning on together with signal_valence: false.",
+      feedback_tint: "Whether the whole screen washes green (correct) or red (incorrect) at feedback. Default is true: with signal_valence off, colour is free to carry correctness, and it is the only signal of it besides the coin. Turn it off if signal_valence is ever turned on, so colour does not mean two things in one trial.",
       play_sounds: "Whether the outcome sound plays. Default is true.",
-      outcome_display: "'coins' shows the £1 / 1p / broken-coin images; 'points' shows Sam Zorowitz's values instead (+10, +1, -1, -10) and adapts the instructions to match. Default is 'coins'.",
+      outcome_display: "'coins' shows the £1 / 1p / broken-coin images; 'points' shows Sam Zorowitz's values instead (+10, +1, -1, -10) and adapts the instructions to match. Default is 'coins', which is also what Reversal pays in - the two games sit next to each other in Module 1 and should not use different currencies.",
       iti: "Blank gap in ms after feedback. Default is 400.",
       preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). Default is 'landscape'."
     }
@@ -431,7 +434,7 @@ export const TaskRegistry = {
       no_skip: true,
       timeout_alert_duration: 4,
       max_timeout: 5,
-      warning_text: `Didn't catch a response - moving on.`
+      warning_text: `We missed that one. Moving on.`
     },
     configOptions: {
       min_words: "Minimum number of words required for each response. Default is 30.",
@@ -443,7 +446,7 @@ export const TaskRegistry = {
       no_skip: "Whether to prevent skipping questions if no response is given or time runs out. Default is true.",
       timeout_alert_duration: "Duration in seconds of the timeout/empty response alert. Default is 4 seconds.",
       max_timeout: "Maximum number of timeouts or empty responses allowed before the participant is asked to return their submission. Default is 5.",
-      warning_text: "Text to display when a response is not captured before moving on. Default is `Didn't catch a response - moving on.`"
+      warning_text: "Text to display when a response is not captured before moving on. Default is `We missed that one. Moving on.`"
     },
     requirements: {
       css: ['@tasks/open-text/styles.css'],
@@ -463,7 +466,11 @@ export const TaskRegistry = {
     },
     configOptions: {
       task_name: "Short identifier for the task (used in data field names). Default is 'task'.",
-      game_description: "Human-readable description of the game/task. Default is 'game you have just completed'."
+      game_description: "Human-readable description of the game/task. Default is 'game you have just completed'. Shown to the participant verbatim, so it must be what they were actually called in the game's own instructions."
+    },
+    requirements: {
+      // Shares the questionnaire block's one-item-per-screen component, and so its styles.
+      css: ['@tasks/self-report/styles.css'],
     },
     resumptionRules: {
         enabled: false,
@@ -507,6 +514,39 @@ export const TaskRegistry = {
      * a first tap and its correction can both be seen, but only one of them counts.
      */
     dataNotes: 'One row per screen. Live answers are navigation === "forward" && !superseded, one per item_id.'
+  },
+  dynamometer_calibration: {
+    name: 'Dynamometer Calibration',
+    description: 'Measures maximum squeeze force using the Vernier Go Direct Hand Dynamometer over Bluetooth',
+    createTimeline: createDynamometerCalibrationTimeline,
+    computeBonus: () => 0,
+    defaultConfig: {},
+    requirements: {
+      css: ['@tasks/dynamometer-calibration/styles.css']
+    },
+    resumptionRules: { enabled: false },
+    configOptions: {}
+  },
+  dynamometer_vigour: {
+    name: 'Dynamometer Vigour Task',
+    description: 'Piggy-bank vigour task driven by hand dynamometer squeezes instead of screen taps',
+    createTimeline: createDynamometerVigourTimeline,
+    computeBonus: () => computeDynBonus('dynamometer_vigour_trial'),
+    defaultConfig: {
+      task_name: 'dynamometer_vigour',
+      thresholdFraction: 0.75,
+      holdDurationMs: 40,
+      preferredOrientation: 'portrait'
+    },
+    requirements: {
+      css: ['@tasks/piggy-banks/styles.css']
+    },
+    resumptionRules: { enabled: true },
+    configOptions: {
+      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.75 (75%).',
+      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 40.',
+      preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
+    }
   }
 };
 

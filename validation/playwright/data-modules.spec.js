@@ -32,18 +32,29 @@ test('study modules contain the requested tasks and rate every task immediately 
     expect(elements[0]).toMatchObject({ type: 'instructions', config: { text: 'start_message' } });
     expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
 
+    // Module 2 carries break screens between tasks, so the body is no longer a flat
+    // run of task/rating pairs. The invariant being checked is unchanged and is the
+    // one that matters: a rating follows its own task IMMEDIATELY, with nothing
+    // allowed in between. A break may only sit at a boundary, after a rating.
     const body = elements.slice(1, -1);
-    const ratedTasks = body.slice(0, expectedTasks.length * 2);
-    expectedTasks.forEach(([taskName, ratingName], index) => {
-      expect(ratedTasks[index * 2]).toMatchObject({ type: 'task', name: taskName });
-      expect(ratedTasks[index * 2 + 1]).toMatchObject({
+    let cursor = 0;
+    expectedTasks.forEach(([taskName, ratingName]) => {
+      while (body[cursor] && body[cursor].type === 'instructions') cursor += 1;
+
+      expect(body[cursor]).toMatchObject({ type: 'task', name: taskName });
+      expect(
+        body[cursor + 1],
+        `${taskName} must be rated immediately, with no break between the task and its rating`
+      ).toMatchObject({
         type: 'task',
         name: 'acceptability_judgment',
         config: { task_name: ratingName },
       });
+      cursor += 2;
     });
 
-    expect(body.slice(expectedTasks.length * 2)).toEqual([]);
+    // Nothing but breaks may follow the last rating.
+    expect(body.slice(cursor).filter((element) => element.type !== 'instructions')).toEqual([]);
   }
 });
 
@@ -66,17 +77,19 @@ test('questionnaire module presents every questionnaire in the configured order'
   ]);
 });
 
-test('experimenter launcher offers five sessions and the three study modules', async ({ page }) => {
+// VIREPS runs two sessions. The launcher was cut to two in 3ff732b ("correct number
+// and name of session"), which also dropped the week labels; this test still described
+// the five-session RELMED launcher and had been failing ever since. experiment.html
+// keeps SESSION_CONFIG entries for weeks 4-28 so repeat-session sequences still build
+// (see the timeline test below) - they are simply not offered to the experimenter.
+test('experimenter launcher offers two sessions and the three study modules', async ({ page }) => {
   await page.goto('/index.html');
 
-  await expect(page.locator('#sessionNumber option')).toHaveCount(6);
+  await expect(page.locator('#sessionNumber option')).toHaveCount(3);
   await expect(page.locator('#sessionNumber option').allTextContents()).resolves.toEqual([
     'Select session',
-    'Session 1 (week 0)',
-    'Session 2 (week 2)',
-    'Session 3 (week 4)',
-    'Session 4 (week 24)',
-    'Session 5 (week 28)',
+    'Session 1',
+    'Session 2',
   ]);
   await expect(page.locator('#module option')).toHaveCount(4);
   await expect(page.locator('#module option').evaluateAll((options) => options.map(({ value }) => value))).resolves.toEqual([
@@ -90,7 +103,7 @@ test('experimenter launcher offers five sessions and the three study modules', a
 test('launcher sends participant, session number, and module to the experiment page', async ({ page }) => {
   await page.goto('/index.html');
   await page.locator('#participantId').fill('participant_42');
-  await page.locator('#sessionNumber').selectOption('3');
+  await page.locator('#sessionNumber').selectOption('2');
   await page.locator('#module').selectOption('module_2');
 
   await page.locator('#startButton').click({ noWaitAfter: true });
@@ -98,7 +111,7 @@ test('launcher sends participant, session number, and module to the experiment p
 
   const destination = new URL(page.url());
   expect(destination.searchParams.get('participant_id')).toBe('participant_42');
-  expect(destination.searchParams.get('session_number')).toBe('3');
+  expect(destination.searchParams.get('session_number')).toBe('2');
   expect(destination.searchParams.get('module')).toBe('module_2');
 });
 

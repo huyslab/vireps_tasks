@@ -58,7 +58,6 @@ export const Questionnaires = {
             ['bis_attention', 'I don’t pay attention'],
             ['bis_racing_thoughts', 'I have racing thoughts'],
             ['bis_plan_trips', 'I plan trips well ahead of time'],
-            ['bis_plan_ahead', 'I plan trips well ahead of time'],
             ['bis_self_control', 'I am self-controlled'],
             ['bis_concentrate', 'I concentrate easily'],
             ['bis_save', 'I save regularly'],
@@ -72,22 +71,36 @@ export const Questionnaires = {
             ['bis_bored', 'I get easily bored when solving thought problems'],
             ['bis_spur', 'I act on the spur of the moment'],
             ['bis_steady_thinker', 'I am a steady thinker'],
-            ['bis_change_homes', 'I change where I live [I change residences].'],
+            ['bis_change_homes', 'I change where I live.'],
             ['bis_impulsive_buy', 'I buy things on impulse'],
             ['bis_single_prob', 'I can only think about one problem at a time'],
             ['bis_hobbies', 'I change hobbies'],
-            ['bis_spending', 'I spend more than I earn [I spend or ch‎arge more than I earn].'],
-            ['bis_thoughts', 'I have outside thoughts when thinking [I often have extraneous thoughts when thinking].'],
+            ['bis_spending', 'I spend more than I earn.'],
+            ['bis_thoughts', 'I have outside thoughts when thinking.'],
             ['bis_present_orient', 'I am more interested in the present than the future'],
             ['bis_restless', 'I am restless at lectures or talks'],
             ['bis_puzzles', 'I like puzzles'],
-            ['bis_future_orient', 'I plan for the future [I am future oriented].']
+            ['bis_future_orient', 'I plan for the future.']
         ])
     },
     ARI: {
         key: 'ARI',
         name: 'Affective Reactivity Index',
         scale: ariScale,
+        // ARI-S, verbatim from the supplied data dictionary. NOT TO BE REWORDED.
+        //
+        // The scale is under copyright and "should not be altered in any way without
+        // our written permission" (transatlantic-comppsych/Affective-Reactivity-Index).
+        // The self-report form is the parent form with only two adaptations: the
+        // introductory referent, and the impairment pronoun in the last item. That is
+        // exactly what is below - which is why the six stems read in the third person
+        // while the instruction and the final item address the participant. It looks
+        // like an inconsistency and is not one.
+        //
+        // An earlier pass "corrected" all seven stems to the first person and
+        // simplified the instruction. That produced an unvalidated scale and was
+        // reverted. The US spelling in "behavior/feelings" is likewise left as the
+        // dictionary has it: anglicising it would be an alteration too.
         sections: [{
             start: 0,
             context: 'In the <em>last six months,</em>',
@@ -170,8 +183,8 @@ export const Questionnaires = {
             ['staxi_boil', "I boil inside but I don't show it"],
             ['staxi_control_behaviour', 'I control my behaviour'],
             ['staxi_slam_door', 'I do things like slam doors'],
-            ['staxi_endev_calm', 'I endeavor to be calm again'],
-            ['staxi_harbor_grudges', "I tend to harbor grudges that I don't tell anyone about"],
+            ['staxi_endev_calm', 'I endeavour to be calm again'],
+            ['staxi_harbor_grudges', "I tend to harbour grudges that I don't tell anyone about"],
             ['staxi_stop_temper', 'I can stop myself from losing my temper'],
             ['staxi_argue', 'I argue with others'],
             ['staxi_anger_asap', 'I reduce my anger as soon as possible'],

@@ -386,7 +386,7 @@ function piggyBankTrial(settings) {
       if (data.trial_presses === 0 && data.timeline_variables.ratio === 1) {
         const up_to_now = jsPsych.data.get().last(1).select('n_warnings').values[0] ?? 0;
         jsPsych.data.addProperties({ n_warnings: up_to_now + 1 });
-        showTemporaryWarning("Didn't catch a response - moving on", 800);
+        showTemporaryWarning("We missed that one. Moving on", 800);
       }
 
       // Warn (and count like a missed response) if a stylus / Apple Pencil was used

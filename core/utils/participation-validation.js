@@ -129,9 +129,10 @@ function preKickOutWarning(settings) {
                 // session. kickOut() only ever shows this screen and the
                 // speed-accuracy one. Saying we would stop someone's participation
                 // was simply untrue.
-                stimulus: `<p>You seem to be taking too long to respond on the games.</p>
-                    <p>Please try to respond more quickly. Also, please keep your attention on the game window, and don't use other tabs or windows.</p>
-                    <p>Tap the button below to continue.</p>
+                stimulus: `<p>You are taking a long time to answer.</p>
+                    <p>Please try to answer a bit faster.</p>
+                    <p>Keep this game open. Do not use other tabs or windows.</p>
+                    <p>Tap the button below to carry on.</p>
                 `,
                 on_start: function(trial) {
                     // Save data
@@ -170,9 +171,9 @@ function kickOutWarning(settings)  {
         css_classes: ['instructions'],
         timeline: [
             {
-            stimulus: `<p>You might be taking a little too long to make your choices.</p>
-            <p>We're interested in your quick judgments, so please try to respond a little faster—even if it feels a bit less precise.</p>
-            <p>Tap the button below to continue.</p>
+            stimulus: `<p>You are taking a little long to choose.</p>
+            <p>We want your quick answers. Try to go a bit faster, even if it feels less careful.</p>
+            <p>Tap the button below to carry on.</p>
             `
             }
         ],
@@ -313,7 +314,7 @@ function noChoiceWarning(resp_var = "response", stimulus = "", settings) {
             },
             trial_duration: 1000,
             on_load: function () {
-                showTemporaryWarning("Didn't catch a response - moving on", 800);
+                showTemporaryWarning("We missed that one. Moving on", 800);
             }
         }],
         conditional_function: function () {
@@ -442,7 +443,7 @@ function createPressBothTrial(stimulus, trialphase){
  */
 function createReadyTrial(stimulus, trialphase, options = {}) {
     const {
-        keyboardPrompt = `<p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong>both left and right arrow keys at the same time</strong> to begin.</p>
+        keyboardPrompt = `<p>When you're ready, place your fingers on the <strong>left and right arrow keys</strong> as shown. Press both at the same time to begin.</p>
             <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>`,
         touchPrompt = `<p>When you're ready, tap the button below to begin.</p>`,
         buttonLabel = "I'm ready"

@@ -16,13 +16,11 @@ const SECOND_ITEM = 'I do things without thinking';
  * section-boundary regression names the questionnaire it broke rather than just
  * moving a total.
  *
- * BIS is 31 rather than the canonical 30 because the source data dictionary repeats
- * "I plan trips well ahead of time" under two ids. That is a known content issue
- * raised separately; this test pins current reality so a silently dropped item
- * cannot hide behind it.
+ * BIS is the canonical 30: the duplicate bis_plan_ahead, which repeated
+ * bis_plan_trips verbatim, has been removed.
  */
-const EXPECTED_ITEMS = { BIS: 31, ARI: 7, STAXI2: 57, STAI: 20 };
-const EXPECTED_TOTAL = Object.values(EXPECTED_ITEMS).reduce((a, b) => a + b, 0); // 115
+const EXPECTED_ITEMS = { BIS: 30, ARI: 7, STAXI2: 57, STAI: 20 };
+const EXPECTED_TOTAL = Object.values(EXPECTED_ITEMS).reduce((a, b) => a + b, 0); // 114
 
 async function openQuestionnaire(page, participantId) {
   await patchWebkitTouchPoints(page);
@@ -169,7 +167,7 @@ test('the last item of a questionnaire is still correctable', async ({ page }) =
   // Walk BIS to its end. Each questionnaire owns its own cursor and the next one opens
   // with no way back, so without a screen after the final item that answer would be
   // sealed the moment it was given.
-  const LAST_BIS_ITEM = 'I plan for the future [I am future oriented].';
+  const LAST_BIS_ITEM = 'I plan for the future.';
   for (let step = 0; step < 40; step++) {
     if ((await page.locator('.srq-prompt').innerText()) === LAST_BIS_ITEM) break;
     const primary = page.locator('.srq-btn-primary');
@@ -212,7 +210,7 @@ test('crossing into the next questionnaire closes the previous one', async ({ pa
   test.setTimeout(180000);
   await openQuestionnaire(page, 'back_crossing');
 
-  const LAST_BIS_ITEM = 'I plan for the future [I am future oriented].';
+  const LAST_BIS_ITEM = 'I plan for the future.';
   for (let step = 0; step < 40; step++) {
     if ((await page.locator('.srq-prompt').innerText()) === LAST_BIS_ITEM) break;
     const primary = page.locator('.srq-btn-primary');

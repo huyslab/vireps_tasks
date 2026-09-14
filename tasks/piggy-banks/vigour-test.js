@@ -162,7 +162,7 @@ const postVigourInstructions = {
   type: jsPsychHtmlButtonResponse,
   css_classes: ['instructions'],
   stimulus: () => `
-    <p><strong>You will now see two piggy banks at a time. You have seen them all before.</strong></p>
+    <p><strong>Now you will see two piggy banks at a time. You have seen them all before.</strong></p>
     <p><span class="highlight-txt">Pick the one you would rather play with next time.</span></p>
     <p>${pressVerb(true)} the piggy bank you choose.</p>
   `,

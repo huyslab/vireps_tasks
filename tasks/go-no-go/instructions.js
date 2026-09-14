@@ -50,15 +50,6 @@ const isTouch = isTouchDevice;
 
 const actionText = () => (isTouch() ? 'touch the picture' : 'press the space bar');
 
-/* Text versions of the two rim-light colours, darkened for contrast against the
-   white instruction background. The words "money to win" and "money to lose" are
-   set in the colour of the light the participant is about to see, so the mapping
-   is stated once in the only place it can be stated - the light itself is never
-   labelled on screen. Previously green and red, which now mean nothing in this
-   task and would have taught the wrong pairing. */
-const GLOW_BLUE = '#2a63cc';
-const GLOW_AMBER = '#b87400';
-
 function coinInline(src, alt) {
   return `<img src="${src}" alt="${alt}" style="width:68px; height:68px; vertical-align:middle; margin-left:8px;">`;
 }
@@ -288,14 +279,19 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       `<p>Each picture stays on screen for a moment.</p>
        <p><b>To tap:</b> ${actionText()}.</p>
        <p><b>To not tap:</b> just wait, and the picture will go away on its own.</p>
-       <p>Choose quickly - you do not have long.</p>`,
+       <p>Choose fast. You only get a moment.</p>`,
 
-      `<p>With some people, <span style="color:${GLOW_BLUE};">${L.stakeWin}</span>.</p>
+      // No colour on these words. The rim light that used to carry the win/lose
+      // mapping is off (signal_valence: false), so colouring them would teach a
+      // code the participant never meets. Which kind of person this is has to be
+      // learnt from the outcomes instead, which the last line says outright.
+      `<p>With some people, ${L.stakeWin}.</p>
        <p>Get it right and you win <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
        <p>Get it wrong and you win only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>
-       <p>With others, <span style="color:${GLOW_AMBER};">${L.stakeLose}</span>.</p>
+       <p>With others, ${L.stakeLose}.</p>
        <p>Get it right and you lose only <b>${L.small}</b>. ${L.icon('brokenPenny', 'broken 1 penny coin')}</p>
-       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>`,
+       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>
+       <p>You cannot tell which is which by looking. You find out from what happens.</p>`,
 
       `<p>The same people come back again and again.</p>
        <p>Some are best tapped. Others are best left alone. You cannot tell by looking - you have to find out by trying.</p>
@@ -305,7 +301,8 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       // still see the worse coin. Phrased after PILT's "even the best cards may
       // sometimes give only a penny": it names the exception in terms of the coins
       // themselves, rather than telling anyone what to do about it.
-      `<p>Even when you make the better choice, you may sometimes get ${L.minorWin}, or occasionally ${L.majorLoss}.</p>
+      `<p>The screen turns <b>green</b> when you get it right, and <b>red</b> when you get it wrong.</p>
+       <p>Even when you make the better choice, you may sometimes get ${L.minorWin}, or occasionally ${L.majorLoss}.</p>
        <p>First, let's try a few.</p>`,
     ],
   };
@@ -385,7 +382,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
   const quizQuestions = [
     {
-      prompt: `For each person, I choose whether to tap or not.`,
+      prompt: `For each person, I choose to tap or not to tap.`,
       correct: 'True',
     },
     {

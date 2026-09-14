@@ -12,14 +12,14 @@ function PITMainInstructions(settings) {
     show_clickable_nav: true,
     pages: [`
     <div id="instruction-text">
-      <p><strong>You will now play the same game again for the next few minutes. The rules remain the same:</strong></p>
+      <p><strong>Now you will play the same game again for a few minutes. The rules are the same:</strong></p>
 
       <ul>
           <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
           <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
       </ul>
 
-      <p>Types of coins you can win:</p>
+      <p>These are the coins you can win:</p>
       <div class="instruct-coin-container">
           <div class="instruct-coin">
               <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny">
@@ -37,15 +37,14 @@ function PITMainInstructions(settings) {
       </div>
       `,
       `<div id="instruction-text">
-        <p><strong>But this time, you'll play in a cloudy place.</strong></p>
+        <p><strong>This time you play in a cloudy place.</strong></p>
         <img src="./assets/images/piggy-banks/occluding_clouds.png" style="height:12em">
-        <p><span class="highlight-txt">Coins will drop and be collected as usual, but they'll be hidden behind clouds.<br>You won't see them during the game.</span></p>
-        <p>We will also pay you the bonus in the same way as in the previous game at the end.</p>
+        <p><span class="highlight-txt">You still get coins in the same way.<br>But the clouds hide them, so you will not see them while you play.</span></p>
       </div>`,
       `
       <div id="instruction-text">
-        <p><span class="highlight-txt">In this cloudy place, the background will also change occasionally.</span></p>
-        <p>These are the backgrounds you will see. Each time you see a background, <strong>one</strong> coin will either be added or removed from your earnings.</p>
+        <p><span class="highlight-txt">In the cloudy place the background changes from time to time.</span></p>
+        <p>These are the backgrounds you will see. Each one either gives you <strong>one</strong> coin or takes <strong>one</strong> coin away.</p>
 
             <div class="pav-stimuli-container">
                   <div class="pit-pav-row">
@@ -60,8 +59,8 @@ function PITMainInstructions(settings) {
       </div>
       `, `
       <div id="instruction-text">
-            <p><strong>Here's how each background affects your earnings:</strong></p>
-            <p>The backgrounds on the left will <strong>add</strong> £1, 50p, or 1p, while the backgrounds on the right will <strong>remove</strong> 1p, 50p, or £1.</p>
+            <p><strong>Here is what each background does.</strong></p>
+            <p>The ones on the left give you a coin. The ones on the right take a coin away.</p>
 
             <div class="pav-stimuli-container">
                   <div class="pit-pav-row">

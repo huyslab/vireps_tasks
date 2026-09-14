@@ -161,7 +161,7 @@
   z-index: 1;
 }
 
-/* --- Feedback background tint (optional, off by default) -------------------
+/* --- Feedback background tint (off by plugin default, ON in the study) ------
    The original correctness signal: a low-alpha green/red wash over the whole
    viewport, behind the face and coin. It is retired in the default
    configuration because hue now marks the outcome DOMAIN at cue onset, and one
@@ -204,7 +204,8 @@
    Hue carries EXACTLY ONE meaning in this task. It used to mark correctness
    (a green/red wash over the whole screen at feedback); using it for domain as
    well would have made the same dimension mean two different things at two
-   moments of the same trial. The wash is off by default, and correctness is
+   moments of the same trial. The wash is off by PLUGIN default - the study
+   registry turns it on and signalling off - and where it is off, correctness is
    carried by the coin, its fly-out and the outcome sound - which already stated it
    unambiguously, since the four coins distinguish both correctness and domain.
 

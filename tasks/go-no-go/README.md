@@ -54,13 +54,21 @@ from the first paint.
 
 Two decisions are worth recording, because both were made against alternatives:
 
-- **Hue means exactly one thing.** Feedback used to wash the whole screen green
-  or red; with the light added, colour would have meant the domain at onset and
-  correctness 300 ms later, in the same trial. The wash is **off by default**
-  (`feedback_tint`), and correctness is carried by the outcome, its fly-out and
-  the sound — which already stated it, since £1 and 1p occur only in the win
-  domain and the broken coins only in the loss domain. Turning `signal_valence`
-  off and `feedback_tint` on restores the original, unsignalled design.
+- **Hue means exactly one thing.** Colour may mark the outcome domain at cue
+  onset (`signal_valence`) or correctness at feedback (`feedback_tint`), but not
+  both in the same trial, or the same dimension means two things 300 ms apart.
+
+  **What the study runs:** `signal_valence: false`, `feedback_tint: true` — no rim
+  light, and the screen washes green or red for right and wrong. Valence is part
+  of what the task measures here, so it is not given away at onset, and that
+  leaves colour free to carry correctness. This is the registry configuration
+  (`api/task-registry.js`) and what the instructions describe.
+
+  **The plugin's own defaults are the opposite** (`signal_valence: true`,
+  `feedback_tint: false`) and are what you get calling the plugin directly. The
+  signalled arrangement carries correctness on the outcome, its fly-out and the
+  sound instead — £1 and 1p occur only in the win domain, the broken coins only
+  in the loss domain — so dropping the wash costs no information there.
 - **The light hugs the silhouette; it does not wash over the face.** The cues are
   angry and happy faces, and the colour is perfectly correlated with reward
   valence, so tinting the skin could shift how the expression reads — and that
