@@ -1,4 +1,4 @@
-import { connectDynamometer, startForceStream, setForceCallback } from '@utils/dynamometer.js';
+import { connectDynamometer, startForceStream, setForceCallback, disconnectDynamometer } from '@utils/dynamometer.js';
 import { updateState } from '@utils/index.js';
 
 const N_TRIALS = 6;
@@ -194,11 +194,11 @@ const calibrationResults = {
             `;
         }
 
-        // If exactly one peak is invalid (≤1 N), include it in the full set so
-        // computeMaxForce naturally discards it as the outlier and averages 5.
-        // If all 6 are valid, the true outlier is discarded as normal.
-        const peaks = validPeaks.length >= N_TRIALS ? _peaks : validPeaks;
-        const { maxForce } = computeMaxForce(peaks);
+        // Always pass the full 6-peak set to computeMaxForce. When one peak is
+        // invalid (≤1 N) it is always the farthest from the median, so it is
+        // discarded as the outlier and the remaining 5 valid peaks are averaged.
+        // When all 6 are valid the true outlier is discarded normally.
+        const { maxForce } = computeMaxForce(_peaks);
         window.dynamometerMaxForce = maxForce;
         sessionStorage.setItem(calStorageKey(), String(maxForce));
 
@@ -223,7 +223,12 @@ const calibrationResults = {
     },
     on_finish: function () {
         if (!_needsRetry) {
-            setForceCallback(() => {});
+            // Disconnect BLE so the GDX does not keep streaming after calibration.
+            // Vigour re-connects via its own reconnectStep when it starts.
+            if (window.dynamometerSensor) {
+                disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+                window.dynamometerSensor = null;
+            }
             updateState('dynamometer_calibration_end');
         }
     }

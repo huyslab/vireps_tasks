@@ -66,10 +66,11 @@ export function startForceStream(device, callback, periodMs = 10) {
         }, 50);
         return;
     }
-    // selectDevice already started the stream; only start if not yet collecting.
-    if (!device.collecting) {
-        device.start(periodMs);
-    }
+    // selectDevice calls open(startMeasurements=true) internally, so the device
+    // is already streaming when returned. Never call device.start() again: in the
+    // vendored v1.8.3 SDK, open(true) invokes start() synchronously but the
+    // device.collecting flag only becomes true after the asynchronous START
+    // response, so checking it here races and may issue a duplicate command.
     // Attach the listener once — duplicate registration causes double callbacks.
     if (!_listenerAttached) {
         _listenerAttached = true;
