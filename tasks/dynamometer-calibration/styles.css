@@ -1,0 +1,17 @@
+#cal-phase-label {
+    font-size: clamp(2rem, 8vw, 4rem);
+    font-weight: 700;
+    margin: 0 0 0.5em;
+    color: var(--rlm-ink);
+    transition: color 0.2s;
+}
+
+#cal-phase-label.squeeze {
+    color: var(--rlm-accent, #4a6fa5);
+}
+
+#cal-trial-counter {
+    font-size: clamp(1rem, 3vw, 1.25rem);
+    color: var(--rlm-ink-muted, #666);
+    margin: 0;
+}

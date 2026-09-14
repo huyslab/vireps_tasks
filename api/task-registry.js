@@ -9,6 +9,9 @@ import { createVigourTimeline, computeRelativePiggyTasksBonus, createPITTimeline
 import { createPavlovianLotteryTimeline } from '@tasks/pavlovian-lottery/task.js';
 import { createControlTimeline, computeRelativeControlBonus } from '@tasks/control/index.js';
 import { createOpenTextTimeline } from '@tasks/open-text/index.js';
+import { createDynamometerCalibrationTimeline } from '@tasks/dynamometer-calibration/task.js';
+import { createDynamometerVigourTimeline } from '@tasks/piggy-banks-dynamometer/index.js';
+import { computeRelativePiggyTasksBonus as computeDynBonus } from '@tasks/piggy-banks/utils.js';
 import { createReversalTimeline, computeRelativeReversalBonus } from '@tasks/reversal/index.js';
 import { createAcceptabilityTimeline } from '@tasks/acceptability-judgment/index.js';
 import { createSelfReportTimeline } from '@tasks/self-report/index.js';
@@ -511,6 +514,39 @@ export const TaskRegistry = {
      * a first tap and its correction can both be seen, but only one of them counts.
      */
     dataNotes: 'One row per screen. Live answers are navigation === "forward" && !superseded, one per item_id.'
+  },
+  dynamometer_calibration: {
+    name: 'Dynamometer Calibration',
+    description: 'Measures maximum squeeze force using the Vernier Go Direct Hand Dynamometer over Bluetooth',
+    createTimeline: createDynamometerCalibrationTimeline,
+    computeBonus: () => 0,
+    defaultConfig: {},
+    requirements: {
+      css: ['@tasks/dynamometer-calibration/styles.css']
+    },
+    resumptionRules: { enabled: false },
+    configOptions: {}
+  },
+  dynamometer_vigour: {
+    name: 'Dynamometer Vigour Task',
+    description: 'Piggy-bank vigour task driven by hand dynamometer squeezes instead of screen taps',
+    createTimeline: createDynamometerVigourTimeline,
+    computeBonus: () => computeDynBonus('dynamometer_vigour_trial'),
+    defaultConfig: {
+      task_name: 'dynamometer_vigour',
+      thresholdFraction: 0.75,
+      holdDurationMs: 40,
+      preferredOrientation: 'portrait'
+    },
+    requirements: {
+      css: ['@tasks/piggy-banks/styles.css']
+    },
+    resumptionRules: { enabled: true },
+    configOptions: {
+      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.75 (75%).',
+      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 40.',
+      preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
+    }
   }
 };
 
