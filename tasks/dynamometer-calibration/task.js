@@ -64,9 +64,11 @@ const connectTrial = {
             btn.disabled = true;
             status.textContent = 'Connecting…';
             try {
-                // Close any stale handle so the next selectDevice starts fresh.
-                if (window.dynamometerSensor && !window.dynamometerSensor.simulated) {
-                    try { await window.dynamometerSensor.close(); } catch (_) { /* already closed */ }
+                // Fully disconnect any existing handle — this resets _listenerAttached in
+                // dynamometer.js so the new device gets a fresh listener registration.
+                if (window.dynamometerSensor) {
+                    try { await disconnectDynamometer(window.dynamometerSensor); } catch (_) {}
+                    window.dynamometerSensor = null;
                 }
                 window.dynamometerSensor = await connectDynamometer();
                 // Start the stream (or attach listener if already streaming).
@@ -194,11 +196,15 @@ const calibrationResults = {
             `;
         }
 
-        // Always pass the full 6-peak set to computeMaxForce. When one peak is
-        // invalid (≤1 N) it is always the farthest from the median, so it is
-        // discarded as the outlier and the remaining 5 valid peaks are averaged.
-        // When all 6 are valid the true outlier is discarded normally.
-        const { maxForce } = computeMaxForce(_peaks);
+        // When all 6 peaks are valid, use outlier removal (drop the one farthest
+        // from the median and average the remaining 5).
+        // When exactly 5 are valid, average them directly — passing the full set
+        // to computeMaxForce could discard the wrong trial if a high outlier is
+        // present (e.g. [0, 40, 42, 43, 44, 200]: outlier removal drops 200 and
+        // averages the zero, producing a biased threshold).
+        const maxForce = validPeaks.length === _peaks.length
+            ? computeMaxForce(_peaks).maxForce
+            : validPeaks.reduce((s, v) => s + v, 0) / validPeaks.length;
         window.dynamometerMaxForce = maxForce;
         sessionStorage.setItem(calStorageKey(), String(maxForce));
 
@@ -252,8 +258,9 @@ export function createDynamometerCalibrationTimeline(settings) {
         loop_function: function () {
             if (_needsRetry) {
                 _peaks = [];
-                // Signal to connectTrial that it should reconnect.
-                window.dynamometerSensor = null;
+                // Retain window.dynamometerSensor so the Connect button in connectTrial
+                // can call disconnectDynamometer on it, which resets _listenerAttached
+                // before a new device is selected and its listener attached.
                 return true;
             }
             return false;
