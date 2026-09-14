@@ -149,7 +149,7 @@ const ruleInstruction = {
     </div>
     `,
     `<div id="instruction-text">
-    <p>These are the coins you can win:</p>
+    <p>These are the coins you can win.</p>
     <div class="instruct-coin-container">
         <div class="instruct-coin">
             <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny">
@@ -164,8 +164,8 @@ const ruleInstruction = {
             <p>5 Pence</p>
         </div>
     </div>
-    
-    <p><span class="highlight-txt">Your goal</span>: collect as many coins as you can from all the piggy banks.</p>
+
+    <p>Your goal is to collect as many coins as you can.</p>
     </div>
       `]
 };

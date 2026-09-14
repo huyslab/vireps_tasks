@@ -291,8 +291,7 @@ function reversalInstructions(settings) {
     // --- Keyboard ready screen: press both arrow keys simultaneously (original behaviour) ---
     var keyboardReadyTrial = createPressBothTrial(
         `<p>You will now play the squirrel game for about ${duration} minutes without breaks.</p>
-        <p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below.
-        Press down <strong>both left and right arrow keys at the same time</strong> to begin.</p>
+        <p>When you're ready, place your fingers on the <strong>left and right arrow keys</strong> as shown. Press both at the same time to begin.</p>
         <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'>`,
         "reversal_instruction"
     );

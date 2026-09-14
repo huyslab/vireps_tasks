@@ -25,7 +25,7 @@ const formatted_warning_msg = `
 export const messages = {
     module_1: {
         start_message: [
-            `<p><b>Welcome back.</b></p>
+            `<p><b>Welcome to Part 1.</b></p>
             <p>In this part you will play two games. First the squirrel game, then the people game.</p>
             <p>After each game we will ask you a few short questions about it.</p>`,
             `<p>Try to answer quickly. We want your first idea, not your best guess after a long think.</p>

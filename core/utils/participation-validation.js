@@ -131,6 +131,7 @@ function preKickOutWarning(settings) {
                 // was simply untrue.
                 stimulus: `<p>You are taking a long time to answer.</p>
                     <p>Please try to answer a bit faster.</p>
+                    <p>Keep this game open. Do not use other tabs or windows.</p>
                     <p>Tap the button below to carry on.</p>
                 `,
                 on_start: function(trial) {
@@ -442,7 +443,7 @@ function createPressBothTrial(stimulus, trialphase){
  */
 function createReadyTrial(stimulus, trialphase, options = {}) {
     const {
-        keyboardPrompt = `<p>When you're ready, place your fingers comfortably on the <strong>left and right arrow keys</strong> as shown below. Press down <strong>both left and right arrow keys at the same time</strong> to begin.</p>
+        keyboardPrompt = `<p>When you're ready, place your fingers on the <strong>left and right arrow keys</strong> as shown. Press both at the same time to begin.</p>
             <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>`,
         touchPrompt = `<p>When you're ready, tap the button below to begin.</p>`,
         buttonLabel = "I'm ready"

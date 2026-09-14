@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 /**
  * Reading level of the participant-facing instructions.
@@ -36,6 +38,66 @@ function gradeLevel(html) {
   return Math.round((0.39 * (words.length / sentences.length) + 11.8 * (syl / words.length) - 15.59) * 10) / 10;
 }
 
+/**
+ * Extract template literals that contain participant-facing HTML (identified by
+ * the presence of a <p> tag) from a JS source file.  ${…} expressions are
+ * replaced with a space so they do not inflate the word count.
+ */
+function extractTaskPassages(source, label) {
+  // Strip single-line comments so commented-out old text is not checked.
+  const cleaned = source.replace(/\/\/[^\n]*/g, '');
+
+  const passages = {};
+  let i = 0;
+  let n = 0;
+
+  while (i < cleaned.length) {
+    const open = cleaned.indexOf('`', i);
+    if (open === -1) break;
+
+    // Scan forward to the matching close backtick, tracking ${ … } depth.
+    let depth = 0;
+    let j = open + 1;
+    while (j < cleaned.length) {
+      if (cleaned[j] === '\\') { j += 2; continue; }
+      if (cleaned.slice(j, j + 2) === '${') { depth++; j += 2; continue; }
+      if (depth > 0 && cleaned[j] === '}') { depth--; j++; continue; }
+      if (depth === 0 && cleaned[j] === '`') break;
+      j++;
+    }
+
+    const raw = cleaned.slice(open + 1, j);
+    i = j + 1;
+
+    // Only participant-facing HTML has <p> tags; skip short or code-only strings.
+    if (/<p[ >]/.test(raw) && raw.length > 40) {
+      // Replace ${…} expressions so they don't contribute words to the score.
+      const staticText = raw.replace(/\$\{[^}]*\}/g, ' ');
+      // Skip passages with fewer than 12 plain-text words: very short strings
+      // (e.g. button labels, UI state messages) produce unreliable FK scores
+      // because the formula assumes sentence-length distributions that short
+      // strings cannot exhibit.
+      const wordCount = staticText.replace(/<[^>]+>/g, ' ').match(/[A-Za-z'-]+/g)?.length ?? 0;
+      if (wordCount < 12) { i = j + 1; continue; }
+      passages[`${label}[${n++}]`] = staticText;
+    }
+  }
+
+  return passages;
+}
+
+// Task source files whose participant-facing instruction HTML should stay
+// at or below MAX_GRADE.  Standardised questionnaire items are excluded.
+const TASK_INSTRUCTION_FILES = [
+  'tasks/card-choosing/instructions.js',
+  'tasks/go-no-go/instructions.js',
+  'tasks/pavlovian-lottery/task.js',
+  'tasks/piggy-banks/PIT-instructions.js',
+  'tasks/piggy-banks/vigour-instructions.js',
+  'tasks/reversal/task.js',
+  'core/utils/participation-validation.js',
+];
+
 test('module messages read at Year 5 level or simpler', async ({ page }) => {
   await page.goto('/experiment.html?participant_id=invalid%20participant');
   const passages = await page.evaluate(async () => {
@@ -64,6 +126,27 @@ test('module messages read at Year 5 level or simpler', async ({ page }) => {
   expect(tooHard, `these read above grade ${MAX_GRADE}`).toEqual([]);
 });
 
+test('task instruction HTML reads at Year 5 level or simpler', () => {
+  const passages = {};
+  const root = resolve('.');
+
+  for (const rel of TASK_INSTRUCTION_FILES) {
+    const source = readFileSync(resolve(root, rel), 'utf8');
+    Object.assign(passages, extractTaskPassages(source, rel));
+  }
+
+  expect(
+    Object.keys(passages).length,
+    'task HTML passages should have been collected'
+  ).toBeGreaterThan(5);
+
+  const tooHard = Object.entries(passages)
+    .map(([name, html]) => [name, gradeLevel(html)])
+    .filter(([, grade]) => grade !== null && grade > MAX_GRADE);
+
+  expect(tooHard, `these task passages read above grade ${MAX_GRADE}`).toEqual([]);
+});
+
 test('no participant-facing screen uses staff or study jargon', async ({ page }) => {
   await page.goto('/experiment.html?participant_id=invalid%20participant');
   const found = await page.evaluate(async () => {
@@ -89,4 +172,23 @@ test('no participant-facing screen uses staff or study jargon', async ({ page })
   // "Module 1" and "experimenter" are what staff say; participants are told "Part 1"
   // and "the person running the study".
   expect(found, 'participant-facing text should not use these').toEqual([]);
+});
+
+test('task instruction text does not use banned terms', () => {
+  const banned = /\b(trial and error|experimenter|module \d|intuitive|promptly)\b/i;
+  const hits = [];
+  const root = resolve('.');
+
+  for (const rel of TASK_INSTRUCTION_FILES) {
+    const source = readFileSync(resolve(root, rel), 'utf8');
+    const passages = extractTaskPassages(source, rel);
+    for (const [name, html] of Object.entries(passages)) {
+      const text = html.replace(/<[^>]+>/g, ' ');
+      if (banned.test(text)) {
+        hits.push(`${name}: "${text.match(banned)[0]}"`);
+      }
+    }
+  }
+
+  expect(hits, 'task instructions should not use these terms').toEqual([]);
 });

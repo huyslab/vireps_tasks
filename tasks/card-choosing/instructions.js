@@ -84,7 +84,7 @@ function preparePILTInstructions(settings) {
 
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
-            pages.push(`<p>Sometimes you will turn over a broken coin, like these:</p>\
+            pages.push(`<p>Sometimes you will turn over a broken coin, like these.</p>\
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
@@ -255,14 +255,14 @@ function preparePILTInstructions(settings) {
     // the review screen and loop_function below already read.
     let quiz = createInstructionQuiz(quiz_questions, {
         trialphase: "instruction_quiz",
-        preamble: `<div class=instructions><p>For each statement, please indicate whether it is true or false:</p></div>`
+        preamble: `<div class=instructions><p>For each statement, say if it is true or false:</p></div>`
     });
 
     // Explanation for wrong answers
     let piltQuizExplanation = [
         {
             prompt: `Some cards are better than others, but even the best cards might only give a penny${settings.session !== "screening" ? " or break a £1 coin" : ''}.`,
-            explanation: "You can learn which cards are better by trial and error. However, cards are not 100% consistent in the coins behind them."
+            explanation: "The cards do not always pay out the same way. You learn which are better by trying them."
         },
         {
             prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
@@ -295,12 +295,12 @@ function preparePILTInstructions(settings) {
                         return piltQuizExplanation.filter((item, index) => {
                             return Object.values(data)[index] !== "True";
                         }).map(item => `
-                            <p>You gave the wrong answer for the following question:</p>
-                            <h3 style="color: darkred; width: 700px; text-align: left;">Question: ${item.prompt}</h3>
+                            <p>You got this one wrong.</p>
+                            <h3 style="color: darkred; width: 700px; text-align: left;">${item.prompt}</h3>
                             <br>
-                            <p style="max-width: 700px; text-align: left;"><strong>The correct answer:</strong> True</p>
-                            <p style="max-width: 700px; text-align: left;"><strong>Explanation:</strong> ${item.explanation}</p>
-                            ${settings.session === "screening" ? "<p>Press next to review the instructions again.</p>" : "<p>Press next to try the quiz again.</p>"}
+                            <p style="max-width: 700px; text-align: left;"><strong>Right answer:</strong> True</p>
+                            <p style="max-width: 700px; text-align: left;"><strong>Why:</strong> ${item.explanation}</p>
+                            ${settings.session === "screening" ? "<p>Read the rules again and try once more.</p>" : "<p>Press next to try again.</p>"}
                         `);
                     }
                 }
@@ -431,7 +431,7 @@ function threeResponseReadyTrial(stimulus, trialphase, warningCounter) {
     return {
         type: jsPsychHtmlKeyboardResponse,
         css_classes: ['instructions'],
-        stimulus: stimulus + `<p>When you are ready to start playing, place your fingers on the left, right, and up arrow keys as shown below, and press the up arrow key.</p>
+        stimulus: stimulus + `<p>Put your fingers on the left, right, and up arrow keys as shown. Press the up arrow key to begin.</p>
         <img src='./assets/images/3_finger_keys.jpg' style='width:250px;'></img>`,
         choices: ['arrowup'],
         data: { trialphase: trialphase },
@@ -450,14 +450,12 @@ const LTM_instructions = [
         pages: [
             '<p>You will now play another round of the card choosing game.</p>\
                 <p>Your goal remains to add as much money as you can to your safe.</p>',
-            `<p>This time, you will choose between three cards on every turn.</p>
-            <p>In every triplet, one picture card will always have £1 and 50-pence coins behind it, while the other two cards will have only pennies.</p>
-            <p>You can earn more by learning which is the better picture card in each triplet and choosing that card when you next see same triplet.</p>`,
+            `<p>This time you pick from three cards each turn.</p>
+            <p>One card in each set always has £1 and 50 pence coins. The other two have only pennies.</p>
+            <p>Learn which card is best in each set and pick it next time.</p>`,
             touchCapable
                 ? `<p><b>Tap the card you want to choose</b> - left, middle, or right.</p>`
-                : `<p>Use the right arrow key to choose the card on the right, the left arrow key to choose the card on the left,
-            and <b>use the upwards arrow key to choose the card in the middle.</b>
-            `
+                : `<p>Press the <b>left arrow</b> to pick the left card. Press the <b>right arrow</b> for the right. Press the <b>up arrow</b> for the middle.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "LTM_instructions"}
@@ -486,10 +484,10 @@ const WM_instructions = [
             <p>Below the card there are three buttons: <span class="cardChoosingResponseBtn">←</span> <span class="cardChoosingResponseBtn">↑</span> <span class="cardChoosingResponseBtn">→</span>. You can flip the card by tapping any one of them.</p>
             <p>For each card, tapping one of the three buttons will always reveal £1 and 50-pence coins, while the other two will reveal only pennies.</p>
             <p>You can earn more by learning which is the better button for each card, and tapping that button when you next see the same card.</p>`
-                : `<p>This time, you will see only one card on each turn.</p>
-            <p>You can flip this card by pressing either the left <span class="spacebar-icon">&nbsp;←&nbsp;</span>, up <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or right <span class="spacebar-icon">&nbsp;→&nbsp;</span> arrow keys on your keyboard.</p>
-            <p>For each card, pressing one of the keys will always reveal £1 and 50-pence coins, while the other two keys will reveal only pennies.</p>
-            <p>You can earn more by learning which is the better key to press for each card and pressing that key when you next see same card.</p>`
+                : `<p>This time, you see just one card each turn.</p>
+            <p>Press <span class="spacebar-icon">&nbsp;←&nbsp;</span>, <span class="spacebar-icon">&nbsp;↑&nbsp;</span>, or <span class="spacebar-icon">&nbsp;→&nbsp;</span> to flip it.</p>
+            <p>One key always shows £1 and 50 pence coins. The other two show only pennies.</p>
+            <p>Learn which key is best for each card and use it again next time.</p>`
         ],
         show_clickable_nav: true,
         data: {trialphase: "WM_instructions"}
