@@ -5,15 +5,17 @@
 //
 // API surface used from v1.8.3:
 //   GoDirect.selectDevice(true)  — shows BLE picker, opens device, returns Device
-//   device.start(periodMs)       — enables default sensors and starts streaming
-//   device.stop()                — stops streaming
-//   device.close()               — disconnects
+//     (selectDevice already calls open(startMeasurements=true) internally, so the
+//      device is streaming when returned; do not call device.start() again)
+//   device.stop()                — stops streaming (also done by close())
+//   device.close()               — stops streaming AND disconnects; stop() alone is redundant
 //   sensor.on('value-changed', (sensor) => …)  — fires on each new reading
 //   sensor.value                 — current reading (Newtons for GDX-HD)
 
-let _godirect = null;
+let _godirect      = null;
 let _currentCallback = null;
-let _simInterval = null;
+let _simInterval   = null;
+let _listenerAttached = false; // guard against registering duplicate value-changed listeners
 
 async function getGoDirect() {
     if (_godirect) return _godirect;
@@ -25,6 +27,11 @@ async function getGoDirect() {
 /**
  * Shows the browser BLE device picker and opens the selected Go Direct sensor.
  * Must be called from a user gesture (button click).
+ *
+ * The vendored selectDevice(true) internally calls open(startMeasurements=true),
+ * so the device is already streaming when this returns. Do NOT call device.start()
+ * afterwards — attach the value-changed listener via startForceStream instead.
+ *
  * Returns a connected Device handle, or throws on failure.
  */
 export async function connectDynamometer() {
@@ -32,27 +39,25 @@ export async function connectDynamometer() {
         return { simulated: true };
     }
     const GoDirect = await getGoDirect();
-    // selectDevice(true) uses Bluetooth; it requests the device, creates the
-    // adapter, and calls device.open() before returning.
     return GoDirect.selectDevice(true);
 }
 
 /**
- * Enables the default sensors, starts the measurement stream at the given
- * period (ms), and routes each reading to callback(forceNewtons).
+ * Attaches a force callback to the already-streaming device.
+ * If the device has not yet started (e.g. manually constructed), starts it first.
+ * Only one callback is active at a time; call setForceCallback() to swap it
+ * without restarting the stream.
  *
- * Only one callback is active at a time. Call setForceCallback() to swap it
- * without restarting the stream (e.g. between calibration and vigour trials).
+ * The simulated stream fires a sinusoidal pattern at ~20 Hz.
  *
- * The simulated stream fires a sinusoidal pattern at 20 Hz.
- *
- * @param {Object}   device   - From connectDynamometer()
- * @param {Function} callback - Called with force in Newtons on each reading
+ * @param {Object}   device    - From connectDynamometer()
+ * @param {Function} callback  - Called with force in Newtons on each reading
  * @param {number}   [periodMs=10]
  */
 export function startForceStream(device, callback, periodMs = 10) {
     _currentCallback = callback;
     if (device.simulated) {
+        if (_simInterval) clearInterval(_simInterval);
         let t = 0;
         _simInterval = setInterval(() => {
             t += 50;
@@ -61,14 +66,19 @@ export function startForceStream(device, callback, periodMs = 10) {
         }, 50);
         return;
     }
-    // Enable default sensors and start streaming.
-    device.start(periodMs);
-    // Attach listener to the first enabled sensor after start() marks it enabled.
-    const sensor = device.sensors.find(s => s.enabled) ?? device.sensors[0];
-    if (sensor) {
-        sensor.on('value-changed', (s) => {
-            if (_currentCallback) _currentCallback(s.value ?? 0);
-        });
+    // selectDevice already started the stream; only start if not yet collecting.
+    if (!device.collecting) {
+        device.start(periodMs);
+    }
+    // Attach the listener once — duplicate registration causes double callbacks.
+    if (!_listenerAttached) {
+        _listenerAttached = true;
+        const sensor = device.sensors.find(s => s.enabled) ?? device.sensors[0];
+        if (sensor) {
+            sensor.on('value-changed', (s) => {
+                if (_currentCallback) _currentCallback(s.value ?? 0);
+            });
+        }
     }
 }
 
@@ -83,16 +93,17 @@ export function setForceCallback(callback) {
 
 /**
  * Stops the force stream and disconnects the device.
+ * device.close() already stops measurements, so device.stop() is redundant.
  * @param {Object} device
  */
 export async function disconnectDynamometer(device) {
     _currentCallback = null;
+    _listenerAttached = false;
     if (device.simulated) {
         clearInterval(_simInterval);
         _simInterval = null;
         return;
     }
-    device.stop();
     await device.close();
 }
 

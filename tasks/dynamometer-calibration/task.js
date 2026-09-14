@@ -10,8 +10,8 @@ const TRIAL_DURATION_MS = READY_MS + COUNTDOWN_MS + SQUEEZE_MS + RELAX_MS; // 60
 
 let _peaks = [];
 let _trialPeak = 0;
-// Set inside calibrationResults.stimulus (before on_finish runs) so the loop
-// function can read whether a retry is needed without depending on on_start order.
+// Set inside calibrationResults.stimulus (which jsPsych evaluates before on_start)
+// so the loop_function can read whether a retry is needed.
 let _needsRetry = false;
 
 function computeMaxForce(peaks) {
@@ -32,22 +32,29 @@ function calStorageKey() {
     return `dynamometerMaxForce_${window.participantID ?? 'anon'}`;
 }
 
-// ── Connect trial ─────────────────────────────────────────────────────────────
+// ── Connect / reconnect trial ─────────────────────────────────────────────────
+// Placed INSIDE the calibration loop so it runs on the first pass and on every
+// retry. Closing any existing connection first ensures a clean reconnect after
+// a BLE drop that caused zero peaks.
 
 const connectTrial = {
     type: jsPsychHtmlKeyboardResponse,
     choices: 'NO_KEYS',
-    stimulus: `
-        <div id="instruction-container">
-            <div id="instruction-text">
-                <h2>Connect the grip</h2>
-                <p>Make sure the hand dynamometer is switched on and close by.</p>
-                <p>Then tap <strong>Connect</strong> to pair it with this device.</p>
-                <p id="connect-status" style="color: var(--rlm-accent, #c0392b)"></p>
-                <button id="connect-btn" class="jspsych-btn">Connect</button>
+    stimulus: function () {
+        const reconnect = !!window.dynamometerSensor;
+        return `
+            <div id="instruction-container">
+                <div id="instruction-text">
+                    <h2>${reconnect ? 'Reconnect the grip' : 'Connect the grip'}</h2>
+                    ${reconnect
+                        ? '<p>The grip sensor did not pick up any squeezes. Make sure it is switched on and within range, then tap <strong>Connect</strong> to pair again.</p>'
+                        : '<p>Make sure the hand dynamometer is switched on and close by. Then tap <strong>Connect</strong> to pair it with this device.</p>'}
+                    <p id="connect-status" style="color: var(--rlm-accent, #c0392b)"></p>
+                    <button id="connect-btn" class="jspsych-btn">Connect</button>
+                </div>
             </div>
-        </div>
-    `,
+        `;
+    },
     data: { trialphase: 'dynamometer_connect' },
     on_load: function () {
         const btn    = document.getElementById('connect-btn');
@@ -57,7 +64,12 @@ const connectTrial = {
             btn.disabled = true;
             status.textContent = 'Connecting…';
             try {
+                // Close any stale handle so the next selectDevice starts fresh.
+                if (window.dynamometerSensor && !window.dynamometerSensor.simulated) {
+                    try { await window.dynamometerSensor.close(); } catch (_) { /* already closed */ }
+                }
                 window.dynamometerSensor = await connectDynamometer();
+                // Start the stream (or attach listener if already streaming).
                 startForceStream(window.dynamometerSensor, () => {});
                 jsPsych.finishTrial({ connected: true });
             } catch (err) {
@@ -158,29 +170,34 @@ function makeCalibrationTrial(trialIndex) {
 
 // ── Results trial ─────────────────────────────────────────────────────────────
 // IMPORTANT: jsPsych evaluates stimulus() BEFORE calling on_start.
-// All computation must live inside stimulus(); on_start must not be used.
+// All computation must live inside stimulus(); on_start must not be used here.
 
 const calibrationResults = {
     type: jsPsychHtmlButtonResponse,
     stimulus: function () {
         const validPeaks = _peaks.filter(p => p > 1.0);
-        _needsRetry = validPeaks.length < 2;
+
+        // Require at least 5 valid peaks so that, after discarding one outlier,
+        // the average rests on at least 4 squeezes (or 5 when using the one
+        // invalid peak as the natural outlier in a full-6 set).
+        _needsRetry = validPeaks.length < 5;
 
         if (_needsRetry) {
             return `
                 <div id="instruction-container">
                     <div id="instruction-text">
                         <h2>Grip not detected</h2>
-                        <p>We did not pick up any squeezes. Check that the grip sensor is still switched on and connected.</p>
-                        <p>Tap <strong>Continue</strong> to repeat the measurement.</p>
+                        <p>Not enough valid squeezes were recorded (${validPeaks.length} of ${N_TRIALS} detected). The sensor may have lost connection.</p>
+                        <p>Tap <strong>Continue</strong> to reconnect and try again.</p>
                     </div>
                 </div>
             `;
         }
 
-        // Use all N_TRIALS peaks when available; fall back to valid subset so
-        // computeMaxForce (which discards one outlier) still has enough data.
-        const peaks = validPeaks.length === N_TRIALS ? _peaks : validPeaks;
+        // If exactly one peak is invalid (≤1 N), include it in the full set so
+        // computeMaxForce naturally discards it as the outlier and averages 5.
+        // If all 6 are valid, the true outlier is discarded as normal.
+        const peaks = validPeaks.length >= N_TRIALS ? _peaks : validPeaks;
         const { maxForce } = computeMaxForce(peaks);
         window.dynamometerMaxForce = maxForce;
         sessionStorage.setItem(calStorageKey(), String(maxForce));
@@ -215,19 +232,23 @@ const calibrationResults = {
 // ── Public timeline factory ───────────────────────────────────────────────────
 
 export function createDynamometerCalibrationTimeline(settings) {
-    // Clear any stale calibration stored for this participant so vigour
-    // cannot pick up a previous participant's max force.
+    // Clear any stale calibration for this participant so vigour cannot pick up
+    // a previous participant's max force from the same browser tab.
     sessionStorage.removeItem(calStorageKey());
     window.dynamometerMaxForce = undefined;
+    window.dynamometerSensor   = null;
 
     const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i));
 
-    // Loop repeats all calibration trials if the sensor failed to deliver data.
+    // connectTrial runs first AND on every retry. Clearing window.dynamometerSensor
+    // in the loop_function forces a fresh BLE pair when the sensor dropped.
     const calibrationProcedure = {
-        timeline: [...trials, calibrationResults],
+        timeline: [connectTrial, ...trials, calibrationResults],
         loop_function: function () {
             if (_needsRetry) {
                 _peaks = [];
+                // Signal to connectTrial that it should reconnect.
+                window.dynamometerSensor = null;
                 return true;
             }
             return false;
@@ -238,7 +259,6 @@ export function createDynamometerCalibrationTimeline(settings) {
     };
 
     return [
-        connectTrial,
         calibrationInstructions,
         calibrationProcedure
     ];

@@ -1,5 +1,5 @@
 import { saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt } from '@utils/index.js';
-import { setForceCallback, createPressDetector } from '@utils/dynamometer.js';
+import { setForceCallback, createPressDetector, disconnectDynamometer } from '@utils/dynamometer.js';
 import { shakePiggy, updatePiggyTails } from '@tasks/piggy-banks/utils.js';
 
 const VIGOUR_TRIALS = [{ "magnitude": 1, "ratio": 1, "trialDuration": 6825 }, { "magnitude": 2, "ratio": 8, "trialDuration": 6956 }, { "magnitude": 1, "ratio": 16, "trialDuration": 7228 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7221 }, { "magnitude": 5, "ratio": 16, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7386 }, { "magnitude": 1, "ratio": 8, "trialDuration": 7009 }, { "magnitude": 5, "ratio": 8, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 16, "trialDuration": 6666 }, { "magnitude": 1, "ratio": 1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 8, "trialDuration": 6501 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7236 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7490 }, { "magnitude": 1, "ratio": 16, "trialDuration": 6902 }, { "magnitude": 1, "ratio": 8, "trialDuration": 6888 }, { "magnitude": 2, "ratio": 16, "trialDuration": 6891 }, { "magnitude": 5, "ratio": 8, "trialDuration": 6535 }, { "magnitude": 5, "ratio": 16, "trialDuration": 6652 }, { "magnitude": 1, "ratio": 8, "trialDuration": 6890 }, { "magnitude": 5, "ratio": 8, "trialDuration": 7452 }, { "magnitude": 5, "ratio": 16, "trialDuration": 6954 }, { "magnitude": 2, "ratio": 1, "trialDuration": 6827 }, { "magnitude": 5, "ratio": 1, "trialDuration": 6679 }, { "magnitude": 1, "ratio": 16, "trialDuration": 7199 }, { "magnitude": 2, "ratio": 16, "trialDuration": 7207 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7145 }, { "magnitude": 2, "ratio": 8, "trialDuration": 7465 }, { "magnitude": 1, "ratio": 8, "trialDuration": 6870 }, { "magnitude": 5, "ratio": 8, "trialDuration": 6726 }, { "magnitude": 2, "ratio": 16, "trialDuration": 6688 }, { "magnitude": 2, "ratio": 8, "trialDuration": 6506 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7044 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7293 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7182 }, { "magnitude": 1, "ratio": 16, "trialDuration": 6862 }, { "magnitude": 5, "ratio": 16, "trialDuration": 6985 }];
@@ -204,19 +204,15 @@ function piggyBankTrial(settings) {
                 }
             }
 
-            // Load max force from sessionStorage if not set (e.g. page reload between tasks)
-            if (!window.dynamometerMaxForce) {
-                const stored = sessionStorage.getItem('dynamometerMaxForce');
-                if (stored) window.dynamometerMaxForce = parseFloat(stored);
-            }
-
             if (window.simulating) {
                 const nPresses = jsPsych.randomization.randomInt(1, 3);
                 for (let i = 0; i < nPresses; i++) {
                     jsPsych.pluginAPI.setTimeout(handlePress, 120 * (i + 1));
                 }
             } else {
-                const detector = createPressDetector(window.dynamometerMaxForce ?? 80, {
+                // window.dynamometerMaxForce is guaranteed valid by the calibration
+                // gate in vigour-timeline.js; no 80 N fallback needed here.
+                const detector = createPressDetector(window.dynamometerMaxForce, {
                     thresholdFraction: settings.thresholdFraction,
                     holdDurationMs:    settings.holdDurationMs,
                     onPress: handlePress
@@ -280,6 +276,12 @@ function createDynVigourCoreTimeline(settings) {
 
     timeline.at(-1)['on_timeline_finish'] = () => {
         removePersistentCoinContainer();
+        // Disconnect and release the Bluetooth device so it does not continue
+        // streaming and draining its battery after the task ends.
+        if (window.dynamometerSensor) {
+            disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+            window.dynamometerSensor = null;
+        }
     };
 
     return timeline;

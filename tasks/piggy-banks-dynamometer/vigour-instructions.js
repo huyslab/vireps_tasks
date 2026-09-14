@@ -71,7 +71,7 @@ function makeInstructionPage(settings) {
             }
 
             function startDetector() {
-                instructionDetector = createPressDetector(window.dynamometerMaxForce ?? 80, {
+                instructionDetector = createPressDetector(window.dynamometerMaxForce, {
                     thresholdFraction: settings.thresholdFraction,
                     holdDurationMs:    settings.holdDurationMs,
                     onPress: handlePress
@@ -202,7 +202,7 @@ function makeStartConfirmation(settings) {
                 jsPsych.finishTrial({ response });
             };
 
-            const detector = createPressDetector(window.dynamometerMaxForce ?? 80, {
+            const detector = createPressDetector(window.dynamometerMaxForce, {
                 thresholdFraction: settings.thresholdFraction,
                 holdDurationMs:    settings.holdDurationMs,
                 onPress: () => finishOnce('b')
