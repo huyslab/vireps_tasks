@@ -13,5 +13,74 @@
 #cal-trial-counter {
     font-size: clamp(1rem, 3vw, 1.25rem);
     color: var(--rlm-ink-muted, #666);
-    margin: 0;
+    margin: 0 0 1.5rem;
+}
+
+#cal-phase-prompt {
+    max-width: 32rem;
+    margin: 1.25rem auto 0;
+    font-size: clamp(1.2rem, 3vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+#cal-timing-ring {
+    position: relative;
+    width: clamp(9rem, 35vw, 12rem);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    color: var(--rlm-ink-muted, #666);
+}
+
+#cal-timing-ring svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+#cal-timing-ring circle {
+    fill: none;
+    stroke-width: 10;
+}
+
+.cal-ring-track {
+    stroke: var(--rlm-border, #d5d5d5);
+}
+
+#cal-ring-progress {
+    /* 2 × pi × 52, matching the SVG circle radius. */
+    stroke-dasharray: 326.73;
+    stroke-dashoffset: 326.73;
+    stroke-linecap: round;
+    stroke: var(--rlm-accent, #c0392b);
+    transition-property: stroke-dashoffset;
+    transition-timing-function: linear;
+}
+
+#cal-ring-progress.filling {
+    stroke-dashoffset: 0;
+}
+
+#cal-ring-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: clamp(1.1rem, 3vw, 1.35rem);
+    font-weight: 700;
+}
+
+#cal-timing-ring.active {
+    color: var(--rlm-ink, #222);
+}
+
+#cal-timing-ring.complete #cal-ring-progress {
+    stroke: var(--rlm-success, #2f7d4a);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #cal-ring-progress {
+        transition-timing-function: steps(4, end);
+    }
 }
