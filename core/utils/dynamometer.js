@@ -52,7 +52,16 @@ class DynamometerBluetoothAdapter {
 
     async setup({ onClosed, onResponse }) {
         const nativeDevice = this.webBluetoothNativeDevice;
-        this.closedListener = onClosed;
+        this.closedListener = () => {
+            try {
+                // Preserve the Go Direct Device lifecycle: this sets opened=false
+                // and emits device-closed on both expected and unexpected drops.
+                onClosed();
+            } finally {
+                this.removeResponseListener();
+                this.removeClosedListener();
+            }
+        };
         nativeDevice.addEventListener('gattserverdisconnected', this.closedListener);
 
         try {
@@ -81,16 +90,19 @@ class DynamometerBluetoothAdapter {
         } catch (error) {
             // The upstream adapter leaves GATT connected when setup/open fails,
             // which can make every subsequent retry fail until the sensor is power-cycled.
-            await this.close();
+            this.cleanupAfterFailedOpen();
             throw error;
         }
     }
 
-    async close() {
+    removeResponseListener() {
         if (this.responseListener) {
             this.deviceResponse?.removeEventListener?.('characteristicvaluechanged', this.responseListener);
             this.responseListener = null;
         }
+    }
+
+    removeClosedListener() {
         if (this.closedListener) {
             this.webBluetoothNativeDevice.removeEventListener?.(
                 'gattserverdisconnected',
@@ -98,8 +110,31 @@ class DynamometerBluetoothAdapter {
             );
             this.closedListener = null;
         }
+    }
+
+    cleanupAfterFailedOpen() {
+        // An SDK Device that never finished opening must not receive a synthetic
+        // device-closed event. Remove its callbacks before releasing GATT.
+        this.removeResponseListener();
+        this.removeClosedListener();
+        try {
+            if (this.webBluetoothNativeDevice.gatt.connected) {
+                this.webBluetoothNativeDevice.gatt.disconnect();
+            }
+        } catch (cleanupError) {
+            // Keep the original setup/protocol error for the participant-facing UI.
+            console.warn('Could not clean up failed dynamometer connection:', cleanupError);
+        }
+    }
+
+    async close() {
+        this.removeResponseListener();
         if (this.webBluetoothNativeDevice.gatt.connected) {
+            // Keep closedListener attached until the browser's disconnect event
+            // lets the SDK update Device.opened and emit device-closed.
             this.webBluetoothNativeDevice.gatt.disconnect();
+        } else {
+            this.removeClosedListener();
         }
     }
 }
@@ -140,7 +175,7 @@ export async function connectDynamometer() {
     } catch (error) {
         // createDevice does not close its adapter when protocol initialization
         // fails (including an INIT timeout), so release GATT before allowing retry.
-        await adapter.close();
+        adapter.cleanupAfterFailedOpen();
         throw error;
     }
 }
@@ -169,9 +204,9 @@ export function startForceStream(device, callback, periodMs = 10) {
         }, 50);
         return;
     }
-    // selectDevice calls open(startMeasurements=true) internally, so the device
-    // is already streaming when returned. Never call device.start() again: in the
-    // vendored v1.8.3 SDK, open(true) invokes start() synchronously but the
+    // createDevice calls open(startMeasurements=true), so the device is already
+    // streaming when returned. Never call device.start() again: in the vendored
+    // v1.8.3 SDK, open(true) invokes start() synchronously but the
     // device.collecting flag only becomes true after the asynchronous START
     // response, so checking it here races and may issue a duplicate command.
     // Attach the listener once — duplicate registration causes double callbacks.

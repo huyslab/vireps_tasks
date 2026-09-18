@@ -10,6 +10,7 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
 
     let notificationsReady = false;
     let responseListener = null;
+    let disconnectedListener = null;
     let writesBeforeNotifications = 0;
     let disconnectCount = 0;
     let pendingCommand = [];
@@ -18,6 +19,11 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
       uuid: RESPONSE,
       addEventListener(type, listener) {
         if (type === 'characteristicvaluechanged') responseListener = listener;
+      },
+      removeEventListener(type, listener) {
+        if (type === 'characteristicvaluechanged' && responseListener === listener) {
+          responseListener = null;
+        }
       },
       async startNotifications() {
         // Make the race deterministic. The old Vernier adapter returns from setup()
@@ -68,7 +74,14 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
       },
     };
     const nativeDevice = {
-      addEventListener() {},
+      addEventListener(type, listener) {
+        if (type === 'gattserverdisconnected') disconnectedListener = listener;
+      },
+      removeEventListener(type, listener) {
+        if (type === 'gattserverdisconnected' && disconnectedListener === listener) {
+          disconnectedListener = null;
+        }
+      },
       gatt: {
         connected: false,
         async connect() {
@@ -78,6 +91,7 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
         disconnect() {
           this.connected = false;
           disconnectCount += 1;
+          disconnectedListener?.();
         },
       },
     };
@@ -94,16 +108,28 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
 
     const { connectDynamometer, disconnectDynamometer } = await import('/core/utils/dynamometer.js');
     const device = await connectDynamometer();
+    const openedBeforeDisconnect = device.opened;
+    let deviceClosedEvents = 0;
+    device.on('device-closed', () => { deviceClosedEvents += 1; });
     await disconnectDynamometer(device);
 
-    return { writesBeforeNotifications, disconnectCount };
+    return {
+      writesBeforeNotifications,
+      disconnectCount,
+      openedBeforeDisconnect,
+      openedAfterDisconnect: device.opened,
+      deviceClosedEvents,
+    };
   });
 
   expect(result.writesBeforeNotifications).toBe(0);
   expect(result.disconnectCount).toBe(1);
+  expect(result.openedBeforeDisconnect).toBe(true);
+  expect(result.openedAfterDisconnect).toBe(false);
+  expect(result.deviceClosedEvents).toBe(1);
 });
 
-test('dynamometer disconnects GATT when notification setup fails', async ({ page }) => {
+test('dynamometer preserves the setup error when failed-open cleanup also errors', async ({ page }) => {
   await page.goto('/index.html');
 
   const result = await page.evaluate(async () => {
@@ -139,6 +165,7 @@ test('dynamometer disconnects GATT when notification setup fails', async ({ page
         disconnect() {
           this.connected = false;
           disconnectCount += 1;
+          throw new Error('disconnect cleanup failed');
         },
       },
     };
