@@ -4,9 +4,8 @@
 //   cp node_modules/@vernier/godirect/dist/godirect.min.esm.js core/godirect/godirect.module.js
 //
 // API surface used from v1.8.3:
-//   GoDirect.selectDevice(true)  — shows BLE picker, opens device, returns Device
-//     (selectDevice already calls open(startMeasurements=true) internally, so the
-//      device is streaming when returned; do not call device.start() again)
+//   GoDirect.createDevice(adapter, options) — opens our race-free Web Bluetooth
+//     adapter and starts measurements, returning a Device
 //   device.stop()                — stops streaming (also done by close())
 //   device.close()               — stops streaming AND disconnects; stop() alone is redundant
 //   sensor.on('value-changed', (sensor) => …)  — fires on each new reading
@@ -16,6 +15,129 @@ let _godirect      = null;
 let _currentCallback = null;
 let _simInterval   = null;
 let _listenerAttached = false; // guard against registering duplicate value-changed listeners
+
+const GDX_SERVICE = 'd91714ef-28b9-4f91-ba16-f0d9a604f112';
+const GDX_COMMAND_CHARACTERISTIC = 'f4bf14a6-c7d5-4b6d-8aa8-df1a7c83adcb';
+const GDX_RESPONSE_CHARACTERISTIC = 'b41e6675-a329-40e0-aa01-44d2f444babe';
+
+/**
+ * Web Bluetooth adapter for the Go Direct SDK.
+ *
+ * The adapter bundled with @vernier/godirect 1.8.3 calls startNotifications()
+ * without awaiting it. Device.open() can consequently send the INIT command
+ * before Chrome has enabled response notifications; the sensor replies, the
+ * browser drops that reply, and the SDK reports a command 0x1a timeout five
+ * seconds later. Awaiting notification setup closes that race.
+ *
+ * This deliberately implements the small adapter interface accepted by
+ * GoDirect.createDevice() rather than modifying the vendored SDK bundle.
+ */
+class DynamometerBluetoothAdapter {
+    constructor(device) {
+        this.webBluetoothNativeDevice = device;
+        this.maxPacketLength = 20;
+        this.deviceCommand = null;
+        this.deviceResponse = null;
+        this.closedListener = null;
+        this.responseListener = null;
+    }
+
+    get godirectAdapter() {
+        return true;
+    }
+
+    async writeCommand(commandBuffer) {
+        return this.deviceCommand.writeValue(commandBuffer);
+    }
+
+    async setup({ onClosed, onResponse }) {
+        const nativeDevice = this.webBluetoothNativeDevice;
+        this.closedListener = () => {
+            try {
+                // Preserve the Go Direct Device lifecycle: this sets opened=false
+                // and emits device-closed on both expected and unexpected drops.
+                onClosed();
+            } finally {
+                this.removeResponseListener();
+                this.removeClosedListener();
+            }
+        };
+        nativeDevice.addEventListener('gattserverdisconnected', this.closedListener);
+
+        try {
+            const server = await nativeDevice.gatt.connect();
+            const service = await server.getPrimaryService(GDX_SERVICE);
+            const characteristics = await service.getCharacteristics();
+
+            this.deviceCommand = characteristics.find(
+                characteristic => characteristic.uuid === GDX_COMMAND_CHARACTERISTIC
+            );
+            this.deviceResponse = characteristics.find(
+                characteristic => characteristic.uuid === GDX_RESPONSE_CHARACTERISTIC
+            );
+
+            if (!(this.deviceCommand && this.deviceResponse)) {
+                throw new Error('Expected command and response characteristics not found');
+            }
+
+            this.responseListener = event => {
+                onResponse(event.target.value);
+            };
+            this.deviceResponse.addEventListener('characteristicvaluechanged', this.responseListener);
+
+            // Do not allow Device.open() to send INIT until replies can be received.
+            await this.deviceResponse.startNotifications();
+        } catch (error) {
+            // The upstream adapter leaves GATT connected when setup/open fails,
+            // which can make every subsequent retry fail until the sensor is power-cycled.
+            this.cleanupAfterFailedOpen();
+            throw error;
+        }
+    }
+
+    removeResponseListener() {
+        if (this.responseListener) {
+            this.deviceResponse?.removeEventListener?.('characteristicvaluechanged', this.responseListener);
+            this.responseListener = null;
+        }
+    }
+
+    removeClosedListener() {
+        if (this.closedListener) {
+            this.webBluetoothNativeDevice.removeEventListener?.(
+                'gattserverdisconnected',
+                this.closedListener
+            );
+            this.closedListener = null;
+        }
+    }
+
+    cleanupAfterFailedOpen() {
+        // An SDK Device that never finished opening must not receive a synthetic
+        // device-closed event. Remove its callbacks before releasing GATT.
+        this.removeResponseListener();
+        this.removeClosedListener();
+        try {
+            if (this.webBluetoothNativeDevice.gatt.connected) {
+                this.webBluetoothNativeDevice.gatt.disconnect();
+            }
+        } catch (cleanupError) {
+            // Keep the original setup/protocol error for the participant-facing UI.
+            console.warn('Could not clean up failed dynamometer connection:', cleanupError);
+        }
+    }
+
+    async close() {
+        this.removeResponseListener();
+        if (this.webBluetoothNativeDevice.gatt.connected) {
+            // Keep closedListener attached until the browser's disconnect event
+            // lets the SDK update Device.opened and emit device-closed.
+            this.webBluetoothNativeDevice.gatt.disconnect();
+        } else {
+            this.removeClosedListener();
+        }
+    }
+}
 
 async function getGoDirect() {
     if (_godirect) return _godirect;
@@ -28,9 +150,9 @@ async function getGoDirect() {
  * Shows the browser BLE device picker and opens the selected Go Direct sensor.
  * Must be called from a user gesture (button click).
  *
- * The vendored selectDevice(true) internally calls open(startMeasurements=true),
- * so the device is already streaming when this returns. Do NOT call device.start()
- * afterwards — attach the value-changed listener via startForceStream instead.
+ * createDevice() calls open(startMeasurements=true), so the device is already
+ * streaming when this returns. Do NOT call device.start() afterwards — attach
+ * the value-changed listener via startForceStream instead.
  *
  * Returns a connected Device handle, or throws on failure.
  */
@@ -38,8 +160,24 @@ export async function connectDynamometer() {
     if (window.simulating) {
         return { simulated: true };
     }
+    if (!navigator.bluetooth) {
+        throw new Error('No Web Bluetooth support. Please use Chrome or Edge on a Bluetooth-enabled device.');
+    }
+
     const GoDirect = await getGoDirect();
-    return GoDirect.selectDevice(true);
+    const nativeDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'GDX' }],
+        optionalServices: [GDX_SERVICE]
+    });
+    const adapter = new DynamometerBluetoothAdapter(nativeDevice);
+    try {
+        return await GoDirect.createDevice(adapter, { open: true, startMeasurements: true });
+    } catch (error) {
+        // createDevice does not close its adapter when protocol initialization
+        // fails (including an INIT timeout), so release GATT before allowing retry.
+        adapter.cleanupAfterFailedOpen();
+        throw error;
+    }
 }
 
 /**
@@ -66,9 +204,9 @@ export function startForceStream(device, callback, periodMs = 10) {
         }, 50);
         return;
     }
-    // selectDevice calls open(startMeasurements=true) internally, so the device
-    // is already streaming when returned. Never call device.start() again: in the
-    // vendored v1.8.3 SDK, open(true) invokes start() synchronously but the
+    // createDevice calls open(startMeasurements=true), so the device is already
+    // streaming when returned. Never call device.start() again: in the vendored
+    // v1.8.3 SDK, open(true) invokes start() synchronously but the
     // device.collecting flag only becomes true after the asynchronous START
     // response, so checking it here races and may issue a duplicate command.
     // Attach the listener once — duplicate registration causes double callbacks.
