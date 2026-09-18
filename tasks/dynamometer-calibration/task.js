@@ -174,18 +174,18 @@ function makeCalibrationTrial(trialIndex) {
 // IMPORTANT: jsPsych evaluates stimulus() BEFORE calling on_start.
 // All computation must live inside stimulus(); on_start must not be used here.
 
-const calibrationResults = {
-    type: jsPsychHtmlButtonResponse,
-    stimulus: function () {
-        const validPeaks = _peaks.filter(p => p > 1.0);
+function createCalibrationResults(settings) {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function () {
+            const validPeaks = _peaks.filter(p => p > 1.0);
 
-        // Require at least 5 valid peaks so that, after discarding one outlier,
-        // the average rests on at least 4 squeezes (or 5 when using the one
-        // invalid peak as the natural outlier in a full-6 set).
-        _needsRetry = validPeaks.length < 5;
+            // Require at least 5 valid peaks so the result always rests on five
+            // detected squeezes.
+            _needsRetry = validPeaks.length < 5;
 
-        if (_needsRetry) {
-            return `
+            if (_needsRetry) {
+                return `
                 <div id="instruction-container">
                     <div id="instruction-text">
                         <h2>Grip not detected</h2>
@@ -193,23 +193,23 @@ const calibrationResults = {
                         <p>Tap <strong>Continue</strong> to reconnect and try again.</p>
                     </div>
                 </div>
-            `;
-        }
+                `;
+            }
 
-        // When all 6 peaks are valid, use outlier removal (drop the one farthest
-        // from the median and average the remaining 5).
-        // When exactly 5 are valid, average them directly — passing the full set
-        // to computeMaxForce could discard the wrong trial if a high outlier is
-        // present (e.g. [0, 40, 42, 43, 44, 200]: outlier removal drops 200 and
-        // averages the zero, producing a biased threshold).
-        const maxForce = validPeaks.length === _peaks.length
-            ? computeMaxForce(_peaks).maxForce
-            : validPeaks.reduce((s, v) => s + v, 0) / validPeaks.length;
-        window.dynamometerMaxForce = maxForce;
-        sessionStorage.setItem(calStorageKey(), String(maxForce));
+            // When all 6 peaks are valid, use outlier removal (drop the one farthest
+            // from the median and average the remaining 5).
+            // When exactly 5 are valid, average them directly — passing the full set
+            // to computeMaxForce could discard the wrong trial if a high outlier is
+            // present (e.g. [0, 40, 42, 43, 44, 200]: outlier removal drops 200 and
+            // averages the zero, producing a biased threshold).
+            const maxForce = validPeaks.length === _peaks.length
+                ? computeMaxForce(_peaks).maxForce
+                : validPeaks.reduce((s, v) => s + v, 0) / validPeaks.length;
+            window.dynamometerMaxForce = maxForce;
+            sessionStorage.setItem(calStorageKey(), String(maxForce));
 
-        const threshold = (maxForce * 0.75).toFixed(1);
-        return `
+            const threshold = (maxForce * 0.75).toFixed(1);
+            return `
             <div id="instruction-container">
                 <div id="instruction-text">
                     <h2>Well done!</h2>
@@ -218,27 +218,28 @@ const calibrationResults = {
                     <p>Tap <strong>Continue</strong> when you are ready.</p>
                 </div>
             </div>
-        `;
-    },
-    choices: ['Continue'],
-    data: {
-        trialphase: 'dynamometer_calibration_results',
-        max_force_n: () => window.dynamometerMaxForce,
-        had_bad_peaks: () => _peaks.some(p => p <= 1.0),
-        calibration_retry: () => _needsRetry
-    },
-    on_finish: function () {
-        if (!_needsRetry) {
-            // Disconnect BLE so the GDX does not keep streaming after calibration.
-            // Vigour re-connects via its own reconnectStep when it starts.
-            if (window.dynamometerSensor) {
-                disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-                window.dynamometerSensor = null;
+            `;
+        },
+        choices: ['Continue'],
+        data: {
+            trialphase: 'dynamometer_calibration_results',
+            max_force_n: () => window.dynamometerMaxForce,
+            had_bad_peaks: () => _peaks.some(p => p <= 1.0),
+            calibration_retry: () => _needsRetry
+        },
+        on_finish: function () {
+            if (!_needsRetry) {
+                // Standalone calibration releases Bluetooth here. The combined module
+                // keeps this connection so its immediately following vigour task can reuse it.
+                if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+                    disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+                    window.dynamometerSensor = null;
+                }
+                updateState('dynamometer_calibration_end');
             }
-            updateState('dynamometer_calibration_end');
         }
-    }
-};
+    };
+}
 
 // ── Public timeline factory ───────────────────────────────────────────────────
 
@@ -250,9 +251,10 @@ export function createDynamometerCalibrationTimeline(settings) {
     window.dynamometerSensor   = null;
 
     const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i));
+    const calibrationResults = createCalibrationResults(settings);
 
-    // connectTrial runs first AND on every retry. Clearing window.dynamometerSensor
-    // in the loop_function forces a fresh BLE pair when the sensor dropped.
+    // connectTrial runs first AND on every retry. On retry the existing handle is
+    // retained so connectTrial can disconnect it cleanly before pairing again.
     const calibrationProcedure = {
         timeline: [connectTrial, ...trials, calibrationResults],
         loop_function: function () {

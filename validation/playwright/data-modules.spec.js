@@ -77,12 +77,30 @@ test('questionnaire module presents every questionnaire in the configured order'
   ]);
 });
 
+test('dynamometer module calibrates before vigour and keeps the connection between them', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const elements = await page.evaluate(async () => {
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    return ModuleRegistry.dynamometer.elements;
+  });
+
+  expect(elements).toEqual([
+    {
+      type: 'task',
+      name: 'dynamometer_calibration',
+      config: { disconnectOnFinish: false },
+    },
+    { type: 'task', name: 'dynamometer_vigour' },
+  ]);
+});
+
 // VIREPS runs two sessions. The launcher was cut to two in 3ff732b ("correct number
 // and name of session"), which also dropped the week labels; this test still described
 // the five-session RELMED launcher and had been failing ever since. experiment.html
 // keeps SESSION_CONFIG entries for weeks 4-28 so repeat-session sequences still build
 // (see the timeline test below) - they are simply not offered to the experimenter.
-test('experimenter launcher offers two sessions and the three study modules', async ({ page }) => {
+test('experimenter launcher offers two sessions and all four study modules', async ({ page }) => {
   await page.goto('/index.html');
 
   await expect(page.locator('#sessionNumber option')).toHaveCount(3);
@@ -91,12 +109,13 @@ test('experimenter launcher offers two sessions and the three study modules', as
     'Session 1',
     'Session 2',
   ]);
-  await expect(page.locator('#module option')).toHaveCount(4);
+  await expect(page.locator('#module option')).toHaveCount(5);
   await expect(page.locator('#module option').evaluateAll((options) => options.map(({ value }) => value))).resolves.toEqual([
     '',
     'module_1',
     'module_2',
     'questionnaires',
+    'dynamometer',
   ]);
 });
 
@@ -140,14 +159,22 @@ test('all complete module timelines build with repeat-session sequences', async 
       stimulus_session: 3,
       session_number: 3,
     });
+    const dynamometer = await createModuleTimeline('dynamometer', {
+      session: 'wk0',
+      sequence: 'wk0',
+      stimulus_session: 1,
+      session_number: 1,
+    });
     return {
       module1: module1.length,
       module2: module2.length,
       questionnaires: questionnaires.length,
+      dynamometer: dynamometer.length,
     };
   });
 
   expect(lengths.module1).toBeGreaterThan(10);
   expect(lengths.module2).toBeGreaterThan(lengths.module1);
   expect(lengths.questionnaires).toBeGreaterThan(2);
+  expect(lengths.dynamometer).toBeGreaterThan(2);
 });
