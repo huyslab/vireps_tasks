@@ -61,6 +61,19 @@ export const ModuleRegistry = {
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
+    dynamometer: {
+        name: "Dynamometer Calibration and Vigour",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0"
+        },
+        elements: [
+            // Keep the grip connected between these adjacent tasks. Standalone
+            // calibration still disconnects when it finishes.
+            { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false } },
+            { type: "task", name: "dynamometer_vigour" }
+        ]
+    },
     full_battery: {
         name: "Full RELEMD Task Battery",
         moduleConfig: { // Settings that apply to all tasks in the module unless overridden

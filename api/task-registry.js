@@ -520,12 +520,16 @@ export const TaskRegistry = {
     description: 'Measures maximum squeeze force using the Vernier Go Direct Hand Dynamometer over Bluetooth',
     createTimeline: createDynamometerCalibrationTimeline,
     computeBonus: () => 0,
-    defaultConfig: {},
+    defaultConfig: {
+      disconnectOnFinish: true
+    },
     requirements: {
       css: ['@tasks/dynamometer-calibration/styles.css']
     },
     resumptionRules: { enabled: false },
-    configOptions: {}
+    configOptions: {
+      disconnectOnFinish: 'Whether to disconnect the dynamometer after calibration. Default is true; the combined dynamometer module sets this to false so vigour can reuse the connection.'
+    }
   },
   dynamometer_vigour: {
     name: 'Dynamometer Vigour Task',

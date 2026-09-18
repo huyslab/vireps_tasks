@@ -38,17 +38,21 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 - **`self_report`** — touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires
+- **`dynamometer_calibration`** — six-squeeze maximum-force calibration using a Vernier GDX-HD
+- **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
 
-The experimenter launcher uses three supervised modules from `api/module-registry.js`:
+The experimenter launcher uses four supervised modules from `api/module-registry.js`:
 `module_1` (reversal and Faces Go/No-Go), `module_2` (the linked learning and
-effort tasks), and `questionnaires` (STAI, ARI, BIS, and STAXI-2). Every behavioural
-task is followed by acceptability ratings. The older `full_battery` and `screening`
-definitions remain available through the API.
+effort tasks), `questionnaires` (STAI, ARI, BIS, and STAXI-2), and `dynamometer`
+(calibration followed by dynamometer-controlled vigour). In Modules 1 and 2,
+every behavioural task is followed by acceptability ratings. The older
+`full_battery` and `screening` definitions remain available through the API.
 
 ## Input modality and devices
 
-Every task in the three study modules can be completed by touch alone. Two
-patterns are in use:
+All four launcher modules can be completed without a keyboard. The dynamometer
+module uses touch for navigation and grip squeezes for task responses. Two other
+input patterns are in use:
 
 **Pointer-driven on every device** - one input path, taps and mouse clicks alike,
 with only the wording varying (`pressVerb()` says "tap" or "click"):
