@@ -2,14 +2,16 @@ import { connectDynamometer, startForceStream, setForceCallback, disconnectDynam
 import { updateState } from '@utils/index.js';
 
 const N_TRIALS = 6;
-const READY_MS   = 500;
-const SQUEEZE_MS = 1000;
-const RELAX_MS   = 1500;
-const COUNTDOWN_MS = 3000;
-const TRIAL_DURATION_MS = READY_MS + COUNTDOWN_MS + SQUEEZE_MS + RELAX_MS; // 6000 ms
+const SQUEEZE_START_THRESHOLD_N = 1.0;
+const SQUEEZE_RELEASE_THRESHOLD_N = 0.5;
+const RELEASE_SETTLE_MS = 100;
+const DEFAULT_SQUEEZE_DURATION_MS = 500;
+const DEFAULT_RELAX_DURATION_MS = 3000;
+const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
 
 let _peaks = [];
 let _trialPeak = 0;
+let _streamTimedOut = false;
 // Set inside calibrationResults.stimulus (which jsPsych evaluates before on_start)
 // so the loop_function can read whether a retry is needed.
 let _needsRetry = false;
@@ -73,6 +75,7 @@ const connectTrial = {
                 window.dynamometerSensor = await connectDynamometer();
                 // Start the stream (or attach listener if already streaming).
                 startForceStream(window.dynamometerSensor, () => {});
+                _streamTimedOut = false;
                 jsPsych.finishTrial({ connected: true });
             } catch (err) {
                 status.textContent = `Could not connect: ${err.message}. Please try again.`;
@@ -95,8 +98,8 @@ const calibrationInstructions = {
             <div id="instruction-text">
                 <h2>Measuring your maximum squeeze</h2>
                 <p>We will measure how hard you can squeeze <strong>${N_TRIALS} times</strong>.</p>
-                <p>Each time, wait for <strong>"Squeeze!"</strong>, then squeeze the grip as hard as you can for one second.</p>
-                <p>Relax between each squeeze.</p>
+                <p>Each time you see <strong>"Ready when you are"</strong>, start squeezing whenever you feel ready.</p>
+                <p>Squeeze as hard as you can until the screen tells you to relax.</p>
             </div>
         </div>
     `,
@@ -106,67 +109,167 @@ const calibrationInstructions = {
 
 // ── One calibration trial ─────────────────────────────────────────────────────
 
-function makeCalibrationTrial(trialIndex) {
+function validDuration(value, fallback) {
+    const duration = Number(value);
+    return Number.isFinite(duration) && duration >= 0 ? duration : fallback;
+}
+
+function makeCalibrationTrial(trialIndex, settings) {
+    const squeezeDurationMs = validDuration(settings?.squeezeDurationMs, DEFAULT_SQUEEZE_DURATION_MS);
+    const relaxDurationMs = validDuration(settings?.relaxDurationMs, DEFAULT_RELAX_DURATION_MS);
+    const squeezeWaitTimeoutMs = validDuration(
+        settings?.squeezeWaitTimeoutMs,
+        DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS
+    );
+    let phase = 'awaiting-release';
+    let selfInitiationRt = null;
+
     return {
         type: jsPsychHtmlKeyboardResponse,
         choices: 'NO_KEYS',
         stimulus: `
             <div id="instruction-container">
                 <div id="instruction-text">
-                    <h2 id="cal-phase-label">Get ready…</h2>
+                    <h2 id="cal-phase-label">Ready when you are</h2>
                     <p id="cal-trial-counter">Squeeze ${trialIndex + 1} of ${N_TRIALS}</p>
+                    <div id="cal-timing-ring">
+                        <svg viewBox="0 0 120 120" aria-hidden="true">
+                            <circle class="cal-ring-track" cx="60" cy="60" r="52"></circle>
+                            <circle id="cal-ring-progress" cx="60" cy="60" r="52"></circle>
+                        </svg>
+                        <span id="cal-ring-label" role="status" aria-live="polite" aria-atomic="true">Ready</span>
+                    </div>
+                    <p id="cal-phase-prompt">Press hard</p>
                 </div>
             </div>
         `,
-        trial_duration: TRIAL_DURATION_MS,
         data: {
             trialphase: 'dynamometer_calibration',
             trial_number: trialIndex + 1,
-            peak_force_n: () => _trialPeak
+            peak_force_n: () => _trialPeak,
+            self_initiation_rt_ms: () => selfInitiationRt,
+            squeeze_duration_ms: squeezeDurationMs,
+            relax_duration_ms: relaxDurationMs,
+            squeeze_wait_timeout_ms: squeezeWaitTimeoutMs,
+            squeeze_wait_timed_out: false
         },
-        on_start: function (trial) {
+        on_start: function () {
             _trialPeak = 0;
-            if (window.simulating) trial.trial_duration = 300;
+            phase = 'awaiting-release';
+            selfInitiationRt = null;
         },
         on_load: function () {
-            let inSqueeze = false;
-
-            setForceCallback((forceN) => {
-                if (inSqueeze) _trialPeak = Math.max(_trialPeak, forceN);
-            });
-
             const label = document.getElementById('cal-phase-label');
+            const prompt = document.getElementById('cal-phase-prompt');
+            const ring = document.getElementById('cal-timing-ring');
+            const ringProgress = document.getElementById('cal-ring-progress');
+            const ringLabel = document.getElementById('cal-ring-label');
+            let readyAt = null;
+            let releaseStartedAt = null;
+            // Keep automated simulations fast without changing the recorded task settings.
+            const activeSqueezeDuration = window.simulating ? Math.min(squeezeDurationMs, 50) : squeezeDurationMs;
+            const activeRelaxDuration = window.simulating ? Math.min(relaxDurationMs, 50) : relaxDurationMs;
+            const activeReleaseSettle = window.simulating ? Math.min(RELEASE_SETTLE_MS, 10) : RELEASE_SETTLE_MS;
 
-            [3, 2, 1].forEach((n, i) => {
-                jsPsych.pluginAPI.setTimeout(() => {
-                    if (label) label.textContent = `${n}…`;
-                }, READY_MS + i * 1000);
-            });
+            const showReleasePrompt = () => {
+                if (label) label.textContent = 'Let go first';
+                if (prompt) prompt.textContent = 'Relax your grip';
+                if (ringLabel) ringLabel.textContent = 'Release';
+            };
 
-            jsPsych.pluginAPI.setTimeout(() => {
-                inSqueeze = true;
+            const armSqueeze = () => {
+                if (phase !== 'awaiting-release') return;
+                phase = 'waiting';
+                readyAt = performance.now();
+                if (label) label.textContent = 'Ready when you are';
+                if (prompt) prompt.textContent = 'Press hard';
+                if (ringLabel) ringLabel.textContent = 'Ready';
+            };
+
+            const beginSqueeze = (forceN) => {
+                if (phase !== 'waiting') return;
+                phase = 'squeezing';
+                selfInitiationRt = Math.round(performance.now() - readyAt);
+                _trialPeak = Math.max(_trialPeak, forceN);
+
                 if (label) {
-                    label.textContent = 'Squeeze!';
+                    label.textContent = 'Keep squeezing';
                     label.classList.add('squeeze');
                 }
-            }, READY_MS + COUNTDOWN_MS);
+                if (prompt) prompt.textContent = 'Press hard';
+                if (ring) ring.classList.add('active');
+                if (ringLabel) ringLabel.textContent = 'Squeeze';
+                if (ringProgress) {
+                    ringProgress.style.transitionDuration = `${activeSqueezeDuration}ms`;
+                    // Force the empty-ring style to render before starting the fill.
+                    void ringProgress.getBoundingClientRect();
+                    ringProgress.classList.add('filling');
+                }
+
+                jsPsych.pluginAPI.setTimeout(() => {
+                    phase = 'relaxing';
+                    if (label) {
+                        label.textContent = 'Relax';
+                        label.classList.remove('squeeze');
+                    }
+                    if (prompt) prompt.textContent = 'Let go and rest';
+                    if (ring) {
+                        ring.classList.remove('active');
+                        ring.classList.add('complete');
+                    }
+                    if (ringLabel) ringLabel.textContent = 'Rest';
+
+                    jsPsych.pluginAPI.setTimeout(() => {
+                        jsPsych.finishTrial();
+                    }, activeRelaxDuration);
+                }, activeSqueezeDuration);
+            };
+
+            setForceCallback((forceN) => {
+                const now = performance.now();
+
+                if (phase === 'awaiting-release') {
+                    if (forceN <= SQUEEZE_RELEASE_THRESHOLD_N) {
+                        if (releaseStartedAt === null) releaseStartedAt = now;
+                        if (now - releaseStartedAt >= activeReleaseSettle) armSqueeze();
+                    } else {
+                        releaseStartedAt = null;
+                        showReleasePrompt();
+                    }
+                } else if (phase === 'waiting' && forceN > SQUEEZE_START_THRESHOLD_N) {
+                    beginSqueeze(forceN);
+                } else if (phase === 'squeezing') {
+                    _trialPeak = Math.max(_trialPeak, forceN);
+                }
+            });
+
+            if (window.simulating) {
+                jsPsych.pluginAPI.setTimeout(armSqueeze, activeReleaseSettle);
+                jsPsych.pluginAPI.setTimeout(
+                    () => beginSqueeze(70 + Math.random() * 20),
+                    activeReleaseSettle + 10
+                );
+            }
 
             jsPsych.pluginAPI.setTimeout(() => {
-                inSqueeze = false;
-                if (label) {
-                    label.textContent = 'Relax.';
-                    label.classList.remove('squeeze');
-                }
-            }, READY_MS + COUNTDOWN_MS + SQUEEZE_MS);
+                if (phase !== 'awaiting-release' && phase !== 'waiting') return;
+                phase = 'timed-out';
+                _streamTimedOut = true;
+                setForceCallback(() => {});
+                jsPsych.finishTrial({ squeeze_wait_timed_out: true });
+            }, squeezeWaitTimeoutMs);
         },
         on_finish: function (data) {
-            if (window.simulating) {
+            if (window.simulating && _trialPeak <= SQUEEZE_START_THRESHOLD_N) {
                 _trialPeak = 70 + Math.random() * 20;
                 data.peak_force_n = _trialPeak;
             }
             _peaks.push(_trialPeak);
             setForceCallback(() => {});
-        }
+        },
+        // A timed-out stream means the remaining trials cannot collect useful
+        // data. Skip them so the existing reconnect loop is reached at once.
+        conditional_function: () => !_streamTimedOut
     };
 }
 
@@ -249,8 +352,9 @@ export function createDynamometerCalibrationTimeline(settings) {
     sessionStorage.removeItem(calStorageKey());
     window.dynamometerMaxForce = undefined;
     window.dynamometerSensor   = null;
+    _streamTimedOut = false;
 
-    const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i));
+    const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i, settings));
     const calibrationResults = createCalibrationResults(settings);
 
     // connectTrial runs first AND on every retry. On retry the existing handle is
