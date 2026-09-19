@@ -321,3 +321,36 @@ test('successful calibration computes results without showing a feedback screen'
   expect(result.maxForceN).toBeGreaterThan(1);
   expect(result.retry).toBe(false);
 });
+
+test('calibration result accepts valid peaks already recorded by jsPsych', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    window.simulating = false;
+    const timeline = await createTaskTimeline('dynamometer_calibration');
+    const resultTrial = timeline[0].timeline.find(
+      item => item.data?.trialphase === 'dynamometer_calibration_results'
+    );
+
+    [10, 11, 12, 13, 14, 50].forEach((peakForceN, index) => {
+      jsPsych.data.get().push({
+        trialphase: 'dynamometer_calibration',
+        trial_number: index + 1,
+        peak_force_n: peakForceN,
+      });
+    });
+
+    await jsPsych.run([resultTrial]);
+    const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
+    return {
+      maxForceN: row.max_force_n,
+      retry: row.calibration_retry,
+      storedMaxForceN: Number(sessionStorage.getItem(`dynamometerMaxForce_${window.participantID ?? 'anon'}`)),
+    };
+  });
+
+  expect(result.maxForceN).toBe(12);
+  expect(result.storedMaxForceN).toBe(12);
+  expect(result.retry).toBe(false);
+});
