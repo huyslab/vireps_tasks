@@ -1,21 +1,3 @@
-#cal-phase-label {
-    font-size: clamp(2rem, 8vw, 4rem);
-    font-weight: 700;
-    margin: 0 0 0.5em;
-    color: var(--rlm-ink);
-    transition: color 0.2s;
-}
-
-#cal-phase-label.squeeze {
-    color: var(--rlm-accent, #4a6fa5);
-}
-
-#cal-trial-counter {
-    font-size: clamp(1rem, 3vw, 1.25rem);
-    color: var(--rlm-ink-muted, #666);
-    margin: 0 0 1.5rem;
-}
-
 #cal-phase-prompt {
     max-width: 32rem;
     margin: 1.25rem auto 0;
@@ -24,12 +6,23 @@
     line-height: 1.5;
 }
 
+#cal-rest-label {
+    margin: 0;
+    font-size: clamp(2.5rem, 10vw, 5rem);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.cal-connection-status {
+    min-height: 1.5em;
+    color: var(--rlm-accent);
+}
+
 #cal-timing-ring {
     position: relative;
     width: clamp(9rem, 35vw, 12rem);
     aspect-ratio: 1;
     margin: 0 auto;
-    color: var(--rlm-ink-muted, #666);
 }
 
 #cal-timing-ring svg {
@@ -60,19 +53,6 @@
 
 #cal-ring-progress.filling {
     stroke-dashoffset: 0;
-}
-
-#cal-ring-label {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: clamp(1.1rem, 3vw, 1.35rem);
-    font-weight: 700;
-}
-
-#cal-timing-ring.active {
-    color: var(--rlm-ink, #222);
 }
 
 #cal-timing-ring.complete #cal-ring-progress {
