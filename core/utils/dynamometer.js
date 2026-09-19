@@ -5,7 +5,8 @@
 //
 // API surface used from v1.8.3:
 //   GoDirect.createDevice(adapter, options) — opens our race-free Web Bluetooth
-//     adapter and starts measurements, returning a Device
+//     adapter without starting measurements, returning a Device
+//   device.start(periodMs)       — starts measurements at the requested period
 //   device.stop()                — stops streaming (also done by close())
 //   device.close()               — stops streaming AND disconnects; stop() alone is redundant
 //   sensor.on('value-changed', (sensor) => …)  — fires on each new reading
