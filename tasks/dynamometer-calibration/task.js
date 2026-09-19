@@ -9,7 +9,6 @@ const DEFAULT_SQUEEZE_DURATION_MS = 500;
 const DEFAULT_RELAX_DURATION_MS = 3000;
 const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
 
-let _peaks = [];
 let _trialPeak = 0;
 let _streamTimedOut = false;
 let _showInstructions = true;
@@ -33,6 +32,24 @@ function computeMaxForce(peaks) {
 
 function calStorageKey() {
     return `dynamometerMaxForce_${window.participantID ?? 'anon'}`;
+}
+
+function getRecordedPeaks() {
+    const rows = jsPsych.data.get()
+        .filter({ trialphase: 'dynamometer_calibration' })
+        .last(N_TRIALS)
+        .values();
+
+    // Do not combine a partial retry with rows from the previous attempt.
+    const isCompleteAttempt = rows.length === N_TRIALS && rows.every(
+        (row, index) => Number(row.trial_number) === index + 1
+    );
+    if (!isCompleteAttempt) return [];
+
+    return rows.map(row => {
+        const peak = Number(row.peak_force_n);
+        return Number.isFinite(peak) ? peak : 0;
+    });
 }
 
 // ── Connect / reconnect trial ─────────────────────────────────────────────────
@@ -259,7 +276,6 @@ function makeCalibrationTrial(trialIndex, settings) {
                 _trialPeak = 70 + Math.random() * 20;
                 data.peak_force_n = _trialPeak;
             }
-            _peaks.push(_trialPeak);
             setForceCallback(() => {});
         },
         // A timed-out stream means the remaining trials cannot collect useful
@@ -274,7 +290,8 @@ function createCalibrationResults(settings) {
     return {
         type: jsPsychCallFunction,
         func: function () {
-            const validPeaks = _peaks.filter(p => p > 1.0);
+            const peaks = getRecordedPeaks();
+            const validPeaks = peaks.filter(p => p > 1.0);
 
             // Require at least 5 valid peaks so the result always rests on five
             // detected squeezes.
@@ -294,15 +311,15 @@ function createCalibrationResults(settings) {
             // to computeMaxForce could discard the wrong trial if a high outlier is
             // present (e.g. [0, 40, 42, 43, 44, 200]: outlier removal drops 200 and
             // averages the zero, producing a biased threshold).
-            const maxForce = validPeaks.length === _peaks.length
-                ? computeMaxForce(_peaks).maxForce
+            const maxForce = validPeaks.length === peaks.length
+                ? computeMaxForce(peaks).maxForce
                 : validPeaks.reduce((s, v) => s + v, 0) / validPeaks.length;
             window.dynamometerMaxForce = maxForce;
             sessionStorage.setItem(calStorageKey(), String(maxForce));
 
             return {
                 max_force_n: maxForce,
-                had_bad_peaks: _peaks.some(p => p <= 1.0),
+                had_bad_peaks: peaks.some(p => p <= 1.0),
                 calibration_retry: false
             };
         },
@@ -348,6 +365,7 @@ export function createDynamometerCalibrationTimeline(settings) {
     window.dynamometerSensor   = null;
     _streamTimedOut = false;
     _showInstructions = true;
+    _needsRetry = false;
 
     const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i, settings));
     const calibrationResults = createCalibrationResults(settings);
@@ -358,16 +376,12 @@ export function createDynamometerCalibrationTimeline(settings) {
         timeline: [connectTrial, calibrationInstructions, ...trials, calibrationResults, calibrationRetryPrompt],
         loop_function: function () {
             if (_needsRetry) {
-                _peaks = [];
                 // Retain window.dynamometerSensor so the Connect button in connectTrial
                 // can call disconnectDynamometer on it, which resets _listenerAttached
                 // before a new device is selected and its listener attached.
                 return true;
             }
             return false;
-        },
-        on_timeline_start: function () {
-            _peaks = [];
         }
     };
 

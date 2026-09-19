@@ -321,3 +321,137 @@ test('successful calibration computes results without showing a feedback screen'
   expect(result.maxForceN).toBeGreaterThan(1);
   expect(result.retry).toBe(false);
 });
+
+test('calibration result accepts valid peaks already recorded by jsPsych', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    window.simulating = false;
+    const timeline = await createTaskTimeline('dynamometer_calibration');
+    const resultTrial = timeline[0].timeline.find(
+      item => item.data?.trialphase === 'dynamometer_calibration_results'
+    );
+
+    [10, 11, 12, 13, 14, 50].forEach((peakForceN, index) => {
+      jsPsych.data.get().push({
+        trialphase: 'dynamometer_calibration',
+        trial_number: index + 1,
+        peak_force_n: peakForceN,
+      });
+    });
+
+    await jsPsych.run([resultTrial]);
+    const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
+    return {
+      maxForceN: row.max_force_n,
+      retry: row.calibration_retry,
+      storedMaxForceN: Number(sessionStorage.getItem(`dynamometerMaxForce_${window.participantID ?? 'anon'}`)),
+    };
+  });
+
+  expect(result.maxForceN).toBe(12);
+  expect(result.storedMaxForceN).toBe(12);
+  expect(result.retry).toBe(false);
+});
+
+test('a timed-out attempt cannot reuse peaks from an earlier calibration', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const { startForceStream, disconnectDynamometer } = await import('/core/utils/dynamometer.js');
+    window.simulating = false;
+
+    let emitForce;
+    const sensor = {
+      enabled: true,
+      value: 0,
+      on: (_eventName, handler) => {
+        emitForce = forceN => {
+          sensor.value = forceN;
+          handler(sensor);
+        };
+      },
+    };
+    const device = { sensors: [sensor], close: async () => {} };
+    startForceStream(device, () => {});
+
+    const waitFor = async predicate => {
+      const deadline = performance.now() + 1500;
+      while (!predicate()) {
+        if (performance.now() > deadline) throw new Error('Timed out waiting for calibration state');
+        await new Promise(resolve => setTimeout(resolve, 5));
+      }
+    };
+
+    const runCompleteAttempt = async peaks => {
+      const timeline = await createTaskTimeline('dynamometer_calibration', {
+        squeezeDurationMs: 10,
+        relaxDurationMs: 0,
+        squeezeWaitTimeoutMs: 1000,
+      });
+      const trials = timeline[0].timeline.filter(
+        item => item.data?.trialphase === 'dynamometer_calibration'
+      );
+      const resultTrial = timeline[0].timeline.find(
+        item => item.data?.trialphase === 'dynamometer_calibration_results'
+      );
+      const startingRowCount = jsPsych.data.get().filter({
+        trialphase: 'dynamometer_calibration',
+      }).count();
+      const runPromise = jsPsych.run([...trials, resultTrial]);
+
+      for (let i = 0; i < peaks.length; i += 1) {
+        await waitFor(() => document.getElementById('cal-rest-label'));
+        emitForce(0);
+        await new Promise(resolve => setTimeout(resolve, 110));
+        emitForce(0);
+        await waitFor(() => !document.getElementById('cal-timing-ring')?.hidden);
+        emitForce(peaks[i]);
+        await waitFor(() => (
+          jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count()
+            >= startingRowCount + i + 1
+        ));
+      }
+
+      await runPromise;
+      return jsPsych.data.get().filter({
+        trialphase: 'dynamometer_calibration_results',
+      }).last(1).values()[0];
+    };
+
+    await runCompleteAttempt([10, 11, 12, 13, 14, 50]);
+
+    const partialTimeline = await createTaskTimeline('dynamometer_calibration', {
+      squeezeDurationMs: 10,
+      relaxDurationMs: 0,
+      squeezeWaitTimeoutMs: 30,
+    });
+    const partialTrials = partialTimeline[0].timeline.filter(
+      item => item.data?.trialphase === 'dynamometer_calibration'
+    );
+    const partialResultTrial = partialTimeline[0].timeline.find(
+      item => item.data?.trialphase === 'dynamometer_calibration_results'
+    );
+    await jsPsych.run([...partialTrials, partialResultTrial]);
+    const partialResult = jsPsych.data.get().filter({
+      trialphase: 'dynamometer_calibration_results',
+    }).last(1).values()[0];
+
+    const retryResult = await runCompleteAttempt([20, 21, 22, 23, 24, 80]);
+    await disconnectDynamometer(device);
+
+    return {
+      partialMaxForceN: partialResult.max_force_n,
+      partialRetry: partialResult.calibration_retry,
+      retryMaxForceN: retryResult.max_force_n,
+      retryRequiredAgain: retryResult.calibration_retry,
+    };
+  });
+
+  expect(result.partialMaxForceN).toBeNull();
+  expect(result.partialRetry).toBe(true);
+  expect(result.retryMaxForceN).toBe(22);
+  expect(result.retryRequiredAgain).toBe(false);
+});
