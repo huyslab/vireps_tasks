@@ -190,3 +190,37 @@ test('dynamometer preserves the setup error when failed-open cleanup also errors
   expect(result.disconnectCount).toBe(1);
   expect(result.message).toContain('notification setup failed');
 });
+
+test('dynamometer starts once at its maximum 10 Hz force sampling rate', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const result = await page.evaluate(async () => {
+    const listeners = [];
+    const startPeriods = [];
+    const sensor = {
+      enabled: false,
+      on(eventName, listener) {
+        listeners.push({ eventName, listener });
+      },
+    };
+    const device = {
+      simulated: false,
+      sensors: [sensor],
+      start(periodMs) {
+        startPeriods.push(periodMs);
+      },
+    };
+
+    const { startForceStream } = await import('/core/utils/dynamometer.js');
+    startForceStream(device, () => {}, 10);
+    startForceStream(device, () => {}, 10);
+
+    return {
+      listenerEvents: listeners.map(entry => entry.eventName),
+      startPeriods,
+    };
+  });
+
+  expect(result.listenerEvents).toEqual(['value-changed']);
+  expect(result.startPeriods).toEqual([100]);
+});

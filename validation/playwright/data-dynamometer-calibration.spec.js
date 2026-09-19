@@ -195,7 +195,7 @@ test('calibration shows only the requested text while squeezing and resting', as
         };
       },
     };
-    const device = { sensors: [sensor], close: async () => {} };
+    const device = { sensors: [sensor], start: () => {}, close: async () => {} };
     startForceStream(device, () => {});
 
     const timeline = await createTaskTimeline('dynamometer_calibration', {
@@ -260,7 +260,7 @@ test('all six self-initiated squeezes fill the ring and produce a calibration', 
         };
       },
     };
-    const device = { sensors: [sensor], close: async () => {} };
+    const device = { sensors: [sensor], start: () => {}, close: async () => {} };
     startForceStream(device, () => {});
 
     const timeline = await createTaskTimeline('dynamometer_calibration', {
@@ -423,7 +423,7 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
         };
       },
     };
-    const device = { sensors: [sensor], close: async () => {} };
+    const device = { sensors: [sensor], start: () => {}, close: async () => {} };
     startForceStream(device, () => {});
 
     const waitFor = async predicate => {
