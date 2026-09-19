@@ -5,7 +5,8 @@
 //
 // API surface used from v1.8.3:
 //   GoDirect.createDevice(adapter, options) — opens our race-free Web Bluetooth
-//     adapter and starts measurements, returning a Device
+//     adapter without starting measurements, returning a Device
+//   device.start(periodMs)       — starts measurements at the requested period
 //   device.stop()                — stops streaming (also done by close())
 //   device.close()               — stops streaming AND disconnects; stop() alone is redundant
 //   sensor.on('value-changed', (sensor) => …)  — fires on each new reading
@@ -15,10 +16,13 @@ let _godirect      = null;
 let _currentCallback = null;
 let _simInterval   = null;
 let _listenerAttached = false; // guard against registering duplicate value-changed listeners
+let _streamStartRequested = false; // guard against racing the SDK's asynchronous start()
 
 const GDX_SERVICE = 'd91714ef-28b9-4f91-ba16-f0d9a604f112';
 const GDX_COMMAND_CHARACTERISTIC = 'f4bf14a6-c7d5-4b6d-8aa8-df1a7c83adcb';
 const GDX_RESPONSE_CHARACTERISTIC = 'b41e6675-a329-40e0-aa01-44d2f444babe';
+// The GDX-HD force channel supports at most 10 samples per second.
+const DYNAMOMETER_MIN_PERIOD_MS = 100;
 
 /**
  * Web Bluetooth adapter for the Go Direct SDK.
@@ -150,9 +154,8 @@ async function getGoDirect() {
  * Shows the browser BLE device picker and opens the selected Go Direct sensor.
  * Must be called from a user gesture (button click).
  *
- * createDevice() calls open(startMeasurements=true), so the device is already
- * streaming when this returns. Do NOT call device.start() afterwards — attach
- * the value-changed listener via startForceStream instead.
+ * The device is opened without starting measurements. startForceStream() then
+ * attaches the value listener before starting once at the requested period.
  *
  * Returns a connected Device handle, or throws on failure.
  */
@@ -171,7 +174,7 @@ export async function connectDynamometer() {
     });
     const adapter = new DynamometerBluetoothAdapter(nativeDevice);
     try {
-        return await GoDirect.createDevice(adapter, { open: true, startMeasurements: true });
+        return await GoDirect.createDevice(adapter, { open: true, startMeasurements: false });
     } catch (error) {
         // createDevice does not close its adapter when protocol initialization
         // fails (including an INIT timeout), so release GATT before allowing retry.
@@ -181,8 +184,7 @@ export async function connectDynamometer() {
 }
 
 /**
- * Attaches a force callback to the already-streaming device.
- * If the device has not yet started (e.g. manually constructed), starts it first.
+ * Attaches a force callback, then starts the device once at the requested rate.
  * Only one callback is active at a time; call setForceCallback() to swap it
  * without restarting the stream.
  *
@@ -190,9 +192,9 @@ export async function connectDynamometer() {
  *
  * @param {Object}   device    - From connectDynamometer()
  * @param {Function} callback  - Called with force in Newtons on each reading
- * @param {number}   [periodMs=10]
+ * @param {number}   [periodMs=100] - Sampling period (the GDX-HD minimum is 100 ms)
  */
-export function startForceStream(device, callback, periodMs = 10) {
+export function startForceStream(device, callback, periodMs = DYNAMOMETER_MIN_PERIOD_MS) {
     _currentCallback = callback;
     if (device.simulated) {
         if (_simInterval) clearInterval(_simInterval);
@@ -204,11 +206,6 @@ export function startForceStream(device, callback, periodMs = 10) {
         }, 50);
         return;
     }
-    // createDevice calls open(startMeasurements=true), so the device is already
-    // streaming when returned. Never call device.start() again: in the vendored
-    // v1.8.3 SDK, open(true) invokes start() synchronously but the
-    // device.collecting flag only becomes true after the asynchronous START
-    // response, so checking it here races and may issue a duplicate command.
     // Attach the listener once — duplicate registration causes double callbacks.
     if (!_listenerAttached) {
         _listenerAttached = true;
@@ -218,6 +215,19 @@ export function startForceStream(device, callback, periodMs = 10) {
                 if (_currentCallback) _currentCallback(s.value ?? 0);
             });
         }
+    }
+
+    // Device.start() launches an asynchronous SDK command sequence but returns
+    // immediately. Track that we requested it instead of checking collecting,
+    // which remains false until the START response and previously allowed a
+    // duplicate command race.
+    if (!_streamStartRequested) {
+        _streamStartRequested = true;
+        const parsedPeriodMs = Number(periodMs);
+        const safePeriodMs = Number.isFinite(parsedPeriodMs)
+            ? Math.max(DYNAMOMETER_MIN_PERIOD_MS, parsedPeriodMs)
+            : DYNAMOMETER_MIN_PERIOD_MS;
+        device.start(safePeriodMs);
     }
 }
 
@@ -238,6 +248,7 @@ export function setForceCallback(callback) {
 export async function disconnectDynamometer(device) {
     _currentCallback = null;
     _listenerAttached = false;
+    _streamStartRequested = false;
     if (device.simulated) {
         clearInterval(_simInterval);
         _simInterval = null;
