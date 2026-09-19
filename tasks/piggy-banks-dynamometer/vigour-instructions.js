@@ -71,6 +71,7 @@ function makeInstructionPage(settings) {
             }
 
             function startDetector() {
+                instructionDetector?.reset();
                 instructionDetector = createPressDetector(window.dynamometerMaxForce, {
                     thresholdFraction: settings.thresholdFraction,
                     holdDurationMs:    settings.holdDurationMs,
@@ -106,6 +107,7 @@ function makeInstructionPage(settings) {
             }
         },
         on_finish: function () {
+            instructionDetector?.reset();
             setForceCallback(() => {});
             instructionDetector = null;
             if (instructionResizeObs) {
@@ -170,6 +172,8 @@ const ruleInstruction = {
 // ── Start confirmation ────────────────────────────────────────────────────────
 
 function makeStartConfirmation(settings) {
+    let detector = null;
+
     return {
         type: jsPsychHtmlKeyboardResponse,
         choices: 'NO_KEYS',
@@ -198,11 +202,12 @@ function makeStartConfirmation(settings) {
             const finishOnce = (response) => {
                 if (confirmed) return;
                 confirmed = true;
+                detector?.reset();
                 setForceCallback(() => {});
                 jsPsych.finishTrial({ response });
             };
 
-            const detector = createPressDetector(window.dynamometerMaxForce, {
+            detector = createPressDetector(window.dynamometerMaxForce, {
                 thresholdFraction: settings.thresholdFraction,
                 holdDurationMs:    settings.holdDurationMs,
                 onPress: () => finishOnce('b')
@@ -216,6 +221,8 @@ function makeStartConfirmation(settings) {
             }
         },
         on_finish: function (data) {
+            detector?.reset();
+            detector = null;
             setForceCallback(() => {});
             const seed = jsPsych.randomization.setSeed();
             data.rng_seed = seed;

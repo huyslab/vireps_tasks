@@ -266,27 +266,48 @@ export async function disconnectDynamometer(device) {
  */
 export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDurationMs = 40, onPress } = {}) {
     const threshold = maxForce * thresholdFraction;
+    const parsedHoldDuration = Number(holdDurationMs);
+    const requiredHoldMs = Number.isFinite(parsedHoldDuration)
+        ? Math.max(0, parsedHoldDuration)
+        : 40;
     let state = 'IDLE'; // IDLE | PRESSING | COOLDOWN
-    let holdStart = null;
+    let holdTimer = null;
+
+    function cancelHold() {
+        if (holdTimer !== null) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+        }
+    }
+
+    function completePress() {
+        if (state !== 'PRESSING') return;
+        state = 'COOLDOWN';
+        holdTimer = null;
+        if (onPress) onPress();
+    }
 
     return {
         update(forceN) {
-            const now = performance.now();
             const above = forceN >= threshold;
 
             if (state === 'IDLE') {
                 if (above) {
                     state = 'PRESSING';
-                    holdStart = now;
+                    if (requiredHoldMs === 0) {
+                        completePress();
+                    } else {
+                        // Go Direct can batch several measurements into one Bluetooth
+                        // notification. Using arrival timestamps therefore makes a
+                        // millisecond hold depend on the next packet. A real timer makes
+                        // the configured duration independent of notification batching.
+                        holdTimer = setTimeout(completePress, requiredHoldMs);
+                    }
                 }
             } else if (state === 'PRESSING') {
                 if (!above) {
+                    cancelHold();
                     state = 'IDLE';
-                    holdStart = null;
-                } else if (now - holdStart >= holdDurationMs) {
-                    state = 'COOLDOWN';
-                    holdStart = null;
-                    if (onPress) onPress();
                 }
             } else if (state === 'COOLDOWN') {
                 if (!above) {
@@ -295,8 +316,8 @@ export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDu
             }
         },
         reset() {
+            cancelHold();
             state = 'IDLE';
-            holdStart = null;
         }
     };
 }

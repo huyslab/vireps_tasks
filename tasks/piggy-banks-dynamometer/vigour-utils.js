@@ -155,6 +155,8 @@ let dynResizeTimer     = null;
 let dynResizeObserver  = null;
 
 function piggyBankTrial(settings) {
+    let detector = null;
+
     return {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: function () {
@@ -279,7 +281,7 @@ function piggyBankTrial(settings) {
             } else {
                 // window.dynamometerMaxForce is guaranteed valid by the calibration
                 // gate in vigour-timeline.js; no 80 N fallback needed here.
-                const detector = createPressDetector(window.dynamometerMaxForce, {
+                detector = createPressDetector(window.dynamometerMaxForce, {
                     thresholdFraction: settings.thresholdFraction,
                     holdDurationMs:    settings.holdDurationMs,
                     onPress: handlePress
@@ -292,6 +294,8 @@ function piggyBankTrial(settings) {
             }
         },
         on_finish: function (data) {
+            detector?.reset();
+            detector = null;
             setForceCallback(() => {}); // idle stream between trials
             jsPsych.pluginAPI.cancelAllKeyboardResponses();
             dynTrialCounter++;

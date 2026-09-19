@@ -24,7 +24,7 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   });
   expect(defaults.vigour).toMatchObject({
     thresholdFraction: 0.2,
-    holdDurationMs: 1,
+    holdDurationMs: 0,
   });
 });
 
