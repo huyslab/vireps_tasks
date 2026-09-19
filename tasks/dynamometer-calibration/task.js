@@ -132,14 +132,14 @@ function makeCalibrationTrial(trialIndex, settings) {
         stimulus: `
             <div id="instruction-container">
                 <div id="instruction-text" class="calibration-stage">
-                    <div id="cal-timing-ring">
+                    <div id="cal-timing-ring" hidden>
                         <svg viewBox="0 0 120 120" aria-hidden="true">
                             <circle class="cal-ring-track" cx="60" cy="60" r="52"></circle>
                             <circle id="cal-ring-progress" cx="60" cy="60" r="52"></circle>
                         </svg>
                     </div>
-                    <p id="cal-phase-prompt" role="status" aria-live="polite" aria-atomic="true">Squeeze hard</p>
-                    <p id="cal-rest-label" role="status" aria-live="polite" aria-atomic="true" hidden>Rest</p>
+                    <p id="cal-phase-prompt" role="status" aria-live="polite" aria-atomic="true" hidden>Squeeze hard</p>
+                    <p id="cal-rest-label" role="status" aria-live="polite" aria-atomic="true">Rest</p>
                 </div>
             </div>
         `,

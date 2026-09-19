@@ -197,6 +197,100 @@ test('calibration shows only the requested text while squeezing and resting', as
   expect(result.timedOut).toBe(false);
 });
 
+test('all six self-initiated squeezes fill the ring and produce a calibration', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const { startForceStream, disconnectDynamometer } = await import('/core/utils/dynamometer.js');
+    window.simulating = false;
+
+    let emitForce;
+    const sensor = {
+      enabled: true,
+      value: 0,
+      on: (_eventName, handler) => {
+        emitForce = forceN => {
+          sensor.value = forceN;
+          handler(sensor);
+        };
+      },
+    };
+    const device = { sensors: [sensor], close: async () => {} };
+    startForceStream(device, () => {});
+
+    const timeline = await createTaskTimeline('dynamometer_calibration', {
+      squeezeDurationMs: 100,
+      relaxDurationMs: 20,
+      squeezeWaitTimeoutMs: 2000,
+    });
+    const procedure = timeline[0];
+    const trials = procedure.timeline.filter(
+      item => item.data?.trialphase === 'dynamometer_calibration'
+    );
+    const resultTrial = procedure.timeline.find(
+      item => item.data?.trialphase === 'dynamometer_calibration_results'
+    );
+
+    const waitFor = async predicate => {
+      const deadline = performance.now() + 1500;
+      while (!predicate()) {
+        if (performance.now() > deadline) throw new Error('Timed out waiting for calibration state');
+        await new Promise(resolve => setTimeout(resolve, 5));
+      }
+    };
+
+    const runPromise = jsPsych.run([...trials, resultTrial]);
+    let ringsFilled = 0;
+    let initialRestScreens = 0;
+
+    for (let i = 0; i < trials.length; i += 1) {
+      await waitFor(() => {
+        const rest = document.getElementById('cal-rest-label');
+        return rest && !rest.hidden;
+      });
+      if (document.getElementById('instruction-text').innerText.trim() === 'Rest') {
+        initialRestScreens += 1;
+      }
+
+      emitForce(0);
+      await new Promise(resolve => setTimeout(resolve, 110));
+      emitForce(0);
+      await waitFor(() => {
+        const ring = document.getElementById('cal-timing-ring');
+        return ring && !ring.hidden;
+      });
+
+      emitForce(5);
+      await waitFor(() => document.getElementById('cal-ring-progress')?.classList.contains('filling'));
+      const progress = document.getElementById('cal-ring-progress');
+      const offsetAtStart = Number.parseFloat(getComputedStyle(progress).strokeDashoffset);
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const offsetDuringFill = Number.parseFloat(getComputedStyle(progress).strokeDashoffset);
+      if (offsetDuringFill < offsetAtStart) ringsFilled += 1;
+
+      await waitFor(() => (
+        jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count() >= i + 1
+      ));
+    }
+
+    await runPromise;
+    await disconnectDynamometer(device);
+    const resultRow = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
+    return {
+      ringsFilled,
+      initialRestScreens,
+      retry: resultRow.calibration_retry,
+      maxForceN: resultRow.max_force_n,
+    };
+  });
+
+  expect(result.initialRestScreens).toBe(6);
+  expect(result.ringsFilled).toBe(6);
+  expect(result.retry).toBe(false);
+  expect(result.maxForceN).toBeGreaterThan(1);
+});
+
 test('successful calibration computes results without showing a feedback screen', async ({ page }) => {
   await openTimelineHarness(page);
 
