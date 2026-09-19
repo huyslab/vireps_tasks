@@ -12,8 +12,9 @@ const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
 let _peaks = [];
 let _trialPeak = 0;
 let _streamTimedOut = false;
-// Set inside calibrationResults.stimulus (which jsPsych evaluates before on_start)
-// so the loop_function can read whether a retry is needed.
+let _showInstructions = true;
+// Set by the invisible result-computation trial so the loop can decide whether
+// the experimenter needs to reconnect the grip and repeat calibration.
 let _needsRetry = false;
 
 function computeMaxForce(peaks) {
@@ -47,12 +48,12 @@ const connectTrial = {
         return `
             <div id="instruction-container">
                 <div id="instruction-text">
-                    <h2>${reconnect ? 'Reconnect the grip' : 'Connect the grip'}</h2>
+                    <h2>For the experimenter</h2>
                     ${reconnect
-                        ? '<p>The grip sensor did not pick up any squeezes. Make sure it is switched on and within range, then tap <strong>Connect</strong> to pair again.</p>'
-                        : '<p>Make sure the hand dynamometer is switched on and close by. Then tap <strong>Connect</strong> to pair it with this device.</p>'}
-                    <p id="connect-status" style="color: var(--rlm-accent, #c0392b)"></p>
-                    <button id="connect-btn" class="jspsych-btn">Connect</button>
+                        ? '<p>Switch on the grip and select <strong>Reconnect grip</strong>.</p>'
+                        : '<p>Switch on the grip and select <strong>Connect grip</strong>.</p>'}
+                    <p id="connect-status" class="cal-connection-status" role="status" aria-live="polite"></p>
+                    <button id="connect-btn" class="jspsych-btn">${reconnect ? 'Reconnect grip' : 'Connect grip'}</button>
                 </div>
             </div>
         `;
@@ -97,14 +98,15 @@ const calibrationInstructions = {
         <div id="instruction-container">
             <div id="instruction-text">
                 <h2>Measuring your maximum squeeze</h2>
-                <p>We will measure how hard you can squeeze <strong>${N_TRIALS} times</strong>.</p>
-                <p>Each time you see <strong>"Ready when you are"</strong>, start squeezing whenever you feel ready.</p>
-                <p>Squeeze as hard as you can until the screen tells you to relax.</p>
+                <p>Squeeze the grip as hard as you can <strong>${N_TRIALS} times</strong>.</p>
+                <p>Start when the ring appears. Let go when you see <strong>Rest</strong>.</p>
             </div>
         </div>
     `,
-    choices: ["OK, let's go"],
-    data: { trialphase: 'dynamometer_calibration_instructions' }
+    choices: ['Start'],
+    data: { trialphase: 'dynamometer_calibration_instructions' },
+    conditional_function: () => _showInstructions,
+    on_finish: () => { _showInstructions = false; }
 };
 
 // ── One calibration trial ─────────────────────────────────────────────────────
@@ -129,17 +131,15 @@ function makeCalibrationTrial(trialIndex, settings) {
         choices: 'NO_KEYS',
         stimulus: `
             <div id="instruction-container">
-                <div id="instruction-text">
-                    <h2 id="cal-phase-label">Ready when you are</h2>
-                    <p id="cal-trial-counter">Squeeze ${trialIndex + 1} of ${N_TRIALS}</p>
+                <div id="instruction-text" class="calibration-stage">
                     <div id="cal-timing-ring">
                         <svg viewBox="0 0 120 120" aria-hidden="true">
                             <circle class="cal-ring-track" cx="60" cy="60" r="52"></circle>
                             <circle id="cal-ring-progress" cx="60" cy="60" r="52"></circle>
                         </svg>
-                        <span id="cal-ring-label" role="status" aria-live="polite" aria-atomic="true">Ready</span>
                     </div>
-                    <p id="cal-phase-prompt">Press hard</p>
+                    <p id="cal-phase-prompt" role="status" aria-live="polite" aria-atomic="true">Squeeze hard</p>
+                    <p id="cal-rest-label" role="status" aria-live="polite" aria-atomic="true" hidden>Rest</p>
                 </div>
             </div>
         `,
@@ -159,11 +159,10 @@ function makeCalibrationTrial(trialIndex, settings) {
             selfInitiationRt = null;
         },
         on_load: function () {
-            const label = document.getElementById('cal-phase-label');
             const prompt = document.getElementById('cal-phase-prompt');
+            const restLabel = document.getElementById('cal-rest-label');
             const ring = document.getElementById('cal-timing-ring');
             const ringProgress = document.getElementById('cal-ring-progress');
-            const ringLabel = document.getElementById('cal-ring-label');
             let readyAt = null;
             let releaseStartedAt = null;
             // Keep automated simulations fast without changing the recorded task settings.
@@ -171,19 +170,26 @@ function makeCalibrationTrial(trialIndex, settings) {
             const activeRelaxDuration = window.simulating ? Math.min(relaxDurationMs, 50) : relaxDurationMs;
             const activeReleaseSettle = window.simulating ? Math.min(RELEASE_SETTLE_MS, 10) : RELEASE_SETTLE_MS;
 
-            const showReleasePrompt = () => {
-                if (label) label.textContent = 'Let go first';
-                if (prompt) prompt.textContent = 'Relax your grip';
-                if (ringLabel) ringLabel.textContent = 'Release';
+            const showRest = () => {
+                if (ring) ring.hidden = true;
+                if (prompt) prompt.hidden = true;
+                if (restLabel) restLabel.hidden = false;
+            };
+
+            const showSqueeze = () => {
+                if (ring) ring.hidden = false;
+                if (prompt) {
+                    prompt.hidden = false;
+                    prompt.textContent = 'Squeeze hard';
+                }
+                if (restLabel) restLabel.hidden = true;
             };
 
             const armSqueeze = () => {
                 if (phase !== 'awaiting-release') return;
                 phase = 'waiting';
                 readyAt = performance.now();
-                if (label) label.textContent = 'Ready when you are';
-                if (prompt) prompt.textContent = 'Press hard';
-                if (ringLabel) ringLabel.textContent = 'Ready';
+                showSqueeze();
             };
 
             const beginSqueeze = (forceN) => {
@@ -192,13 +198,7 @@ function makeCalibrationTrial(trialIndex, settings) {
                 selfInitiationRt = Math.round(performance.now() - readyAt);
                 _trialPeak = Math.max(_trialPeak, forceN);
 
-                if (label) {
-                    label.textContent = 'Keep squeezing';
-                    label.classList.add('squeeze');
-                }
-                if (prompt) prompt.textContent = 'Press hard';
                 if (ring) ring.classList.add('active');
-                if (ringLabel) ringLabel.textContent = 'Squeeze';
                 if (ringProgress) {
                     ringProgress.style.transitionDuration = `${activeSqueezeDuration}ms`;
                     // Force the empty-ring style to render before starting the fill.
@@ -208,16 +208,11 @@ function makeCalibrationTrial(trialIndex, settings) {
 
                 jsPsych.pluginAPI.setTimeout(() => {
                     phase = 'relaxing';
-                    if (label) {
-                        label.textContent = 'Relax';
-                        label.classList.remove('squeeze');
-                    }
-                    if (prompt) prompt.textContent = 'Let go and rest';
                     if (ring) {
                         ring.classList.remove('active');
                         ring.classList.add('complete');
                     }
-                    if (ringLabel) ringLabel.textContent = 'Rest';
+                    showRest();
 
                     jsPsych.pluginAPI.setTimeout(() => {
                         jsPsych.finishTrial();
@@ -234,7 +229,7 @@ function makeCalibrationTrial(trialIndex, settings) {
                         if (now - releaseStartedAt >= activeReleaseSettle) armSqueeze();
                     } else {
                         releaseStartedAt = null;
-                        showReleasePrompt();
+                        showRest();
                     }
                 } else if (phase === 'waiting' && forceN > SQUEEZE_START_THRESHOLD_N) {
                     beginSqueeze(forceN);
@@ -273,14 +268,12 @@ function makeCalibrationTrial(trialIndex, settings) {
     };
 }
 
-// ── Results trial ─────────────────────────────────────────────────────────────
-// IMPORTANT: jsPsych evaluates stimulus() BEFORE calling on_start.
-// All computation must live inside stimulus(); on_start must not be used here.
+// ── Compute calibration result without a participant-facing feedback screen ───
 
 function createCalibrationResults(settings) {
     return {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: function () {
+        type: jsPsychCallFunction,
+        func: function () {
             const validPeaks = _peaks.filter(p => p > 1.0);
 
             // Require at least 5 valid peaks so the result always rests on five
@@ -288,15 +281,11 @@ function createCalibrationResults(settings) {
             _needsRetry = validPeaks.length < 5;
 
             if (_needsRetry) {
-                return `
-                <div id="instruction-container">
-                    <div id="instruction-text">
-                        <h2>Grip not detected</h2>
-                        <p>Not enough valid squeezes were recorded (${validPeaks.length} of ${N_TRIALS} detected). The sensor may have lost connection.</p>
-                        <p>Tap <strong>Continue</strong> to reconnect and try again.</p>
-                    </div>
-                </div>
-                `;
+                return {
+                    max_force_n: null,
+                    had_bad_peaks: true,
+                    calibration_retry: true
+                };
             }
 
             // When all 6 peaks are valid, use outlier removal (drop the one farthest
@@ -311,26 +300,15 @@ function createCalibrationResults(settings) {
             window.dynamometerMaxForce = maxForce;
             sessionStorage.setItem(calStorageKey(), String(maxForce));
 
-            const threshold = (maxForce * 0.75).toFixed(1);
-            return `
-            <div id="instruction-container">
-                <div id="instruction-text">
-                    <h2>Well done!</h2>
-                    <p>Your maximum squeeze: <strong>${maxForce.toFixed(1)} N</strong></p>
-                    <p>During the game, a squeeze that reaches <strong>${threshold} N</strong> and lasts long enough will count.</p>
-                    <p>Tap <strong>Continue</strong> when you are ready.</p>
-                </div>
-            </div>
-            `;
+            return {
+                max_force_n: maxForce,
+                had_bad_peaks: _peaks.some(p => p <= 1.0),
+                calibration_retry: false
+            };
         },
-        choices: ['Continue'],
-        data: {
-            trialphase: 'dynamometer_calibration_results',
-            max_force_n: () => window.dynamometerMaxForce,
-            had_bad_peaks: () => _peaks.some(p => p <= 1.0),
-            calibration_retry: () => _needsRetry
-        },
-        on_finish: function () {
+        data: { trialphase: 'dynamometer_calibration_results' },
+        on_finish: function (data) {
+            Object.assign(data, data.value);
             if (!_needsRetry) {
                 // Standalone calibration releases Bluetooth here. The combined module
                 // keeps this connection so its immediately following vigour task can reuse it.
@@ -344,6 +322,22 @@ function createCalibrationResults(settings) {
     };
 }
 
+const calibrationRetryPrompt = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+        <div id="instruction-container">
+            <div id="instruction-text">
+                <h2>Grip not detected</h2>
+                <p>The grip may have lost its connection.</p>
+                <p>Tap <strong>Continue</strong> to reconnect and try again.</p>
+            </div>
+        </div>
+    `,
+    choices: ['Continue'],
+    data: { trialphase: 'dynamometer_calibration_retry' },
+    conditional_function: () => _needsRetry
+};
+
 // ── Public timeline factory ───────────────────────────────────────────────────
 
 export function createDynamometerCalibrationTimeline(settings) {
@@ -353,6 +347,7 @@ export function createDynamometerCalibrationTimeline(settings) {
     window.dynamometerMaxForce = undefined;
     window.dynamometerSensor   = null;
     _streamTimedOut = false;
+    _showInstructions = true;
 
     const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i, settings));
     const calibrationResults = createCalibrationResults(settings);
@@ -360,7 +355,7 @@ export function createDynamometerCalibrationTimeline(settings) {
     // connectTrial runs first AND on every retry. On retry the existing handle is
     // retained so connectTrial can disconnect it cleanly before pairing again.
     const calibrationProcedure = {
-        timeline: [connectTrial, ...trials, calibrationResults],
+        timeline: [connectTrial, calibrationInstructions, ...trials, calibrationResults, calibrationRetryPrompt],
         loop_function: function () {
             if (_needsRetry) {
                 _peaks = [];
@@ -376,8 +371,5 @@ export function createDynamometerCalibrationTimeline(settings) {
         }
     };
 
-    return [
-        calibrationInstructions,
-        calibrationProcedure
-    ];
+    return [calibrationProcedure];
 }
