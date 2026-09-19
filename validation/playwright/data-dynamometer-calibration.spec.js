@@ -305,14 +305,18 @@ test('successful calibration computes results without showing a feedback screen'
     const resultTrial = procedure.timeline.find(
       item => item.data?.trialphase === 'dynamometer_calibration_results'
     );
+    const retryTimeline = procedure.timeline.find(
+      item => item.timeline?.[0]?.data?.trialphase === 'dynamometer_calibration_retry'
+    );
 
-    await jsPsych.run([...trials, resultTrial]);
+    await jsPsych.run([...trials, resultTrial, retryTimeline]);
     const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
     return {
       pluginName: resultTrial.type.info.name,
       hasStimulus: Object.hasOwn(resultTrial, 'stimulus'),
       maxForceN: row.max_force_n,
       retry: row.calibration_retry,
+      retryScreens: jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_retry' }).count(),
     };
   });
 
@@ -320,6 +324,7 @@ test('successful calibration computes results without showing a feedback screen'
   expect(result.hasStimulus).toBe(false);
   expect(result.maxForceN).toBeGreaterThan(1);
   expect(result.retry).toBe(false);
+  expect(result.retryScreens).toBe(0);
 });
 
 test('calibration result accepts valid peaks already recorded by jsPsych', async ({ page }) => {

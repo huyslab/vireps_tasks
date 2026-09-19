@@ -351,7 +351,13 @@ const calibrationRetryPrompt = {
         </div>
     `,
     choices: ['Continue'],
-    data: { trialphase: 'dynamometer_calibration_retry' },
+    data: { trialphase: 'dynamometer_calibration_retry' }
+};
+
+// jsPsych applies conditional_function to timeline nodes, not individual trial
+// nodes. Wrapping the prompt prevents it from appearing after a valid result.
+const calibrationRetry = {
+    timeline: [calibrationRetryPrompt],
     conditional_function: () => _needsRetry
 };
 
@@ -373,7 +379,7 @@ export function createDynamometerCalibrationTimeline(settings) {
     // connectTrial runs first AND on every retry. On retry the existing handle is
     // retained so connectTrial can disconnect it cleanly before pairing again.
     const calibrationProcedure = {
-        timeline: [connectTrial, calibrationInstructions, ...trials, calibrationResults, calibrationRetryPrompt],
+        timeline: [connectTrial, calibrationInstructions, ...trials, calibrationResults, calibrationRetry],
         loop_function: function () {
             if (_needsRetry) {
                 // Retain window.dynamometerSensor so the Connect button in connectTrial
