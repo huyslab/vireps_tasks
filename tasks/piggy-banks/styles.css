@@ -82,6 +82,54 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+#dynamometer-debug-graph {
+  position: absolute;
+  top: 55%;
+  width: min(82vw, 560px);
+  height: clamp(110px, 20vh, 170px);
+  padding: 8px 12px 10px;
+  box-sizing: border-box;
+  color: #263238;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(38, 50, 56, 0.25);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.dynamometer-debug-readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+  font: 14px/1.2 system-ui, sans-serif;
+}
+
+#dynamometer-debug-graph svg {
+  display: block;
+  width: 100%;
+  height: calc(100% - 24px);
+  overflow: hidden;
+  background: rgba(236, 239, 241, 0.75);
+}
+
+.dynamometer-debug-target {
+  fill: none;
+  stroke: #c62828;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+#dynamometer-debug-trace {
+  fill: none;
+  stroke: #1565c0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
 #bg-container {
   position: relative;
   display: flex;

@@ -544,7 +544,7 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_vigour_trial'),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
-      thresholdFraction: 0.5,
+      thresholdFraction: 0.2,
       holdDurationMs: 1,
       preferredOrientation: 'portrait'
     },
@@ -553,7 +553,7 @@ export const TaskRegistry = {
     },
     resumptionRules: { enabled: true },
     configOptions: {
-      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.5 (50%).',
+      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.2 (20%).',
       holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 1.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
     }

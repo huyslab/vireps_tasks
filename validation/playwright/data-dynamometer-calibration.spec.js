@@ -23,9 +23,53 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
     squeezeWaitTimeoutMs: 30000,
   });
   expect(defaults.vigour).toMatchObject({
-    thresholdFraction: 0.5,
+    thresholdFraction: 0.2,
     holdDurationMs: 1,
   });
+});
+
+test('debug participants get a live force graph with the target marked', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const {
+      createDynVigourCoreTimeline,
+      createDebugForceGraphUpdater,
+    } = await import('/tasks/piggy-banks-dynamometer/vigour-utils.js');
+
+    window.participantID = 'study_debug_001';
+    window.dynamometerMaxForce = 200;
+    const settings = { thresholdFraction: 0.5, holdDurationMs: 1 };
+    const firstTrial = createDynVigourCoreTimeline(settings)[0].timeline.find(
+      item => item.data?.trialphase === 'dynamometer_vigour_trial'
+    );
+    document.getElementById('display_element').innerHTML = firstTrial.stimulus();
+
+    const updateGraph = createDebugForceGraphUpdater(settings);
+    updateGraph(25);
+    updateGraph(100);
+
+    const graph = document.getElementById('dynamometer-debug-graph');
+    const target = graph.querySelector('.dynamometer-debug-target');
+    const trace = document.getElementById('dynamometer-debug-trace');
+    const debugResult = {
+      targetForceN: Number(graph.dataset.targetForceN),
+      targetY1: Number(target.getAttribute('y1')),
+      targetY2: Number(target.getAttribute('y2')),
+      tracePoints: trace.getAttribute('points').split(' ').length,
+      current: document.getElementById('dynamometer-debug-current').textContent,
+    };
+
+    window.participantID = 'study_001';
+    const normalMarkup = firstTrial.stimulus();
+    return { ...debugResult, normalMarkup };
+  });
+
+  expect(result.targetForceN).toBe(100);
+  expect(result.targetY1).toBe(result.targetY2);
+  expect(result.tracePoints).toBe(2);
+  expect(result.current).toBe('100.0 N');
+  expect(result.normalMarkup).not.toContain('dynamometer-debug-graph');
 });
 
 test('calibration waits for a self-initiated squeeze and contains no countdown', async ({ page }) => {

@@ -16,6 +16,71 @@ const VIGOUR_PRELOAD_IMAGES = [
     "ooc_2p.png", "piggy-tail2.png", "saturate-icon.png", "tail-icon.png"
 ].map(s => "./assets/images/piggy-banks/" + s);
 
+const DEBUG_FORCE_GRAPH_WINDOW_MS = 5000;
+const DEBUG_FORCE_GRAPH_TOP_Y = 6;
+const DEBUG_FORCE_GRAPH_BOTTOM_Y = 94;
+
+function isDebugParticipant() {
+    return (window.participantID ?? '').includes('debug');
+}
+
+function forceGraphY(forceN, graphMaximumN) {
+    const usableHeight = DEBUG_FORCE_GRAPH_BOTTOM_Y - DEBUG_FORCE_GRAPH_TOP_Y;
+    const proportion = Math.min(Math.max(forceN / graphMaximumN, 0), 1);
+    return DEBUG_FORCE_GRAPH_BOTTOM_Y - proportion * usableHeight;
+}
+
+function generateDebugForceGraph(settings) {
+    if (!isDebugParticipant()) return '';
+
+    const maximumForceN = Number(window.dynamometerMaxForce);
+    const targetForceN = maximumForceN * Number(settings.thresholdFraction);
+    const graphMaximumN = Math.max(maximumForceN * 1.1, targetForceN * 1.2, 1);
+    const targetY = forceGraphY(targetForceN, graphMaximumN);
+
+    return `
+        <div id="dynamometer-debug-graph" data-target-force-n="${targetForceN}">
+            <div class="dynamometer-debug-readout">
+                <span>Current: <strong id="dynamometer-debug-current">0.0 N</strong></span>
+                <span>Target: <strong>${targetForceN.toFixed(1)} N</strong></span>
+            </div>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none"
+                 role="img" aria-label="Live grip strength; dashed line shows the target">
+                <line class="dynamometer-debug-target"
+                      x1="0" y1="${targetY}" x2="100" y2="${targetY}"></line>
+                <polyline id="dynamometer-debug-trace" points=""></polyline>
+            </svg>
+        </div>
+    `;
+}
+
+function createDebugForceGraphUpdater(settings) {
+    const graph = document.getElementById('dynamometer-debug-graph');
+    const trace = document.getElementById('dynamometer-debug-trace');
+    const current = document.getElementById('dynamometer-debug-current');
+    if (!graph || !trace || !current) return () => {};
+
+    const maximumForceN = Number(window.dynamometerMaxForce);
+    const targetForceN = maximumForceN * Number(settings.thresholdFraction);
+    const graphMaximumN = Math.max(maximumForceN * 1.1, targetForceN * 1.2, 1);
+    const samples = [];
+
+    return forceN => {
+        const now = performance.now();
+        const safeForceN = Number.isFinite(Number(forceN)) ? Math.max(0, Number(forceN)) : 0;
+        samples.push({ time: now, force: safeForceN });
+
+        const windowStart = now - DEBUG_FORCE_GRAPH_WINDOW_MS;
+        while (samples.length > 1 && samples[0].time < windowStart) samples.shift();
+
+        trace.setAttribute('points', samples.map(sample => {
+            const x = 100 - ((now - sample.time) / DEBUG_FORCE_GRAPH_WINDOW_MS) * 100;
+            return `${Math.max(0, x).toFixed(2)},${forceGraphY(sample.force, graphMaximumN).toFixed(2)}`;
+        }).join(' '));
+        current.textContent = `${safeForceN.toFixed(1)} N`;
+    };
+}
+
 function dropCoin(magnitude, persist = false) {
     const id = persist ? 'persist-coin-container' : 'coin-container';
     const container = document.getElementById(id);
@@ -66,7 +131,7 @@ function updatePersistentCoinContainer() {
     }
 }
 
-function generateTrialStimulus(magnitude, ratio) {
+function generateTrialStimulus(magnitude, ratio, settings) {
     const ratio_index  = ratios.indexOf(ratio);
     const ratio_factor = ratio_index / (ratios.length - 1);
     const piggy_style  = `filter: saturate(${50 * (400 / 50) ** ratio_factor}%) brightness(${115 * (90 / 115) ** ratio_factor}%);`;
@@ -77,6 +142,7 @@ function generateTrialStimulus(magnitude, ratio) {
                 <div id="piggy-container">
                     <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank" style="${piggy_style}">
                 </div>
+                ${generateDebugForceGraph(settings)}
             </div>
         </div>
     `;
@@ -94,7 +160,8 @@ function piggyBankTrial(settings) {
         stimulus: function () {
             return generateTrialStimulus(
                 jsPsych.evaluateTimelineVariable('magnitude'),
-                jsPsych.evaluateTimelineVariable('ratio')
+                jsPsych.evaluateTimelineVariable('ratio'),
+                settings
             );
         },
         choices: 'NO_KEYS',
@@ -217,7 +284,11 @@ function piggyBankTrial(settings) {
                     holdDurationMs:    settings.holdDurationMs,
                     onPress: handlePress
                 });
-                setForceCallback(f => detector.update(f));
+                const updateDebugGraph = createDebugForceGraphUpdater(settings);
+                setForceCallback(forceN => {
+                    detector.update(forceN);
+                    updateDebugGraph(forceN);
+                });
             }
         },
         on_finish: function (data) {
@@ -292,5 +363,6 @@ export {
     updatePersistentCoinContainer,
     observeResizing,
     dropCoin,
-    VIGOUR_PRELOAD_IMAGES
+    VIGOUR_PRELOAD_IMAGES,
+    createDebugForceGraphUpdater
 };
