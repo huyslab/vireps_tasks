@@ -18,14 +18,52 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   });
 
   expect(defaults.calibration).toMatchObject({
-    squeezeDurationMs: 500,
-    relaxDurationMs: 3000,
+    disconnectOnFinish: true,
     squeezeWaitTimeoutMs: 30000,
   });
+  expect(defaults.calibration).not.toHaveProperty('squeezeDurationMs');
+  expect(defaults.calibration).not.toHaveProperty('relaxDurationMs');
   expect(defaults.vigour).toMatchObject({
     thresholdFraction: 0.2,
     holdDurationMs: 0,
   });
+});
+
+test('squeezing is the primary action on the dynamometer start screen', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const markup = await page.evaluate(async () => {
+    const { createDynamometerVigourInstructions } = await import(
+      '/tasks/piggy-banks-dynamometer/vigour-instructions.js'
+    );
+    const instructions = createDynamometerVigourInstructions({
+      thresholdFraction: 0.2,
+      holdDurationMs: 0,
+    });
+    return instructions.timeline[2].stimulus();
+  });
+
+  expect(markup).toContain('<span class="highlight-txt">squeeze the grip</span>');
+  expect(markup).toContain('id="reread-button" class="jspsych-btn jspsych-btn-quiet"');
+});
+
+test('dynamometer vigour uses balanced FR1, FR5, and FR10 conditions', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const ratios = await page.evaluate(async () => {
+    const { createDynVigourCoreTimeline } = await import(
+      '/tasks/piggy-banks-dynamometer/vigour-utils.js'
+    );
+    return createDynVigourCoreTimeline({ thresholdFraction: 0.2, holdDurationMs: 0 })
+      .map(trial => trial.timeline_variables[0].ratio);
+  });
+
+  expect(ratios).toHaveLength(36);
+  expect([...new Set(ratios)].sort((a, b) => a - b)).toEqual([1, 5, 10]);
+  expect(Object.fromEntries([1, 5, 10].map(ratio => [
+    ratio,
+    ratios.filter(value => value === ratio).length,
+  ]))).toEqual({ 1: 12, 5: 12, 10: 12 });
 });
 
 test('debug participants get a live force graph with the target marked', async ({ page }) => {
@@ -72,19 +110,16 @@ test('debug participants get a live force graph with the target marked', async (
   expect(result.normalMarkup).not.toContain('dynamometer-debug-graph');
 });
 
-test('calibration waits for a self-initiated squeeze and contains no countdown', async ({ page }) => {
+test('calibration uses ten quick self-paced squeezes with simple instructions and a counter', async ({ page }) => {
   await openTimelineHarness(page);
 
   const details = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');
-    const timeline = await createTaskTimeline('dynamometer_calibration', {
-      squeezeDurationMs: 125,
-      relaxDurationMs: 250,
-    });
+    const timeline = await createTaskTimeline('dynamometer_calibration');
     const procedure = timeline[0];
     const connect = procedure.timeline[0];
     const instructions = procedure.timeline[1];
-    const trial = procedure.timeline.find(
+    const trials = procedure.timeline.filter(
       item => item.data?.trialphase === 'dynamometer_calibration'
     );
 
@@ -93,10 +128,10 @@ test('calibration waits for a self-initiated squeeze and contains no countdown',
       connection: connect.stimulus(),
       firstPhase: connect.data.trialphase,
       secondPhase: instructions.data.trialphase,
-      stimulus: trial.stimulus,
-      hasFixedTrialDuration: Object.hasOwn(trial, 'trial_duration'),
-      squeezeDurationMs: trial.data.squeeze_duration_ms,
-      relaxDurationMs: trial.data.relax_duration_ms,
+      trialCount: trials.length,
+      stimulus: trials[0].stimulus,
+      hasFixedTrialDuration: Object.hasOwn(trials[0], 'trial_duration'),
+      dataKeys: Object.keys(trials[0].data),
     };
   });
 
@@ -104,21 +139,23 @@ test('calibration waits for a self-initiated squeeze and contains no countdown',
   expect(details.secondPhase).toBe('dynamometer_calibration_instructions');
   expect(details.connection).toContain('For the experimenter');
   expect(details.connection).toContain('Connect grip');
-  expect(details.instructions).toContain('Start when the ring appears');
-  expect(details.instructions).not.toContain('Ready when you are');
-  expect(details.stimulus).toContain('id="cal-timing-ring"');
-  expect(details.stimulus).toContain('role="status"');
-  expect(details.stimulus).toContain('aria-live="polite"');
-  expect(details.stimulus).toContain('>Squeeze hard</p>');
-  expect(details.stimulus).not.toContain('cal-trial-counter');
-  expect(details.stimulus).not.toContain('cal-phase-label');
-  expect(details.stimulus).not.toMatch(/>\s*[321]…\s*</);
+  expect(details.instructions).toContain('We need to measure how hard you can squeeze the device');
+  expect(details.instructions).toContain('Squeeze as hard as you can and let go');
+  expect(details.instructions).toContain('10 times');
+  expect(details.instructions).not.toContain('<h2>');
+  expect(details.instructions).not.toMatch(/ring|hold|rest/i);
+  expect(details.trialCount).toBe(10);
+  expect(details.stimulus).toContain('Squeeze and release');
+  expect(details.stimulus).toContain('id="cal-squeeze-counter"');
+  expect(details.stimulus).toContain('data-completed="0"');
+  expect(details.stimulus).toContain('0 / 10');
+  expect(details.stimulus).not.toMatch(/ring|rest|countdown/i);
   expect(details.hasFixedTrialDuration).toBe(false);
-  expect(details.squeezeDurationMs).toBe(125);
-  expect(details.relaxDurationMs).toBe(250);
+  expect(details.dataKeys).toContain('squeeze_duration_ms');
+  expect(details.dataKeys).not.toContain('relax_duration_ms');
 });
 
-test('self-paced calibration trials complete in simulation', async ({ page }) => {
+test('self-paced calibration squeezes complete in simulation', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -136,15 +173,14 @@ test('self-paced calibration trials complete in simulation', async ({ page }) =>
       elapsedMs: performance.now() - startedAt,
       peakForceN: row.peak_force_n,
       squeezeDurationMs: row.squeeze_duration_ms,
-      relaxDurationMs: row.relax_duration_ms,
       selfInitiationRtMs: row.self_initiation_rt_ms,
     };
   });
 
-  expect(result.elapsedMs).toBeLessThan(1000);
+  expect(result.elapsedMs).toBeLessThan(500);
   expect(result.peakForceN).toBeGreaterThan(1);
-  expect(result.squeezeDurationMs).toBe(500);
-  expect(result.relaxDurationMs).toBe(3000);
+  expect(result.squeezeDurationMs).toBeGreaterThanOrEqual(0);
+  expect(result.squeezeDurationMs).toBeLessThan(100);
   expect(result.selfInitiationRtMs).toBeGreaterThanOrEqual(0);
 });
 
@@ -176,7 +212,7 @@ test('calibration times out safely when no squeeze signal arrives', async ({ pag
   expect(result.peakForceN).toBe(0);
 });
 
-test('calibration shows only the requested text while squeezing and resting', async ({ page }) => {
+test('a quick squeeze ends on release and advances the counter', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -199,49 +235,59 @@ test('calibration shows only the requested text while squeezing and resting', as
     startForceStream(device, () => {});
 
     const timeline = await createTaskTimeline('dynamometer_calibration', {
-      squeezeDurationMs: 50,
-      relaxDurationMs: 0,
       squeezeWaitTimeoutMs: 1000,
     });
-    const trial = timeline[0].timeline.find(
+    const trials = timeline[0].timeline.filter(
       item => item.data?.trialphase === 'dynamometer_calibration'
     );
+    const waitFor = async predicate => {
+      const deadline = performance.now() + 1000;
+      while (!predicate()) {
+        if (performance.now() > deadline) throw new Error('Timed out waiting for calibration state');
+        await new Promise(resolve => setTimeout(resolve, 5));
+      }
+    };
 
-    const runPromise = jsPsych.run([trial]);
-    await new Promise(resolve => setTimeout(resolve, 20));
+    const runPromise = jsPsych.run(trials.slice(0, 2));
+    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '0');
+
+    // A squeeze already in progress when the trial loads is ignored until release.
     emitForce(5);
     await new Promise(resolve => setTimeout(resolve, 20));
-    const startedWhileHeld = document.getElementById('cal-ring-progress').classList.contains('filling');
-    const restText = document.getElementById('instruction-text').innerText.trim();
+    const rowsBeforeInitialRelease = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count();
 
-    emitForce(0);
-    await new Promise(resolve => setTimeout(resolve, 110));
     emitForce(0);
     emitForce(5);
-    await new Promise(resolve => setTimeout(resolve, 10));
-    const startedAfterRelease = document.getElementById('cal-ring-progress').classList.contains('filling');
-    const squeezeText = document.getElementById('instruction-text').innerText.trim();
+    emitForce(8);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const rowsWhileSqueezing = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count();
+    emitForce(0);
 
+    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '1');
+    const counterAfterFirst = document.getElementById('cal-squeeze-counter').innerText.trim();
+
+    emitForce(0);
+    emitForce(6);
+    emitForce(0);
     await runPromise;
     await disconnectDynamometer(device);
-    const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).last(1).values()[0];
+
+    const rows = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).values();
     return {
-      startedWhileHeld,
-      restText,
-      startedAfterRelease,
-      squeezeText,
-      timedOut: row.squeeze_wait_timed_out,
+      rowsBeforeInitialRelease,
+      rowsWhileSqueezing,
+      counterAfterFirst,
+      peaks: rows.map(row => row.peak_force_n),
     };
   });
 
-  expect(result.startedWhileHeld).toBe(false);
-  expect(result.restText).toBe('Rest');
-  expect(result.startedAfterRelease).toBe(true);
-  expect(result.squeezeText).toBe('Squeeze hard');
-  expect(result.timedOut).toBe(false);
+  expect(result.rowsBeforeInitialRelease).toBe(0);
+  expect(result.rowsWhileSqueezing).toBe(0);
+  expect(result.counterAfterFirst).toBe('1 / 10');
+  expect(result.peaks).toEqual([8, 6]);
 });
 
-test('all six self-initiated squeezes fill the ring and produce a calibration', async ({ page }) => {
+test('ten quick squeezes produce a calibration using the existing outlier rule', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -264,8 +310,6 @@ test('all six self-initiated squeezes fill the ring and produce a calibration', 
     startForceStream(device, () => {});
 
     const timeline = await createTaskTimeline('dynamometer_calibration', {
-      squeezeDurationMs: 100,
-      relaxDurationMs: 20,
       squeezeWaitTimeoutMs: 2000,
     });
     const procedure = timeline[0];
@@ -275,7 +319,6 @@ test('all six self-initiated squeezes fill the ring and produce a calibration', 
     const resultTrial = procedure.timeline.find(
       item => item.data?.trialphase === 'dynamometer_calibration_results'
     );
-
     const waitFor = async predicate => {
       const deadline = performance.now() + 1500;
       while (!predicate()) {
@@ -284,35 +327,21 @@ test('all six self-initiated squeezes fill the ring and produce a calibration', 
       }
     };
 
+    const peaks = [10, 11, 12, 13, 14, 15, 16, 17, 18, 50];
+    const counters = [];
+    let finalCounter = null;
     const runPromise = jsPsych.run([...trials, resultTrial]);
-    let ringsFilled = 0;
-    let initialRestScreens = 0;
 
-    for (let i = 0; i < trials.length; i += 1) {
-      await waitFor(() => {
-        const rest = document.getElementById('cal-rest-label');
-        return rest && !rest.hidden;
-      });
-      if (document.getElementById('instruction-text').innerText.trim() === 'Rest') {
-        initialRestScreens += 1;
+    for (let i = 0; i < peaks.length; i += 1) {
+      await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === String(i));
+      counters.push(document.getElementById('cal-squeeze-counter').innerText.trim());
+      emitForce(0);
+      emitForce(peaks[i]);
+      emitForce(0);
+      if (i === peaks.length - 1) {
+        await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '10');
+        finalCounter = document.getElementById('cal-squeeze-counter').innerText.trim();
       }
-
-      emitForce(0);
-      await new Promise(resolve => setTimeout(resolve, 110));
-      emitForce(0);
-      await waitFor(() => {
-        const ring = document.getElementById('cal-timing-ring');
-        return ring && !ring.hidden;
-      });
-
-      emitForce(5);
-      await waitFor(() => document.getElementById('cal-ring-progress')?.classList.contains('filling'));
-      const progress = document.getElementById('cal-ring-progress');
-      const offsetAtStart = Number.parseFloat(getComputedStyle(progress).strokeDashoffset);
-      await new Promise(resolve => setTimeout(resolve, 40));
-      const offsetDuringFill = Number.parseFloat(getComputedStyle(progress).strokeDashoffset);
-      if (offsetDuringFill < offsetAtStart) ringsFilled += 1;
-
       await waitFor(() => (
         jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count() >= i + 1
       ));
@@ -322,17 +351,22 @@ test('all six self-initiated squeezes fill the ring and produce a calibration', 
     await disconnectDynamometer(device);
     const resultRow = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
     return {
-      ringsFilled,
-      initialRestScreens,
+      counters,
+      finalCounter,
+      squeezeRows: jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count(),
       retry: resultRow.calibration_retry,
       maxForceN: resultRow.max_force_n,
     };
   });
 
-  expect(result.initialRestScreens).toBe(6);
-  expect(result.ringsFilled).toBe(6);
+  expect(result.counters).toEqual([
+    '0 / 10', '1 / 10', '2 / 10', '3 / 10', '4 / 10',
+    '5 / 10', '6 / 10', '7 / 10', '8 / 10', '9 / 10',
+  ]);
+  expect(result.finalCounter).toBe('10 / 10');
+  expect(result.squeezeRows).toBe(10);
   expect(result.retry).toBe(false);
-  expect(result.maxForceN).toBeGreaterThan(1);
+  expect(result.maxForceN).toBe(14);
 });
 
 test('successful calibration computes results without showing a feedback screen', async ({ page }) => {
@@ -358,6 +392,7 @@ test('successful calibration computes results without showing a feedback screen'
     return {
       pluginName: resultTrial.type.info.name,
       hasStimulus: Object.hasOwn(resultTrial, 'stimulus'),
+      squeezeRows: jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count(),
       maxForceN: row.max_force_n,
       retry: row.calibration_retry,
       retryScreens: jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_retry' }).count(),
@@ -366,12 +401,13 @@ test('successful calibration computes results without showing a feedback screen'
 
   expect(result.pluginName).toBe('call-function');
   expect(result.hasStimulus).toBe(false);
+  expect(result.squeezeRows).toBe(10);
   expect(result.maxForceN).toBeGreaterThan(1);
   expect(result.retry).toBe(false);
   expect(result.retryScreens).toBe(0);
 });
 
-test('calibration result accepts valid peaks already recorded by jsPsych', async ({ page }) => {
+test('calibration result accepts ten valid peaks already recorded by jsPsych', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -382,7 +418,7 @@ test('calibration result accepts valid peaks already recorded by jsPsych', async
       item => item.data?.trialphase === 'dynamometer_calibration_results'
     );
 
-    [10, 11, 12, 13, 14, 50].forEach((peakForceN, index) => {
+    [10, 11, 12, 13, 14, 15, 16, 17, 18, 50].forEach((peakForceN, index) => {
       jsPsych.data.get().push({
         trialphase: 'dynamometer_calibration',
         trial_number: index + 1,
@@ -399,8 +435,8 @@ test('calibration result accepts valid peaks already recorded by jsPsych', async
     };
   });
 
-  expect(result.maxForceN).toBe(12);
-  expect(result.storedMaxForceN).toBe(12);
+  expect(result.maxForceN).toBe(14);
+  expect(result.storedMaxForceN).toBe(14);
   expect(result.retry).toBe(false);
 });
 
@@ -436,8 +472,6 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
 
     const runCompleteAttempt = async peaks => {
       const timeline = await createTaskTimeline('dynamometer_calibration', {
-        squeezeDurationMs: 10,
-        relaxDurationMs: 0,
         squeezeWaitTimeoutMs: 1000,
       });
       const trials = timeline[0].timeline.filter(
@@ -452,12 +486,10 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
       const runPromise = jsPsych.run([...trials, resultTrial]);
 
       for (let i = 0; i < peaks.length; i += 1) {
-        await waitFor(() => document.getElementById('cal-rest-label'));
+        await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === String(i));
         emitForce(0);
-        await new Promise(resolve => setTimeout(resolve, 110));
-        emitForce(0);
-        await waitFor(() => !document.getElementById('cal-timing-ring')?.hidden);
         emitForce(peaks[i]);
+        emitForce(0);
         await waitFor(() => (
           jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count()
             >= startingRowCount + i + 1
@@ -470,11 +502,9 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
       }).last(1).values()[0];
     };
 
-    await runCompleteAttempt([10, 11, 12, 13, 14, 50]);
+    await runCompleteAttempt([10, 11, 12, 13, 14, 15, 16, 17, 18, 50]);
 
     const partialTimeline = await createTaskTimeline('dynamometer_calibration', {
-      squeezeDurationMs: 10,
-      relaxDurationMs: 0,
       squeezeWaitTimeoutMs: 30,
     });
     const partialTrials = partialTimeline[0].timeline.filter(
@@ -488,7 +518,7 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
       trialphase: 'dynamometer_calibration_results',
     }).last(1).values()[0];
 
-    const retryResult = await runCompleteAttempt([20, 21, 22, 23, 24, 80]);
+    const retryResult = await runCompleteAttempt([20, 21, 22, 23, 24, 25, 26, 27, 28, 80]);
     await disconnectDynamometer(device);
 
     return {
@@ -501,6 +531,6 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
 
   expect(result.partialMaxForceN).toBeNull();
   expect(result.partialRetry).toBe(true);
-  expect(result.retryMaxForceN).toBe(22);
+  expect(result.retryMaxForceN).toBe(24);
   expect(result.retryRequiredAgain).toBe(false);
 });
