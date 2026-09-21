@@ -188,6 +188,19 @@ test('launcher sends participant, session number, and module to the experiment p
   expect(destination.searchParams.get('module')).toBe('module_2');
 });
 
+test('the experiment page accepts the dynamometer PIT launcher route', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
+  });
+
+  await page.goto(
+    '/experiment.html?participant_id=route_check&session_number=1&module=dynamometer_pit'
+  );
+
+  await expect(page.locator('#display_element')).not.toBeEmpty();
+  await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toHaveCount(0);
+});
+
 test('all complete module timelines build with repeat-session sequences', async ({ page }) => {
   // The invalid ID stops experiment.html before device authorisation or an automatic run,
   // while still loading the import map, jsPsych plugins, and API used to build timelines.
