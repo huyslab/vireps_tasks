@@ -24,7 +24,7 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   expect(defaults.calibration).not.toHaveProperty('squeezeDurationMs');
   expect(defaults.calibration).not.toHaveProperty('relaxDurationMs');
   expect(defaults.vigour).toMatchObject({
-    thresholdFraction: 0.5,
+    thresholdFraction: 0.2,
     holdDurationMs: 0,
   });
 });
@@ -37,7 +37,7 @@ test('squeezing is the primary action on the dynamometer start screen', async ({
       '/tasks/piggy-banks-dynamometer/vigour-instructions.js'
     );
     const instructions = createDynamometerVigourInstructions({
-      thresholdFraction: 0.5,
+      thresholdFraction: 0.2,
       holdDurationMs: 0,
     });
     return instructions.timeline[2].stimulus();
@@ -45,6 +45,25 @@ test('squeezing is the primary action on the dynamometer start screen', async ({
 
   expect(markup).toContain('<span class="highlight-txt">squeeze the grip</span>');
   expect(markup).toContain('id="reread-button" class="jspsych-btn jspsych-btn-quiet"');
+});
+
+test('dynamometer vigour uses balanced FR1, FR5, and FR10 conditions', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const ratios = await page.evaluate(async () => {
+    const { createDynVigourCoreTimeline } = await import(
+      '/tasks/piggy-banks-dynamometer/vigour-utils.js'
+    );
+    return createDynVigourCoreTimeline({ thresholdFraction: 0.2, holdDurationMs: 0 })
+      .map(trial => trial.timeline_variables[0].ratio);
+  });
+
+  expect(ratios).toHaveLength(36);
+  expect([...new Set(ratios)].sort((a, b) => a - b)).toEqual([1, 5, 10]);
+  expect(Object.fromEntries([1, 5, 10].map(ratio => [
+    ratio,
+    ratios.filter(value => value === ratio).length,
+  ]))).toEqual({ 1: 12, 5: 12, 10: 12 });
 });
 
 test('debug participants get a live force graph with the target marked', async ({ page }) => {
