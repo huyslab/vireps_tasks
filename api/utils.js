@@ -259,6 +259,11 @@ export function getModule(moduleName) {
   return module;
 }
 
+// Every top-level module element uses the same name in demo mode. Only one is active at
+// a time, so the experiment shell can abort the current element without knowing how many
+// nested timelines the task itself contains.
+export const DEMO_MODULE_ELEMENT_TIMELINE_NAME = 'demo-module-element';
+
 /**
  * Create a timeline for a module by processing all its elements
  * @param {string} moduleName - Name of the module
@@ -268,6 +273,12 @@ export function getModule(moduleName) {
 export async function createModuleTimeline(moduleName, config) {
     // Get module
     const module = getModule(moduleName);
+    const {
+        enableDemoNavigation = false,
+        onDemoElementStart,
+        onDemoElementFinish,
+        ...moduleRunConfig
+    } = config || {};
 
     // Pre-fetch task objects and attach to task elements
     module.elements.forEach(element => {
@@ -279,10 +290,10 @@ export async function createModuleTimeline(moduleName, config) {
     // Create timeline for each element in the module
     const timelines = module.elements.map(element => {
         if (element.type === "task") {
-            return createTaskTimeline(element.name, { ...module.moduleConfig, ...element.config, ...config });
+            return createTaskTimeline(element.name, { ...module.moduleConfig, ...element.config, ...moduleRunConfig });
         }
         if (element.type === "instructions") {
-            return getMessage(moduleName, element.config.text, { ...module.moduleConfig, ...element.config, ...config });
+            return getMessage(moduleName, element.config.text, { ...module.moduleConfig, ...element.config, ...moduleRunConfig });
         }
         if (element.type === "bonus") {
             return bonusTrial(module);
@@ -291,6 +302,26 @@ export async function createModuleTimeline(moduleName, config) {
     });
 
     const result = await Promise.all(timelines);
+
+    if (enableDemoNavigation) {
+        return result.map((elementTimeline, index) => {
+            const element = module.elements[index];
+            const elementInfo = {
+                index,
+                type: element.type,
+                name: element.name || element.config?.text || element.type,
+                config: element.config || {}
+            };
+
+            return {
+                name: DEMO_MODULE_ELEMENT_TIMELINE_NAME,
+                timeline: Array.isArray(elementTimeline) ? elementTimeline : [elementTimeline],
+                on_timeline_start: () => onDemoElementStart?.(elementInfo),
+                on_timeline_finish: () => onDemoElementFinish?.(elementInfo)
+            };
+        });
+    }
+
     return result.flat();
 }
 
