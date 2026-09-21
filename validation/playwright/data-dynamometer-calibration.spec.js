@@ -14,6 +14,7 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
     return {
       calibration: TaskRegistry.dynamometer_calibration.defaultConfig,
       vigour: TaskRegistry.dynamometer_vigour.defaultConfig,
+      pit: TaskRegistry.dynamometer_PIT.defaultConfig,
     };
   });
 
@@ -26,6 +27,12 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   expect(defaults.vigour).toMatchObject({
     thresholdFraction: 0.2,
     holdDurationMs: 0,
+    disconnectOnFinish: true,
+  });
+  expect(defaults.pit).toMatchObject({
+    thresholdFraction: 0.2,
+    holdDurationMs: 0,
+    disconnectOnFinish: true,
   });
 });
 
@@ -64,6 +71,30 @@ test('dynamometer vigour uses balanced FR1, FR5, and FR10 conditions', async ({ 
     ratio,
     ratios.filter(value => value === ratio).length,
   ]))).toEqual({ 1: 12, 5: 12, 10: 12 });
+});
+
+test('dynamometer PIT preserves the standard sequence with mapped force ratios', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const comparison = await page.evaluate(async () => {
+    const { createPITCoreTimeline } = await import('/tasks/piggy-banks/PIT-utils.js');
+    const standard = createPITCoreTimeline({ session: 'wk0' });
+    const dynamometer = createPITCoreTimeline({
+      session: 'wk0',
+      inputMode: 'dynamometer',
+      thresholdFraction: 0.2,
+      holdDurationMs: 0,
+    });
+    const variables = timeline => timeline.map(trial => trial.timeline_variables[0]);
+    return { standard: variables(standard), dynamometer: variables(dynamometer) };
+  });
+
+  const ratioMap = { 1: 1, 8: 5, 16: 10 };
+  expect(comparison.dynamometer).toHaveLength(comparison.standard.length);
+  expect(comparison.dynamometer).toEqual(comparison.standard.map(trial => ({
+    ...trial,
+    ratio: ratioMap[trial.ratio],
+  })));
 });
 
 test('debug participants get a live force graph with the target marked', async ({ page }) => {

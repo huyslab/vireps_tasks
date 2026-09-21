@@ -1,19 +1,19 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Module 2's breaks must persist what came before them.
+ * Module 2's pre-calibration pause must persist what came before it.
  *
- * Each break follows an acceptability block, and acceptability writes no snapshot of
+ * The pause follows an acceptability block, and acceptability writes no snapshot of
  * its own - it has no saveDataREDCap or updateState hook. Without a save on entry to
  * the break, those three ratings live only in jsPsych's in-memory data while the
  * participant sits on a screen designed to be sat on: a page killed by Android,
  * refreshed, or closed during the pause would leave nothing containing them in the
  * IndexedDB outbox.
  *
- * The break is the one screen in the module where the participant is invited to stop
+ * The pause is the one screen in the module where the participant is invited to stop
  * paying attention, which is exactly when a session is most likely to be interrupted.
  */
-test('a break persists the ratings that preceded it', async ({ page }) => {
+test('the pre-calibration experimenter pause persists the ratings that preceded it', async ({ page }) => {
   // The outbox suppresses storage entirely on localhost (isDevHost), so without this
   // the queue would stay empty whether or not the break saves, and the test would
   // pass for the wrong reason.
@@ -60,10 +60,12 @@ test('a break persists the ratings that preceded it', async ({ page }) => {
       before,
       after,
       mentionsRating: payloads.includes('PILT_difficulty'),
+      message: breakTrial.pages?.join(' ') ?? breakTrial.stimulus ?? '',
     };
   });
 
   expect(result.error).toBeUndefined();
+  expect(result.message).toContain('Please call the experimenter');
   expect(
     result.after,
     'entering a break should leave a snapshot in the outbox'

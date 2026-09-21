@@ -353,7 +353,7 @@ function createDynVigourCoreTimeline(settings) {
         removePersistentCoinContainer();
         // Disconnect and release the Bluetooth device so it does not continue
         // streaming and draining its battery after the task ends.
-        if (window.dynamometerSensor) {
+        if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
             disconnectDynamometer(window.dynamometerSensor).catch(() => {});
             window.dynamometerSensor = null;
         }
@@ -368,5 +368,6 @@ export {
     observeResizing,
     dropCoin,
     VIGOUR_PRELOAD_IMAGES,
+    generateDebugForceGraph,
     createDebugForceGraphUpdater
 };

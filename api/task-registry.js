@@ -10,7 +10,7 @@ import { createPavlovianLotteryTimeline } from '@tasks/pavlovian-lottery/task.js
 import { createControlTimeline, computeRelativeControlBonus } from '@tasks/control/index.js';
 import { createOpenTextTimeline } from '@tasks/open-text/index.js';
 import { createDynamometerCalibrationTimeline } from '@tasks/dynamometer-calibration/task.js';
-import { createDynamometerVigourTimeline } from '@tasks/piggy-banks-dynamometer/index.js';
+import { createDynamometerVigourTimeline, createDynamometerPITTimeline } from '@tasks/piggy-banks-dynamometer/index.js';
 import { computeRelativePiggyTasksBonus as computeDynBonus } from '@tasks/piggy-banks/utils.js';
 import { createReversalTimeline, computeRelativeReversalBonus } from '@tasks/reversal/index.js';
 import { createAcceptabilityTimeline } from '@tasks/acceptability-judgment/index.js';
@@ -542,6 +542,7 @@ export const TaskRegistry = {
       task_name: 'dynamometer_vigour',
       thresholdFraction: 0.2,
       holdDurationMs: 0,
+      disconnectOnFinish: true,
       preferredOrientation: 'portrait'
     },
     requirements: {
@@ -551,7 +552,31 @@ export const TaskRegistry = {
     configOptions: {
       thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.2 (20%).',
       holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
+      disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true; Module 2 keeps it connected for the following dynamometer PIT task.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
+    }
+  },
+  dynamometer_PIT: {
+    name: 'Dynamometer Pavlovian-Instrumental Transfer Task',
+    description: 'PIT task driven by hand dynamometer squeezes instead of screen taps',
+    createTimeline: createDynamometerPITTimeline,
+    computeBonus: () => computeDynBonus('dynamometer_pit_trial'),
+    defaultConfig: {
+      task_name: 'dynamometer_PIT',
+      thresholdFraction: 0.2,
+      holdDurationMs: 0,
+      disconnectOnFinish: true,
+      preferredOrientation: 'portrait'
+    },
+    requirements: {
+      css: ['@tasks/piggy-banks/styles.css']
+    },
+    resumptionRules: { enabled: true },
+    configOptions: {
+      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.2 (20%).',
+      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
+      disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true.',
+      preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard PIT task."
     }
   }
 };

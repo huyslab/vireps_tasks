@@ -9,8 +9,8 @@ const expectedModules = {
     ['max_press_test', 'max_press_test'],
     ['pavlovian_lottery', 'pavlovian_lottery'],
     ['PILT', 'PILT'],
-    ['vigour', 'vigour'],
-    ['PIT', 'PIT'],
+    ['dynamometer_vigour', 'dynamometer_vigour'],
+    ['dynamometer_PIT', 'dynamometer_PIT'],
     ['vigour_test', 'vigour_test'],
     ['post_PILT_test', 'post_PILT_test'],
   ],
@@ -39,7 +39,10 @@ test('study modules contain the requested tasks and rate every task immediately 
     const body = elements.slice(1, -1);
     let cursor = 0;
     expectedTasks.forEach(([taskName, ratingName]) => {
-      while (body[cursor] && body[cursor].type === 'instructions') cursor += 1;
+      while (body[cursor] && (
+        body[cursor].type === 'instructions'
+        || body[cursor].name === 'dynamometer_calibration'
+      )) cursor += 1;
 
       expect(body[cursor]).toMatchObject({ type: 'task', name: taskName });
       expect(
@@ -56,6 +59,38 @@ test('study modules contain the requested tasks and rate every task immediately 
     // Nothing but breaks may follow the last rating.
     expect(body.slice(cursor).filter((element) => element.type !== 'instructions')).toEqual([]);
   }
+});
+
+test('module 2 calibrates once and keeps the grip connected through vigour and PIT', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const elements = await page.evaluate(async () => {
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    return ModuleRegistry.module_2.elements;
+  });
+
+  const calibrationIndex = elements.findIndex(element => element.name === 'dynamometer_calibration');
+  const vigourIndex = elements.findIndex(element => element.name === 'dynamometer_vigour');
+  const pitIndex = elements.findIndex(element => element.name === 'dynamometer_PIT');
+
+  expect(elements.filter(element => element.name === 'dynamometer_calibration')).toHaveLength(1);
+  expect(elements[calibrationIndex]).toEqual({
+    type: 'task',
+    name: 'dynamometer_calibration',
+    config: { disconnectOnFinish: false },
+  });
+  expect(elements[vigourIndex]).toEqual({
+    type: 'task',
+    name: 'dynamometer_vigour',
+    config: { disconnectOnFinish: false },
+  });
+  expect(calibrationIndex).toBeLessThan(vigourIndex);
+  expect(vigourIndex).toBeLessThan(pitIndex);
+  expect(elements[calibrationIndex - 1]).toEqual({
+    type: 'instructions',
+    config: { text: 'break_message' },
+  });
+  expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
 });
 
 test('questionnaire module presents every questionnaire in the configured order', async ({ page }) => {
@@ -95,12 +130,30 @@ test('dynamometer module calibrates before vigour and keeps the connection betwe
   ]);
 });
 
+test('dynamometer PIT test module calibrates before PIT and keeps the connection between them', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const elements = await page.evaluate(async () => {
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    return ModuleRegistry.dynamometer_pit.elements;
+  });
+
+  expect(elements).toEqual([
+    {
+      type: 'task',
+      name: 'dynamometer_calibration',
+      config: { disconnectOnFinish: false },
+    },
+    { type: 'task', name: 'dynamometer_PIT' },
+  ]);
+});
+
 // VIREPS runs two sessions. The launcher was cut to two in 3ff732b ("correct number
 // and name of session"), which also dropped the week labels; this test still described
 // the five-session RELMED launcher and had been failing ever since. experiment.html
 // keeps SESSION_CONFIG entries for weeks 4-28 so repeat-session sequences still build
 // (see the timeline test below) - they are simply not offered to the experimenter.
-test('experimenter launcher offers two sessions and all four study modules', async ({ page }) => {
+test('experimenter launcher offers two sessions and all five study modules', async ({ page }) => {
   await page.goto('/index.html');
 
   await expect(page.locator('#sessionNumber option')).toHaveCount(3);
@@ -109,13 +162,14 @@ test('experimenter launcher offers two sessions and all four study modules', asy
     'Session 1',
     'Session 2',
   ]);
-  await expect(page.locator('#module option')).toHaveCount(5);
+  await expect(page.locator('#module option')).toHaveCount(6);
   await expect(page.locator('#module option').evaluateAll((options) => options.map(({ value }) => value))).resolves.toEqual([
     '',
     'module_1',
     'module_2',
     'questionnaires',
     'dynamometer',
+    'dynamometer_pit',
   ]);
 });
 
@@ -165,11 +219,18 @@ test('all complete module timelines build with repeat-session sequences', async 
       stimulus_session: 1,
       session_number: 1,
     });
+    const dynamometerPit = await createModuleTimeline('dynamometer_pit', {
+      session: 'wk0',
+      sequence: 'wk0',
+      stimulus_session: 1,
+      session_number: 1,
+    });
     return {
       module1: module1.length,
       module2: module2.length,
       questionnaires: questionnaires.length,
       dynamometer: dynamometer.length,
+      dynamometerPit: dynamometerPit.length,
     };
   });
 
@@ -177,4 +238,5 @@ test('all complete module timelines build with repeat-session sequences', async 
   expect(lengths.module2).toBeGreaterThan(lengths.module1);
   expect(lengths.questionnaires).toBeGreaterThan(2);
   expect(lengths.dynamometer).toBeGreaterThan(2);
+  expect(lengths.dynamometerPit).toBeGreaterThan(2);
 });
