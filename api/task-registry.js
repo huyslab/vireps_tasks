@@ -540,7 +540,7 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_vigour_trial'),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
-      thresholdFraction: 0.2,
+      thresholdFraction: 0.5,
       holdDurationMs: 0,
       preferredOrientation: 'portrait'
     },
