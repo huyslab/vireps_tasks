@@ -5,6 +5,7 @@ const N_SQUEEZES = 10;
 const SQUEEZE_START_THRESHOLD_N = 1.0;
 const SQUEEZE_RELEASE_THRESHOLD_N = 0.5;
 const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
+const FINAL_COUNT_DISPLAY_MS = 300;
 
 let _trialPeak = 0;
 let _streamTimedOut = false;
@@ -111,8 +112,8 @@ const calibrationInstructions = {
     stimulus: `
         <div id="instruction-container">
             <div id="instruction-text">
-                <h2>Grip calibration</h2>
-                <p>Squeeze hard and let go. Repeat <strong>${N_SQUEEZES} times</strong>.</p>
+                <p>We need to measure how hard you can squeeze the device.</p>
+                <p>Squeeze as hard as you can and let go <strong>${N_SQUEEZES} times</strong>.</p>
             </div>
         </div>
     `,
@@ -145,9 +146,9 @@ function makeCalibrationTrial(trialIndex, settings) {
             <div id="instruction-container">
                 <div id="instruction-text" class="calibration-stage">
                     <p id="cal-phase-prompt">Squeeze and release</p>
-                    <p id="cal-squeeze-counter" data-squeeze="${trialIndex + 1}"
+                    <p id="cal-squeeze-counter" data-completed="${trialIndex}"
                        role="status" aria-live="polite" aria-atomic="true">
-                        ${trialIndex + 1} / ${N_SQUEEZES}
+                        ${trialIndex} / ${N_SQUEEZES}
                     </p>
                 </div>
             </div>
@@ -168,6 +169,7 @@ function makeCalibrationTrial(trialIndex, settings) {
             measuredSqueezeDurationMs = null;
         },
         on_load: function () {
+            const counter = document.getElementById('cal-squeeze-counter');
             let readyAt = null;
             let squeezeStartedAt = null;
 
@@ -189,8 +191,22 @@ function makeCalibrationTrial(trialIndex, settings) {
                 if (phase !== 'squeezing') return;
                 phase = 'complete';
                 measuredSqueezeDurationMs = Math.round(performance.now() - squeezeStartedAt);
+                const completedSqueezes = trialIndex + 1;
+                if (counter) {
+                    counter.textContent = `${completedSqueezes} / ${N_SQUEEZES}`;
+                    // Intermediate trials immediately render the next screen with
+                    // its stable completed count. Mark the final state here because
+                    // there is no following calibration screen.
+                    if (completedSqueezes === N_SQUEEZES) {
+                        counter.dataset.completed = String(completedSqueezes);
+                    }
+                }
                 setForceCallback(() => {});
-                jsPsych.finishTrial();
+                if (completedSqueezes === N_SQUEEZES) {
+                    jsPsych.pluginAPI.setTimeout(() => jsPsych.finishTrial(), FINAL_COUNT_DISPLAY_MS);
+                } else {
+                    jsPsych.finishTrial();
+                }
             };
 
             setForceCallback((forceN) => {

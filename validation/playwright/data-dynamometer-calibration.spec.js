@@ -24,9 +24,27 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   expect(defaults.calibration).not.toHaveProperty('squeezeDurationMs');
   expect(defaults.calibration).not.toHaveProperty('relaxDurationMs');
   expect(defaults.vigour).toMatchObject({
-    thresholdFraction: 0.2,
+    thresholdFraction: 0.5,
     holdDurationMs: 0,
   });
+});
+
+test('squeezing is the primary action on the dynamometer start screen', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const markup = await page.evaluate(async () => {
+    const { createDynamometerVigourInstructions } = await import(
+      '/tasks/piggy-banks-dynamometer/vigour-instructions.js'
+    );
+    const instructions = createDynamometerVigourInstructions({
+      thresholdFraction: 0.5,
+      holdDurationMs: 0,
+    });
+    return instructions.timeline[2].stimulus();
+  });
+
+  expect(markup).toContain('<span class="highlight-txt">squeeze the grip</span>');
+  expect(markup).toContain('id="reread-button" class="jspsych-btn jspsych-btn-quiet"');
 });
 
 test('debug participants get a live force graph with the target marked', async ({ page }) => {
@@ -102,14 +120,16 @@ test('calibration uses ten quick self-paced squeezes with simple instructions an
   expect(details.secondPhase).toBe('dynamometer_calibration_instructions');
   expect(details.connection).toContain('For the experimenter');
   expect(details.connection).toContain('Connect grip');
-  expect(details.instructions).toContain('Squeeze hard and let go');
+  expect(details.instructions).toContain('We need to measure how hard you can squeeze the device');
+  expect(details.instructions).toContain('Squeeze as hard as you can and let go');
   expect(details.instructions).toContain('10 times');
+  expect(details.instructions).not.toContain('<h2>');
   expect(details.instructions).not.toMatch(/ring|hold|rest/i);
   expect(details.trialCount).toBe(10);
   expect(details.stimulus).toContain('Squeeze and release');
   expect(details.stimulus).toContain('id="cal-squeeze-counter"');
-  expect(details.stimulus).toContain('data-squeeze="1"');
-  expect(details.stimulus).toContain('1 / 10');
+  expect(details.stimulus).toContain('data-completed="0"');
+  expect(details.stimulus).toContain('0 / 10');
   expect(details.stimulus).not.toMatch(/ring|rest|countdown/i);
   expect(details.hasFixedTrialDuration).toBe(false);
   expect(details.dataKeys).toContain('squeeze_duration_ms');
@@ -210,7 +230,7 @@ test('a quick squeeze ends on release and advances the counter', async ({ page }
     };
 
     const runPromise = jsPsych.run(trials.slice(0, 2));
-    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.squeeze === '1');
+    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '0');
 
     // A squeeze already in progress when the trial loads is ignored until release.
     emitForce(5);
@@ -224,7 +244,7 @@ test('a quick squeeze ends on release and advances the counter', async ({ page }
     const rowsWhileSqueezing = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count();
     emitForce(0);
 
-    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.squeeze === '2');
+    await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '1');
     const counterAfterFirst = document.getElementById('cal-squeeze-counter').innerText.trim();
 
     emitForce(0);
@@ -244,7 +264,7 @@ test('a quick squeeze ends on release and advances the counter', async ({ page }
 
   expect(result.rowsBeforeInitialRelease).toBe(0);
   expect(result.rowsWhileSqueezing).toBe(0);
-  expect(result.counterAfterFirst).toBe('2 / 10');
+  expect(result.counterAfterFirst).toBe('1 / 10');
   expect(result.peaks).toEqual([8, 6]);
 });
 
@@ -290,14 +310,19 @@ test('ten quick squeezes produce a calibration using the existing outlier rule',
 
     const peaks = [10, 11, 12, 13, 14, 15, 16, 17, 18, 50];
     const counters = [];
+    let finalCounter = null;
     const runPromise = jsPsych.run([...trials, resultTrial]);
 
     for (let i = 0; i < peaks.length; i += 1) {
-      await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.squeeze === String(i + 1));
+      await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === String(i));
       counters.push(document.getElementById('cal-squeeze-counter').innerText.trim());
       emitForce(0);
       emitForce(peaks[i]);
       emitForce(0);
+      if (i === peaks.length - 1) {
+        await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === '10');
+        finalCounter = document.getElementById('cal-squeeze-counter').innerText.trim();
+      }
       await waitFor(() => (
         jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count() >= i + 1
       ));
@@ -308,6 +333,7 @@ test('ten quick squeezes produce a calibration using the existing outlier rule',
     const resultRow = jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration_results' }).last(1).values()[0];
     return {
       counters,
+      finalCounter,
       squeezeRows: jsPsych.data.get().filter({ trialphase: 'dynamometer_calibration' }).count(),
       retry: resultRow.calibration_retry,
       maxForceN: resultRow.max_force_n,
@@ -315,9 +341,10 @@ test('ten quick squeezes produce a calibration using the existing outlier rule',
   });
 
   expect(result.counters).toEqual([
-    '1 / 10', '2 / 10', '3 / 10', '4 / 10', '5 / 10',
-    '6 / 10', '7 / 10', '8 / 10', '9 / 10', '10 / 10',
+    '0 / 10', '1 / 10', '2 / 10', '3 / 10', '4 / 10',
+    '5 / 10', '6 / 10', '7 / 10', '8 / 10', '9 / 10',
   ]);
+  expect(result.finalCounter).toBe('10 / 10');
   expect(result.squeezeRows).toBe(10);
   expect(result.retry).toBe(false);
   expect(result.maxForceN).toBe(14);
@@ -440,7 +467,7 @@ test('a timed-out attempt cannot reuse peaks from an earlier calibration', async
       const runPromise = jsPsych.run([...trials, resultTrial]);
 
       for (let i = 0; i < peaks.length; i += 1) {
-        await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.squeeze === String(i + 1));
+        await waitFor(() => document.getElementById('cal-squeeze-counter')?.dataset.completed === String(i));
         emitForce(0);
         emitForce(peaks[i]);
         emitForce(0);

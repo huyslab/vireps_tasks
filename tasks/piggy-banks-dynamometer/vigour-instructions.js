@@ -191,7 +191,7 @@ function makeStartConfirmation(settings) {
                     </div>
                 </div>
                 <div id="bottom-container" style="visibility: visible;">
-                    <button id="reread-button" class="jspsych-btn">Re-read instructions</button>
+                    <button id="reread-button" class="jspsych-btn jspsych-btn-quiet">Re-read instructions</button>
                 </div>
             </div>
         `,
