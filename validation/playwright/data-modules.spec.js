@@ -153,7 +153,7 @@ test('dynamometer PIT test module calibrates before PIT and keeps the connection
 // the five-session RELMED launcher and had been failing ever since. experiment.html
 // keeps SESSION_CONFIG entries for weeks 4-28 so repeat-session sequences still build
 // (see the timeline test below) - they are simply not offered to the experimenter.
-test('experimenter launcher offers two sessions and all five study modules', async ({ page }) => {
+test('experimenter launcher offers two sessions and the three participant modules', async ({ page }) => {
   await page.goto('/index.html');
 
   await expect(page.locator('#sessionNumber option')).toHaveCount(3);
@@ -162,14 +162,12 @@ test('experimenter launcher offers two sessions and all five study modules', asy
     'Session 1',
     'Session 2',
   ]);
-  await expect(page.locator('#module option')).toHaveCount(6);
+  await expect(page.locator('#module option')).toHaveCount(4);
   await expect(page.locator('#module option').evaluateAll((options) => options.map(({ value }) => value))).resolves.toEqual([
     '',
     'module_1',
     'module_2',
     'questionnaires',
-    'dynamometer',
-    'dynamometer_pit',
   ]);
 });
 

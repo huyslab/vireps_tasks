@@ -21,19 +21,19 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   expect(defaults.calibration).toMatchObject({
     disconnectOnFinish: true,
     squeezeWaitTimeoutMs: 30000,
-    thresholdFraction: 0.1,
+    thresholdFraction: 0.05,
     speedCalibrationDurationMs: 7000,
     speedBarMaxHz: 5,
   });
   expect(defaults.calibration).not.toHaveProperty('squeezeDurationMs');
   expect(defaults.calibration).not.toHaveProperty('relaxDurationMs');
   expect(defaults.vigour).toMatchObject({
-    thresholdFraction: 0.1,
+    thresholdFraction: 0.05,
     holdDurationMs: 0,
     disconnectOnFinish: true,
   });
   expect(defaults.pit).toMatchObject({
-    thresholdFraction: 0.1,
+    thresholdFraction: 0.05,
     holdDurationMs: 0,
     disconnectOnFinish: true,
   });
@@ -47,7 +47,7 @@ test('squeezing is the primary action on the dynamometer start screen', async ({
       '/tasks/piggy-banks-dynamometer/vigour-instructions.js'
     );
     const instructions = createDynamometerVigourInstructions({
-      thresholdFraction: 0.1,
+      thresholdFraction: 0.05,
       holdDurationMs: 0,
     });
     return instructions.timeline[2].stimulus();
@@ -64,7 +64,7 @@ test('dynamometer vigour uses balanced FR1, FR5, and FR10 conditions', async ({ 
     const { createDynVigourCoreTimeline } = await import(
       '/tasks/piggy-banks-dynamometer/vigour-utils.js'
     );
-    return createDynVigourCoreTimeline({ thresholdFraction: 0.1, holdDurationMs: 0 })
+    return createDynVigourCoreTimeline({ thresholdFraction: 0.05, holdDurationMs: 0 })
       .map(trial => trial.timeline_variables[0].ratio);
   });
 
@@ -85,7 +85,7 @@ test('dynamometer PIT preserves the standard sequence with mapped force ratios',
     const dynamometer = createPITCoreTimeline({
       session: 'wk0',
       inputMode: 'dynamometer',
-      thresholdFraction: 0.1,
+      thresholdFraction: 0.05,
       holdDurationMs: 0,
     });
     const variables = timeline => timeline.map(trial => trial.timeline_variables[0]);
@@ -205,7 +205,7 @@ test('calibration uses ten quick self-paced squeezes with simple instructions an
   expect(details.speedStimulus).toContain('id="grip-speed-track"');
   expect(details.speedStimulus).toContain('id="grip-speed-bar"');
   expect(details.speedStimulus).not.toContain('grip-speed-feedback-text');
-  expect(details.speedData.threshold_fraction).toBe(0.1);
+  expect(details.speedData.threshold_fraction).toBe(0.05);
   expect(details.speedTrialCount).toBe(3);
   expect(details.speedFeedbackPhase).toBe('dynamometer_speed_calibration_feedback');
   expect(details.speedFeedbackChoices).toEqual(['Continue']);
@@ -268,14 +268,14 @@ test('speed calibration records repeated threshold crossings and gives visible f
   expect(result.live.fitsViewport).toBe(true);
   expect(result.feedbackMarkup).toContain('5.00 squeezes per second');
   expect(result.feedbackMarkup).toContain('Continue');
-  expect(result.thresholdFraction).toBe(0.1);
+  expect(result.thresholdFraction).toBe(0.05);
   expect(result.durationMs).toBe(7000);
   expect(result.squeezes).toBe(35);
   expect(result.averageSpeedHz).toBe(5);
   expect(result.storedSpeedHz).toBeGreaterThan(0);
 });
 
-test('speed calibration counts real force crossings at ten percent of calibrated force', async ({ page }) => {
+test('speed calibration counts real force crossings at five percent of calibrated force', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -319,19 +319,19 @@ test('speed calibration counts real force crossings at ten percent of calibrated
 
     // The first crossing starts the timer. Each later crossing only counts after
     // a below-threshold sample has re-armed the detector.
-    emitForce(11);
+    emitForce(6);
     captureFeedbackState();
-    emitForce(12);
-    captureFeedbackState();
-    emitForce(0);
-    emitForce(11);
+    emitForce(7);
     captureFeedbackState();
     emitForce(0);
-    emitForce(15);
+    emitForce(6);
     captureFeedbackState();
     emitForce(0);
-    emitForce(9);
-    emitForce(10);
+    emitForce(8);
+    captureFeedbackState();
+    emitForce(0);
+    emitForce(4);
+    emitForce(5);
     captureFeedbackState();
 
     await runPromise;
@@ -350,7 +350,7 @@ test('speed calibration counts real force crossings at ten percent of calibrated
     };
   });
 
-  expect(result.thresholdFraction).toBe(0.1);
+  expect(result.thresholdFraction).toBe(0.05);
   expect(result.squeezes).toBe(3);
   expect(result.responseTimes).toHaveLength(3);
   expect(result.feedbackStates).toEqual([true, true, false, true, false]);
