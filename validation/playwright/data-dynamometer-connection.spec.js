@@ -108,6 +108,7 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
 
     const { connectDynamometer, disconnectDynamometer } = await import('/core/utils/dynamometer.js');
     const device = await connectDynamometer();
+    window.dynamometerSensor = device;
     const openedBeforeDisconnect = device.opened;
     let deviceClosedEvents = 0;
     device.on('device-closed', () => { deviceClosedEvents += 1; });
@@ -119,6 +120,7 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
       openedBeforeDisconnect,
       openedAfterDisconnect: device.opened,
       deviceClosedEvents,
+      sharedHandleCleared: window.dynamometerSensor === null,
     };
   });
 
@@ -127,6 +129,7 @@ test('dynamometer waits for Bluetooth notifications before sending INIT', async 
   expect(result.openedBeforeDisconnect).toBe(true);
   expect(result.openedAfterDisconnect).toBe(false);
   expect(result.deviceClosedEvents).toBe(1);
+  expect(result.sharedHandleCleared).toBe(true);
 });
 
 test('dynamometer preserves the setup error when failed-open cleanup also errors', async ({ page }) => {

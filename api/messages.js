@@ -46,7 +46,7 @@ export const messages = {
             <p>At the end there are two short quizzes about what you learned.</p>
             <p>After each game we will ask you a few short questions about it.</p>`,
             `<p>Please stay with the games until the end, and do not close this page.</p>
-            <p>There are two short breaks along the way. If you need to stop at any other time, just ask.</p>
+            <p>Part-way through, you will be asked to call the experimenter to set up the grip device.</p>
             <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
         ],
         end_message: {
@@ -54,8 +54,8 @@ export const messages = {
                 <p>Please tell the person running the study that you have finished.</p>`,
             on_start: endExperiment
         },
-        // Module 2 is the long one - seven tasks and seven sets of questions - and had
-        // no pause anywhere in it. Deliberately NOT the full_battery break_message,
+        // Pause before calibration so the experimenter can set up the grip. Deliberately
+        // NOT the full_battery break_message,
         // which advances on the 'c' key with its clickable nav switched off and so
         // cannot be dismissed on the study tablet at all.
         break_message: {
@@ -66,10 +66,7 @@ export const messages = {
             // page killed by Android, refreshed or closed during that pause would
             // leave nothing containing them in the IndexedDB outbox.
             on_start: () => { saveDataREDCap().catch(() => {}); },
-            message: `<p><b>Take a short break.</b></p>
-                <p>Sit back for a moment. There is no rush.</p>
-                <p>When you are ready, tap <b>Continue</b>.</p>
-                <p>If you would like a longer break, ask the person running the study.</p>`,
+            message: `<p><b>Please call the experimenter.</b></p>`,
             button_label_next: 'Continue',
             allow_backward: false
         }

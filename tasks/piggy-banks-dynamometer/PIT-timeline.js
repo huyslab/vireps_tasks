@@ -1,14 +1,20 @@
-import { createDynVigourCoreTimeline, VIGOUR_PRELOAD_IMAGES } from './vigour-utils.js';
-import { createDynamometerVigourInstructions } from './vigour-instructions.js';
-import { connectDynamometer, isDynamometerConnected, startForceStream } from '@utils/dynamometer.js';
+import { createPITCoreTimeline, PITPreloadImages } from '@tasks/piggy-banks/PIT-utils.js';
+import { PITInstructions } from '@tasks/piggy-banks/PIT-instructions.js';
+import {
+    connectDynamometer,
+    createPressDetector,
+    disconnectDynamometer,
+    isDynamometerConnected,
+    setForceCallback,
+    startForceStream
+} from '@utils/dynamometer.js';
+import { generateDebugForceGraph, createDebugForceGraphUpdater } from './vigour-utils.js';
 import { createPreloadTrial } from '@utils/index.js';
 
-function calStorageKey() {
+function calibrationStorageKey() {
     return `dynamometerMaxForce_${window.participantID ?? 'anon'}`;
 }
 
-// Reconnect trial shown when vigour starts without a live device handle
-// (e.g. the page was reloaded between calibration and vigour).
 function makeReconnectTrial() {
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -25,36 +31,61 @@ function makeReconnectTrial() {
         `,
         data: { trialphase: 'dynamometer_reconnect' },
         on_load: function () {
-            const btn    = document.getElementById('reconnect-btn');
+            const button = document.getElementById('reconnect-btn');
             const status = document.getElementById('reconnect-status');
 
-            btn.addEventListener('click', async () => {
-                btn.disabled = true;
+            button.addEventListener('click', async () => {
+                button.disabled = true;
                 status.textContent = 'Connecting…';
                 try {
                     window.dynamometerSensor = await connectDynamometer();
                     startForceStream(window.dynamometerSensor, () => {});
                     jsPsych.finishTrial({ reconnected: true });
-                } catch (err) {
-                    status.textContent = `Could not connect: ${err.message}. Please try again.`;
-                    btn.disabled = false;
+                } catch (error) {
+                    status.textContent = `Could not connect: ${error.message}. Please try again.`;
+                    button.disabled = false;
                 }
             });
         }
     };
 }
 
-export function createDynamometerVigourTimeline(settings) {
-    // Recover max force scoped to this participant so stale calibration from
-    // another participant sharing the same tab cannot bleed through.
+function makeDynamometerInputAdapter(settings) {
+    return {
+        renderFeedback: () => generateDebugForceGraph(settings),
+        bind(onPress) {
+            const detector = createPressDetector(window.dynamometerMaxForce, {
+                thresholdFraction: settings.thresholdFraction,
+                holdDurationMs: settings.holdDurationMs,
+                onPress
+            });
+            const updateDebugGraph = createDebugForceGraphUpdater(settings);
+            setForceCallback(forceN => {
+                detector.update(forceN);
+                updateDebugGraph(forceN);
+            });
+            return () => {
+                detector.reset();
+                setForceCallback(() => {});
+            };
+        },
+        finish() {
+            if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+                disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+                window.dynamometerSensor = null;
+            }
+        }
+    };
+}
+
+export function createDynamometerPITTimeline(settings) {
     if (!window.dynamometerMaxForce) {
-        const stored = sessionStorage.getItem(calStorageKey());
+        const stored = sessionStorage.getItem(calibrationStorageKey());
         if (stored) window.dynamometerMaxForce = parseFloat(stored);
     }
 
-    // Block the task if no valid calibration is available.  This can happen
-    // when vigour is navigated to directly without completing calibration, or
-    // when sessionStorage was cleared since the last run.
+    const dynamometerSettings = { ...settings, inputMode: 'dynamometer' };
+    dynamometerSettings.inputAdapter = makeDynamometerInputAdapter(dynamometerSettings);
     const calibrationGate = {
         timeline: [{
             type: jsPsychHtmlButtonResponse,
@@ -67,7 +98,7 @@ export function createDynamometerVigourTimeline(settings) {
                     </div>
                 </div>
             `,
-            data: { trialphase: 'dynamometer_vigour_missing_calibration' },
+            data: { trialphase: 'dynamometer_pit_missing_calibration' },
             on_finish: () => { window.location.assign('./index.html'); }
         }],
         conditional_function: function () {
@@ -75,7 +106,6 @@ export function createDynamometerVigourTimeline(settings) {
         }
     };
 
-    // Reconnect only when device handle is absent and not in simulation mode.
     const reconnectStep = {
         timeline: [makeReconnectTrial()],
         conditional_function: function () {
@@ -83,12 +113,11 @@ export function createDynamometerVigourTimeline(settings) {
         }
     };
 
-    // Main task — only reached when calibration is valid.
     const mainTask = {
         timeline: [
             reconnectStep,
-            createDynamometerVigourInstructions(settings),
-            ...createDynVigourCoreTimeline(settings)
+            PITInstructions(dynamometerSettings),
+            ...createPITCoreTimeline(dynamometerSettings)
         ],
         conditional_function: function () {
             return Number.isFinite(window.dynamometerMaxForce) && window.dynamometerMaxForce > 0;
@@ -96,7 +125,7 @@ export function createDynamometerVigourTimeline(settings) {
     };
 
     return [
-        createPreloadTrial(VIGOUR_PRELOAD_IMAGES, settings.task_name),
+        createPreloadTrial(PITPreloadImages(dynamometerSettings), settings.task_name),
         calibrationGate,
         mainTask
     ];

@@ -24,6 +24,12 @@ const GDX_RESPONSE_CHARACTERISTIC = 'b41e6675-a329-40e0-aa01-44d2f444babe';
 // The GDX-HD force channel supports at most 10 samples per second.
 const DYNAMOMETER_MIN_PERIOD_MS = 100;
 
+function resetForceStreamState() {
+    _currentCallback = null;
+    _listenerAttached = false;
+    _streamStartRequested = false;
+}
+
 /**
  * Web Bluetooth adapter for the Go Direct SDK.
  *
@@ -174,13 +180,35 @@ export async function connectDynamometer() {
     });
     const adapter = new DynamometerBluetoothAdapter(nativeDevice);
     try {
-        return await GoDirect.createDevice(adapter, { open: true, startMeasurements: false });
+        const device = await GoDirect.createDevice(adapter, { open: true, startMeasurements: false });
+        // The SDK marks `opened` false when GATT drops. Clear both our stream
+        // guards and the shared handle so the next task offers reconnection
+        // instead of trying to use a dead object.
+        device.on('device-closed', () => {
+            resetForceStreamState();
+            if (window.dynamometerSensor === device) window.dynamometerSensor = null;
+        });
+        return device;
     } catch (error) {
         // createDevice does not close its adapter when protocol initialization
         // fails (including an INIT timeout), so release GATT before allowing retry.
         adapter.cleanupAfterFailedOpen();
         throw error;
     }
+}
+
+/**
+ * Returns whether a retained device handle still represents a live connection.
+ * Real Go Direct devices expose `opened`; the GATT check covers compatible
+ * adapters, while simple test doubles without either signal remain usable.
+ */
+export function isDynamometerConnected(device) {
+    if (!device) return false;
+    if (device.simulated) return true;
+    if (device.opened === false) return false;
+    const gattConnected = device.device?.webBluetoothNativeDevice?.gatt?.connected;
+    if (gattConnected === false) return false;
+    return true;
 }
 
 /**
@@ -246,9 +274,7 @@ export function setForceCallback(callback) {
  * @param {Object} device
  */
 export async function disconnectDynamometer(device) {
-    _currentCallback = null;
-    _listenerAttached = false;
-    _streamStartRequested = false;
+    resetForceStreamState();
     if (device.simulated) {
         clearInterval(_simInterval);
         _simInterval = null;

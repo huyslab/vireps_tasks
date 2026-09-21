@@ -24,6 +24,57 @@ async function loadThemeFixture(page, markup) {
   }, markup);
 }
 
+async function loadPiggyBankThemeFixture(page, markup) {
+  await loadThemeFixture(page, markup);
+  await page.addStyleTag({ url: '/tasks/piggy-banks/styles.css' });
+}
+
+test('PIT background and coin rows have comfortable spacing on a tablet', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const image =
+    'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+
+  await loadPiggyBankThemeFixture(
+    page,
+    `<div class="instructions"><div id="instruction-text">
+      <div class="pav-stimuli-container">
+        <div class="pit-pav-row">
+          ${Array.from({ length: 3 }, () => `<img src="${image}" class="pit-pav-icon">`).join('')}
+          <div class="vertical"></div>
+          ${Array.from({ length: 3 }, () => `<img src="${image}" class="pit-pav-icon">`).join('')}
+        </div>
+        <div class="pit-coin-row">
+          ${Array.from({ length: 3 }, () => `<img src="${image}" class="pit-coin-icon">`).join('')}
+          <div class="vertical"></div>
+          ${Array.from({ length: 3 }, () => `<img src="${image}" class="pit-coin-icon">`).join('')}
+        </div>
+      </div>
+    </div></div>`
+  );
+
+  const layout = await page.evaluate(() => {
+    const measure = (selector) =>
+      [...document.querySelectorAll(selector)].map((element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+      });
+    return {
+      container: document.querySelector('.pav-stimuli-container').getBoundingClientRect().toJSON(),
+      backgrounds: measure('.pit-pav-icon'),
+      coins: measure('.pit-coin-icon'),
+    };
+  });
+
+  for (const row of [layout.backgrounds, layout.coins]) {
+    expect(row[0].left).toBeGreaterThanOrEqual(layout.container.left);
+    expect(row.at(-1).right).toBeLessThanOrEqual(layout.container.right);
+    for (let index = 1; index < row.length; index += 1) {
+      expect(row[index].left - row[index - 1].right).toBeGreaterThanOrEqual(20);
+    }
+  }
+  expect(layout.coins[0].top - layout.backgrounds[0].bottom).toBeGreaterThanOrEqual(20);
+});
+
 test('three-column coin legends fit the instruction column on a narrow phone', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await loadThemeFixture(

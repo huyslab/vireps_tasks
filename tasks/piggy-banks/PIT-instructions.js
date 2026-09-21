@@ -1,4 +1,9 @@
 import { updateState, pressVerb, simulateTap } from '@utils/index.js';
+import { setForceCallback, createPressDetector } from '@utils/dynamometer.js';
+
+function usesDynamometer(settings) {
+  return settings.inputMode === 'dynamometer';
+}
 
 /**
  * Creates the main instruction pages for the PIT (Pavlovian-Instrumental Transfer) task
@@ -6,6 +11,9 @@ import { updateState, pressVerb, simulateTap } from '@utils/index.js';
  * @returns {Object} jsPsych instructions trial object
  */
 function PITMainInstructions(settings) { 
+  const effortInstruction = usesDynamometer(settings)
+    ? 'you need to squeeze the grip more times to get a coin.'
+    : 'you need to shake this piggy faster to get a coin.';
   return {
     type: jsPsychInstructions,
     data: { trialphase: 'vigour_instructions' },
@@ -15,7 +23,7 @@ function PITMainInstructions(settings) {
       <p><strong>Now you will play the same game again for a few minutes. The rules are the same:</strong></p>
 
       <ul>
-          <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
+          <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: ${effortInstruction}</li>
           <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
       </ul>
 
@@ -90,12 +98,15 @@ function PITMainInstructions(settings) {
 /**
  * Confirmation screen before starting the PIT task.
  *
- * Deliberately the same screen as the vigour task's, down to the piggy bank the
- * participant taps to start: PIT is the same game under cloud cover, and its own
- * instructions say so ("the rules remain the same"). It previously asked for the
- * B key and an index finger, which the study tablet cannot offer.
+ * Deliberately the same screen as the preceding vigour task: participants start
+ * with a piggy-bank tap in the standard battery or a grip squeeze in the
+ * dynamometer battery. PIT is the same game under cloud cover.
  */
-const startPITconfirmation = {
+function makeStartPITConfirmation(settings) {
+  const dynamometer = usesDynamometer(settings);
+  let detector = null;
+
+  return {
   type: jsPsychHtmlKeyboardResponse,
   choices: 'NO_KEYS',
   stimulus: () => `
@@ -103,7 +114,7 @@ const startPITconfirmation = {
     <div id="instruction-container">
       <div id="instruction-text">
         <p>You will now play the piggy-bank game in the clouds for about <strong>eight minutes</strong>.</p>
-        <p>When you're ready, <span class="highlight-txt">${pressVerb()} the piggy bank</span> to begin.</p>
+        <p>When you're ready, <span class="highlight-txt">${dynamometer ? 'squeeze the grip' : `${pressVerb()} the piggy bank`}</span> to begin.</p>
       </div>
     </div>
     <div id="experiment-container">
@@ -113,12 +124,12 @@ const startPITconfirmation = {
       </div>
     </div>
     <div id="bottom-container" style="visibility: visible;">
-      <button id="reread-button" class="jspsych-btn">Re-read instructions</button>
+      <button id="reread-button" class="jspsych-btn jspsych-btn-quiet">Re-read instructions</button>
     </div>
   </div>
     `,
   post_trial_gap: 300,
-  data: { trialphase: 'pit_instructions' },
+  data: { trialphase: dynamometer ? 'dynamometer_pit_instructions' : 'pit_instructions' },
   simulation_options: { data: { response: 'b' } },
   on_load: function () {
     let confirmed = false;
@@ -126,12 +137,22 @@ const startPITconfirmation = {
     const finishOnce = function (response) {
       if (confirmed) return;
       confirmed = true;
+      if (dynamometer) {
+        detector?.reset();
+        setForceCallback(() => {});
+      }
       jsPsych.finishTrial({ response });
     };
 
-    // Tap the piggy bank to begin
     const piggyContainer = document.getElementById('piggy-container');
-    if (piggyContainer) {
+    if (dynamometer) {
+      detector = createPressDetector(window.dynamometerMaxForce, {
+        thresholdFraction: settings.thresholdFraction,
+        holdDurationMs: settings.holdDurationMs,
+        onPress: () => finishOnce('b')
+      });
+      setForceCallback(forceN => detector.update(forceN));
+    } else if (piggyContainer) {
       piggyContainer.addEventListener('pointerdown', function handler(event) {
         if (!event.isPrimary || event.button !== 0) return;
         event.preventDefault();
@@ -151,9 +172,14 @@ const startPITconfirmation = {
     // This trial has no timeout and ends only on a real tap, so an automated run
     // needs a synthetic one to get past it.
     if (window.simulating) {
-      simulateTap(piggyContainer, 100);
+      if (dynamometer) {
+        jsPsych.pluginAPI.setTimeout(() => finishOnce('b'), 100);
+      } else {
+        simulateTap(piggyContainer, 100);
+      }
     }
   }
+  };
 }
 
 /**
@@ -163,7 +189,7 @@ const startPITconfirmation = {
  */
 export const PITInstructions = (settings) => {
   return {
-    timeline: [PITMainInstructions(settings), startPITconfirmation],
+    timeline: [PITMainInstructions(settings), makeStartPITConfirmation(settings)],
     // Loop function to repeat instructions if user presses 'r'
     loop_function: function (data) {
       const last_iter = data.last(1).values()[0];
@@ -176,7 +202,7 @@ export const PITInstructions = (settings) => {
     },
     // Update experiment state when instructions begin
     on_timeline_start: () => {
-      updateState(`pit_instructions_start`);
+      updateState(usesDynamometer(settings) ? `dynamometer_pit_instructions_start` : `pit_instructions_start`);
     }
   }
 }

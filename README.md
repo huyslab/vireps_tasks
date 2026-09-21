@@ -38,20 +38,22 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 - **`self_report`** — touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires
-- **`dynamometer_calibration`** — ten quick-squeeze maximum-force calibration using a Vernier GDX-HD
+- **`dynamometer_calibration`** — ten quick squeezes to calibrate maximum force, followed by a seven-second squeeze-speed check at the task threshold, using a Vernier GDX-HD
 - **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
+- **`dynamometer_PIT`** — cloudy-place PIT task controlled by the same calibrated grip squeezes
 
-The experimenter launcher uses four supervised modules from `api/module-registry.js`:
+The experimenter launcher uses three supervised modules from `api/module-registry.js`:
 `module_1` (reversal and Faces Go/No-Go), `module_2` (the linked learning and
-effort tasks), `questionnaires` (STAI, ARI, BIS, and STAXI-2), and `dynamometer`
-(calibration followed by dynamometer-controlled vigour). In Modules 1 and 2,
-every behavioural task is followed by acceptability ratings. The older
-`full_battery` and `screening` definitions remain available through the API.
+dynamometer effort tasks), and `questionnaires` (STAI, ARI, BIS, and STAXI-2).
+In Modules 1 and 2, every behavioural task is followed by acceptability ratings.
+The focused `dynamometer` and `dynamometer_pit` diagnostic modules, plus the older
+`full_battery` and `screening` definitions, remain available by direct URL or through
+the API but are not shown in the launcher.
 
 ## Input modality and devices
 
-All four launcher modules can be completed without a keyboard. The dynamometer
-module uses touch for navigation and grip squeezes for task responses. Two other
+All three launcher modules can be completed without a keyboard. Module 2 uses touch for
+navigation and grip squeezes for vigour and PIT responses. Two other
 input patterns are in use:
 
 **Pointer-driven on every device** - one input path, taps and mouse clicks alike,
@@ -60,6 +62,7 @@ with only the wording varying (`pressVerb()` says "tap" or "click"):
 | Task | Input |
 |---|---|
 | `vigour`, `PIT` | tap the piggy bank |
+| `dynamometer_vigour`, `dynamometer_PIT` | squeeze the calibrated grip |
 | `vigour_test` | tap either piggy bank |
 | `max_press_test` | tap the pad as fast as you can |
 | `pavlovian_lottery` | Start and Continue buttons |
@@ -467,7 +470,8 @@ console.log(taskInfo.defaultConfig);  // Shows default values
 
 Use these exact strings when calling `createTaskTimeline()`:
 - `'PILT'`, `'WM'`, `'post_learning_test'`, `'post_PILT_test'`, `'post_WM_test'`
-- `'delay_discounting'`, `'vigour'`, `'vigour_test'`, `'PIT'` 
+- `'delay_discounting'`, `'vigour'`, `'vigour_test'`, `'PIT'`
+- `'dynamometer_calibration'`, `'dynamometer_vigour'`, `'dynamometer_PIT'`
 - `'control'`, `'max_press_test'`, `'pavlovian_lottery'`, `'open_text'`
 - `'reversal'`, `'go_no_go'`, `'self_report'`, `'acceptability_judgment'`
 
@@ -477,6 +481,8 @@ Use these exact strings when calling `createModuleTimeline()`:
 - `'module_1'` - Reversal and Faces Go/No-Go
 - `'module_2'` - Linked learning and effort tasks
 - `'questionnaires'` - STAI, ARI, BIS, and STAXI-2
+- `'dynamometer'` - Dynamometer calibration followed by vigour
+- `'dynamometer_pit'` - Dynamometer calibration followed by PIT
 - `'full_battery'` - Complete RELMED task battery 
 - `'screening'` - Shortened screening version
 

@@ -9,6 +9,26 @@ const PIT_TRIAL_LIST = [{ "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration"
 const unique_magnitudes = [...new Set(PIT_TRIAL_LIST.map(item => item.magnitude))].sort((a, b) => a - b);
 const unique_ratios = [...new Set(PIT_TRIAL_LIST.map(item => item.ratio))].sort((a, b) => b - a); // Sort ratios descending
 
+function usesDynamometer(settings) {
+  return settings.inputMode === 'dynamometer';
+}
+
+function dynamometerRatio(ratio) {
+  const numericRatio = Number(ratio);
+  if (!(Number.isFinite(numericRatio) && numericRatio > 0)) {
+    throw new Error(`Invalid PIT response ratio: ${ratio}`);
+  }
+  // Preserve FR1 and scale the remaining tap ratios to the grip's lower
+  // response rate: 1 -> 1, 8 -> 5, 16 -> 10.
+  return Math.max(1, Math.round(numericRatio * 5 / 8));
+}
+
+function ratiosFor(settings) {
+  return usesDynamometer(settings)
+    ? unique_ratios.map(dynamometerRatio)
+    : unique_ratios;
+}
+
 /**
  * Returns array of image paths to preload for the PIT task
  * @param {Object} settings - Configuration object containing session information
@@ -40,7 +60,8 @@ export const PITPreloadImages = (settings) => {
  * @returns {string} HTML string for the trial stimulus
  */
 function generatePITstimulus(coin, ratio, settings) {
-  const ratio_index = unique_ratios.indexOf(ratio);
+  const trialRatios = ratiosFor(settings);
+  const ratio_index = trialRatios.indexOf(ratio);
   // Calculate saturation based on ratio - higher ratios = more saturated colors
   const ratio_factor = ratio_index / (unique_ratios.length - 1);
   const piggy_style = `filter: saturate(${50 * (400 / 50) ** ratio_factor}%) brightness(${115 * (90/115) ** ratio_factor}%);`;
@@ -75,6 +96,7 @@ function generatePITstimulus(coin, ratio, settings) {
         <div id="obstructor-container">
           <img id="obstructor" src="./assets/images/piggy-banks/occluding_clouds.png" alt="Obstructor">
         </div>
+        ${settings.inputAdapter?.renderFeedback?.() ?? ''}
       </div>
     </div>
   `;
@@ -93,6 +115,8 @@ let pitTapListener = null;
  * @returns {Object} jsPsych trial object
  */
 function PITTrial(settings) {
+  const dynamometer = usesDynamometer(settings);
+  let cleanupInput = null;
   // Create trial state in closure scope so it's accessible to data functions
   const trialState = {
     trialPresses: 0,
@@ -112,20 +136,25 @@ function PITTrial(settings) {
     trial_duration: jsPsych.timelineVariable('trialDuration'),
     save_timeline_variables: ["magnitude", "ratio"],
     data: {
-      trialphase: 'pit_trial',
+      trialphase: dynamometer ? 'dynamometer_pit_trial' : 'pit_trial',
       pit_coin: jsPsych.timelineVariable('coin'),
       trial_duration: jsPsych.timelineVariable('trialDuration'),
       response_time: () => { return trialState.responseTime },
-      // Matches the vigour trial's telemetry: the two tasks are compared press
-      // for press, so they have to record input the same way.
-      pointer_type: () => { return trialState.pointerType },
-      pointer_type_counts: () => { return trialState.pointerTypeCounts },
-      pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 },
       trial_presses: () => { return trialState.trialPresses },
       trial_reward: () => { return trialState.trialReward },
       // Record global data
       total_presses: () => { return taskTotalPresses },
-      total_reward: () => { return taskTotalReward }
+      total_reward: () => { return taskTotalReward },
+      input_type: dynamometer ? 'dynamometer' : 'pointer',
+      ...(dynamometer ? {
+        max_force_n: () => window.dynamometerMaxForce,
+        threshold_fraction: settings.thresholdFraction,
+        hold_duration_ms: settings.holdDurationMs
+      } : {
+        pointer_type: () => { return trialState.pointerType },
+        pointer_type_counts: () => { return trialState.pointerTypeCounts },
+        pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 }
+      })
     },
     on_start: function (trial) {
       // Shorten trial duration for simulation mode
@@ -146,7 +175,7 @@ function PITTrial(settings) {
       
       // Add magnitudes and ratios to settings for piggy tails
       settings.magnitudes = unique_magnitudes;
-      settings.ratios = unique_ratios;
+      settings.ratios = ratiosFor(settings);
       
       updatePiggyTails(currentMag, currentRatio, settings);
 
@@ -159,22 +188,21 @@ function PITTrial(settings) {
       document.addEventListener('fullscreenchange', fsChangeHandler);
       document.addEventListener('webkitfullscreenchange', fsChangeHandler);
 
-      // Shake the piggy bank by tapping it, exactly as in the vigour task - PIT is
-      // the same surface under cloud cover, so it takes the same input. It used to
-      // read the B key, which the study tablet does not have.
       let pressCount = 0;
       let lastPressTime = null;
       const trialStartTime = performance.now();
       const piggyContainer = document.getElementById('piggy-container');
 
-      pitTapListener = setupTapListener(piggyContainer, (event) => {
+      const handlePress = (event = null) => {
         const now = performance.now();
 
-        const ptype = event.pointerType || 'unknown';
-        if (trialState.pointerType === null) {
-          trialState.pointerType = ptype; // modality the trial was started with
+        if (event) {
+          const ptype = event.pointerType || 'unknown';
+          if (trialState.pointerType === null) {
+            trialState.pointerType = ptype; // modality the trial was started with
+          }
+          trialState.pointerTypeCounts[ptype] = (trialState.pointerTypeCounts[ptype] || 0) + 1;
         }
-        trialState.pointerTypeCounts[ptype] = (trialState.pointerTypeCounts[ptype] || 0) + 1;
 
         // First entry is RT from trial onset; the rest are inter-press intervals.
         trialState.responseTime.push(lastPressTime === null ? now - trialStartTime : now - lastPressTime);
@@ -191,14 +219,28 @@ function PITTrial(settings) {
           taskTotalReward += currentMag;
           pressCount = 0;
         }
-      });
+      };
 
-      // Simulate taps for testing mode
+      if (dynamometer && !window.simulating) {
+        if (typeof settings.inputAdapter?.bind !== 'function') {
+          throw new Error('Dynamometer PIT input adapter is not configured');
+        }
+        cleanupInput = settings.inputAdapter.bind(handlePress);
+      } else if (!dynamometer) {
+        // PIT uses the same input as its preceding vigour task: screen taps in the
+        // standard battery, or threshold-crossing grip squeezes in the dynamometer battery.
+        pitTapListener = setupTapListener(piggyContainer, handlePress);
+      }
+
       if (window.simulating) {
         const trial_presses = jsPsych.randomization.randomInt(1, 8);
         const avg_rt = 500/trial_presses;
         for (let i = 0; i < trial_presses; i++) {
-          simulateTap(piggyContainer, avg_rt * i + 1);
+          if (dynamometer) {
+            jsPsych.pluginAPI.setTimeout(handlePress, avg_rt * i + 1);
+          } else {
+            simulateTap(piggyContainer, avg_rt * i + 1);
+          }
         }
       }
     },
@@ -206,6 +248,8 @@ function PITTrial(settings) {
       // Clean up listeners
       cleanupTapListener(pitTapListener);
       pitTapListener = null;
+      cleanupInput?.();
+      cleanupInput = null;
       jsPsych.pluginAPI.cancelAllKeyboardResponses();
       PITtrialCounter += 1;
       data.pit_trial_number = PITtrialCounter;
@@ -242,9 +286,13 @@ function PITTrial(settings) {
  * @returns {Array} Array of jsPsych timeline objects for all PIT trials
  */
 export function createPITCoreTimeline(settings) {
+  const dynamometer = usesDynamometer(settings);
+  const trialSequence = dynamometer
+    ? PIT_TRIAL_LIST.map(trial => ({ ...trial, ratio: dynamometerRatio(trial.ratio) }))
+    : PIT_TRIAL_LIST;
   let PITtrials = [];
   // Create a timeline for each trial with kick-out and fullscreen checks
-  PIT_TRIAL_LIST.forEach(trial => {
+  trialSequence.forEach(trial => {
     PITtrials.push({
       timeline: [kickOut(settings), fullscreen_prompt, PITTrial(settings)],
       timeline_variables: [trial]
@@ -254,15 +302,16 @@ export function createPITCoreTimeline(settings) {
   // Add initialization callback to first trial
   PITtrials[0]["on_timeline_start"] = () => {
     updateState(`no_resume_10_minutes`);
-    updateState(`pit_task_start`);
+    updateState(dynamometer ? `dynamometer_pit_task_start` : `pit_task_start`);
     // Reset task counters
+    PITtrialCounter = 0;
     taskTotalPresses = 0;
     taskTotalReward = 0;
   };
 
+  PITtrials.at(-1)["on_timeline_finish"] = () => {
+    settings.inputAdapter?.finish?.();
+  };
+
   return PITtrials;
 }
-
-
-
-

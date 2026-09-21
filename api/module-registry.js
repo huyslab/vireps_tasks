@@ -35,11 +35,11 @@ export const ModuleRegistry = {
             { type: "task", name: "PILT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
             { type: "instructions", config: { text: "break_message" } },
-            { type: "task", name: "vigour" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
-            { type: "task", name: "PIT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
-            { type: "instructions", config: { text: "break_message" } },
+            { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false } },
+            { type: "task", name: "dynamometer_vigour", config: { disconnectOnFinish: false } },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_vigour", game_description: "piggy-bank game" } },
+            { type: "task", name: "dynamometer_PIT" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_PIT", game_description: "piggy-bank game in the clouds" } },
             { type: "task", name: "vigour_test" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank choices" } },
             { type: "task", name: "post_PILT_test" },
@@ -72,6 +72,17 @@ export const ModuleRegistry = {
             // calibration still disconnects when it finishes.
             { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false } },
             { type: "task", name: "dynamometer_vigour" }
+        ]
+    },
+    dynamometer_pit: {
+        name: "Dynamometer Calibration and PIT",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0"
+        },
+        elements: [
+            { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false } },
+            { type: "task", name: "dynamometer_PIT" }
         ]
     },
     full_battery: {
