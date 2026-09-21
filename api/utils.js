@@ -287,13 +287,19 @@ export async function createModuleTimeline(moduleName, config) {
         }
     });
 
+    const elementSettings = module.elements.map(element => ({
+        ...module.moduleConfig,
+        ...element.config,
+        ...moduleRunConfig
+    }));
+
     // Create timeline for each element in the module
-    const timelines = module.elements.map(element => {
+    const timelines = module.elements.map((element, index) => {
         if (element.type === "task") {
-            return createTaskTimeline(element.name, { ...module.moduleConfig, ...element.config, ...moduleRunConfig });
+            return createTaskTimeline(element.name, elementSettings[index]);
         }
         if (element.type === "instructions") {
-            return getMessage(moduleName, element.config.text, { ...module.moduleConfig, ...element.config, ...moduleRunConfig });
+            return getMessage(moduleName, element.config.text, elementSettings[index]);
         }
         if (element.type === "bonus") {
             return bonusTrial(module);
@@ -310,7 +316,10 @@ export async function createModuleTimeline(moduleName, config) {
                 index,
                 type: element.type,
                 name: element.name || element.config?.text || element.type,
-                config: element.config || {}
+                config: element.config || {},
+                onDemoSkip: typeof element.__task?.onDemoSkip === 'function'
+                    ? () => element.__task.onDemoSkip(elementSettings[index])
+                    : null
             };
 
             return {

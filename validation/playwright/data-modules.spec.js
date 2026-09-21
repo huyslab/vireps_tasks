@@ -298,3 +298,44 @@ test('a demo participant can skip the current module element', async ({ page }) 
   await expect(skipButton).toBeVisible();
   await expect(skipButton).toBeEnabled();
 });
+
+test('skipping demo calibration supplies values for the following grip tasks', async ({ page }) => {
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const result = await page.evaluate(async () => {
+    window.participantID = 'tablet_demo';
+    let activeElement = null;
+    const { createModuleTimeline } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const timeline = await createModuleTimeline('module_2', {
+      session: 'wk0',
+      sequence: 'wk0',
+      stimulus_session: 1,
+      session_number: 1,
+      enableDemoNavigation: true,
+      onDemoElementStart: (element) => { activeElement = element; },
+    });
+    const calibrationIndex = ModuleRegistry.module_2.elements.findIndex(
+      (element) => element.name === 'dynamometer_calibration'
+    );
+
+    timeline[calibrationIndex].on_timeline_start();
+    activeElement.onDemoSkip();
+
+    return {
+      hookIsDeclared: typeof activeElement.onDemoSkip === 'function',
+      maxForce: window.dynamometerMaxForce,
+      maxSpeed: window.dynamometerMaxSpeed,
+      storedForce: sessionStorage.getItem('dynamometerMaxForce_tablet_demo'),
+      storedSpeed: sessionStorage.getItem('dynamometerMaxSpeed_tablet_demo'),
+    };
+  });
+
+  expect(result).toEqual({
+    hookIsDeclared: true,
+    maxForce: 80,
+    maxSpeed: 5,
+    storedForce: '80',
+    storedSpeed: '5',
+  });
+});

@@ -297,7 +297,6 @@
             getModuleInfo,
             getTaskInfo
         } from '@api/index.js';
-        import { disconnectDynamometer } from '@utils/dynamometer.js';
         import {
             enterExperiment,
             getDeviceAuthorizationStatus,
@@ -353,20 +352,18 @@
         }
 
         function cleanUpSkippedDemoElement() {
-            document.body.removeAttribute('data-preferred-orientation');
-            document.getElementById('persist-coin-container')?.remove();
-
-            const isDynamometerTask = [
-                'dynamometer_calibration',
-                'dynamometer_vigour',
-                'dynamometer_PIT'
-            ].includes(activeDemoElement?.name);
-            const shouldDisconnect = activeDemoElement?.config?.disconnectOnFinish !== false;
-            if (isDynamometerTask && shouldDisconnect && window.dynamometerSensor) {
-                const sensor = window.dynamometerSensor;
-                window.dynamometerSensor = null;
-                disconnectDynamometer(sensor).catch(() => {});
+            try {
+                const cleanup = activeDemoElement?.onDemoSkip?.();
+                Promise.resolve(cleanup).catch((error) => {
+                    console.warn('Could not fully clean up skipped demo task:', error);
+                });
+            } catch (error) {
+                console.warn('Could not fully clean up skipped demo task:', error);
             }
+
+            // Orientation is owned by the shared task wrapper rather than an individual
+            // task, so the demo shell resets it after invoking the task's own cleanup hook.
+            document.body.removeAttribute('data-preferred-orientation');
         }
 
         demoSkipButton.addEventListener('click', () => {

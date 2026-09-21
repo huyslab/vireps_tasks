@@ -17,6 +17,7 @@ let _currentCallback = null;
 let _simInterval   = null;
 let _listenerAttached = false; // guard against registering duplicate value-changed listeners
 let _streamStartRequested = false; // guard against racing the SDK's asynchronous start()
+let _connectionGeneration = 0; // invalidates a picker/open operation when its task is skipped
 
 const GDX_SERVICE = 'd91714ef-28b9-4f91-ba16-f0d9a604f112';
 const GDX_COMMAND_CHARACTERISTIC = 'f4bf14a6-c7d5-4b6d-8aa8-df1a7c83adcb';
@@ -28,6 +29,19 @@ function resetForceStreamState() {
     _currentCallback = null;
     _listenerAttached = false;
     _streamStartRequested = false;
+}
+
+function connectionCancelledError() {
+    return new DOMException('Dynamometer connection cancelled.', 'AbortError');
+}
+
+/**
+ * Invalidates any in-flight Bluetooth picker/open operation. A native picker cannot be
+ * programmatically closed, but its eventual result is discarded before it can start a
+ * stream or finish whichever jsPsych trial happens to be active by then.
+ */
+export function cancelPendingDynamometerConnection() {
+    _connectionGeneration += 1;
 }
 
 /**
@@ -173,14 +187,27 @@ export async function connectDynamometer() {
         throw new Error('No Web Bluetooth support. Please use Chrome or Edge on a Bluetooth-enabled device.');
     }
 
+    const connectionGeneration = _connectionGeneration;
     const GoDirect = await getGoDirect();
+    if (connectionGeneration !== _connectionGeneration) {
+        throw connectionCancelledError();
+    }
+
     const nativeDevice = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: 'GDX' }],
         optionalServices: [GDX_SERVICE]
     });
+    if (connectionGeneration !== _connectionGeneration) {
+        throw connectionCancelledError();
+    }
+
     const adapter = new DynamometerBluetoothAdapter(nativeDevice);
     try {
         const device = await GoDirect.createDevice(adapter, { open: true, startMeasurements: false });
+        if (connectionGeneration !== _connectionGeneration) {
+            try { await device.close(); } catch (_) {}
+            throw connectionCancelledError();
+        }
         // The SDK marks `opened` false when GATT drops. Clear both our stream
         // guards and the shared handle so the next task offers reconnection
         // instead of trying to use a dead object.

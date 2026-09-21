@@ -439,5 +439,6 @@ export {
   updatePersistentCoinContainer,
   observeResizing,
   dropCoin,
+  removePersistentCoinContainer,
   VIGOUR_PRELOAD_IMAGES
 }
