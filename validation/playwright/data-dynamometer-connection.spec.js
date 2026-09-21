@@ -194,6 +194,58 @@ test('dynamometer preserves the setup error when failed-open cleanup also errors
   expect(result.message).toContain('notification setup failed');
 });
 
+test('a skipped task invalidates its pending Bluetooth picker result', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const result = await page.evaluate(async () => {
+    let resolvePicker;
+    let connectCount = 0;
+    const nativeDevice = {
+      gatt: {
+        connected: false,
+        async connect() {
+          connectCount += 1;
+          this.connected = true;
+          throw new Error('a cancelled picker result must not connect');
+        },
+      },
+    };
+
+    Object.defineProperty(navigator, 'bluetooth', {
+      configurable: true,
+      value: {
+        requestDevice() {
+          return new Promise((resolve) => { resolvePicker = resolve; });
+        },
+      },
+    });
+    window.simulating = false;
+
+    const {
+      cancelPendingDynamometerConnection,
+      connectDynamometer,
+    } = await import('/core/utils/dynamometer.js');
+    const connection = connectDynamometer().then(
+      () => ({ resolved: true, errorName: null }),
+      (error) => ({ resolved: false, errorName: error.name })
+    );
+
+    while (!resolvePicker) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    cancelPendingDynamometerConnection();
+    resolvePicker(nativeDevice);
+
+    return { ...(await connection), connectCount };
+  });
+
+  expect(result).toEqual({
+    resolved: false,
+    errorName: 'AbortError',
+    connectCount: 0,
+  });
+});
+
 test('dynamometer starts once at its maximum 10 Hz force sampling rate', async ({ page }) => {
   await page.goto('/index.html');
 

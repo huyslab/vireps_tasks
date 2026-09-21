@@ -251,3 +251,91 @@ test('all complete module timelines build with repeat-session sequences', async 
   expect(lengths.dynamometer).toBeGreaterThan(2);
   expect(lengths.dynamometerPit).toBeGreaterThan(2);
 });
+
+test('demo module timelines preserve one skippable boundary per module element', async ({ page }) => {
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const result = await page.evaluate(async () => {
+    const {
+      createModuleTimeline,
+      DEMO_MODULE_ELEMENT_TIMELINE_NAME,
+    } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const timeline = await createModuleTimeline('module_1', {
+      session: 'wk0',
+      sequence: 'wk0',
+      stimulus_session: 1,
+      session_number: 1,
+      enableDemoNavigation: true,
+    });
+
+    return {
+      expectedCount: ModuleRegistry.module_1.elements.length,
+      names: timeline.map((element) => element.name),
+      childCounts: timeline.map((element) => element.timeline.length),
+    };
+  });
+
+  expect(result.names).toHaveLength(result.expectedCount);
+  expect(result.names.every((name) => name === 'demo-module-element')).toBe(true);
+  expect(result.childCounts.every((count) => count > 0)).toBe(true);
+});
+
+test('a demo participant can skip the current module element', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
+  });
+  await page.goto('/experiment.html?participant_id=tablet_Demo&session_number=1&module=module_1');
+
+  const skipButton = page.getByRole('button', { name: 'Skip to next task' });
+  await expect(skipButton).toBeVisible();
+  await expect(skipButton).toBeEnabled();
+  await skipButton.click();
+
+  await expect.poll(() => page.evaluate(() => (
+    jsPsych.data.get().filter({ demo_skip: true }).count()
+  ))).toBe(1);
+  await expect(skipButton).toBeVisible();
+  await expect(skipButton).toBeEnabled();
+});
+
+test('skipping demo calibration supplies values for the following grip tasks', async ({ page }) => {
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const result = await page.evaluate(async () => {
+    window.participantID = 'tablet_demo';
+    let activeElement = null;
+    const { createModuleTimeline } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const timeline = await createModuleTimeline('module_2', {
+      session: 'wk0',
+      sequence: 'wk0',
+      stimulus_session: 1,
+      session_number: 1,
+      enableDemoNavigation: true,
+      onDemoElementStart: (element) => { activeElement = element; },
+    });
+    const calibrationIndex = ModuleRegistry.module_2.elements.findIndex(
+      (element) => element.name === 'dynamometer_calibration'
+    );
+
+    timeline[calibrationIndex].on_timeline_start();
+    activeElement.onDemoSkip();
+
+    return {
+      hookIsDeclared: typeof activeElement.onDemoSkip === 'function',
+      maxForce: window.dynamometerMaxForce,
+      maxSpeed: window.dynamometerMaxSpeed,
+      storedForce: sessionStorage.getItem('dynamometerMaxForce_tablet_demo'),
+      storedSpeed: sessionStorage.getItem('dynamometerMaxSpeed_tablet_demo'),
+    };
+  });
+
+  expect(result).toEqual({
+    hookIsDeclared: true,
+    maxForce: 80,
+    maxSpeed: 5,
+    storedForce: '80',
+    storedSpeed: '5',
+  });
+});

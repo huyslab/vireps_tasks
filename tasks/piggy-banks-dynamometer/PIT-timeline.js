@@ -1,6 +1,7 @@
 import { createPITCoreTimeline, PITPreloadImages } from '@tasks/piggy-banks/PIT-utils.js';
 import { PITInstructions } from '@tasks/piggy-banks/PIT-instructions.js';
 import {
+    cancelPendingDynamometerConnection,
     connectDynamometer,
     createPressDetector,
     disconnectDynamometer,
@@ -129,4 +130,15 @@ export function createDynamometerPITTimeline(settings) {
         calibrationGate,
         mainTask
     ];
+}
+
+export function cleanUpDynamometerPITDemo(settings = {}) {
+    cancelPendingDynamometerConnection();
+    setForceCallback(() => {});
+
+    if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+        const sensor = window.dynamometerSensor;
+        window.dynamometerSensor = null;
+        disconnectDynamometer(sensor).catch(() => {});
+    }
 }

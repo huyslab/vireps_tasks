@@ -1,4 +1,5 @@
 import {
+    cancelPendingDynamometerConnection,
     connectDynamometer,
     createPressDetector,
     startForceStream,
@@ -43,6 +44,31 @@ function calStorageKey() {
 
 function speedStorageKey() {
     return `dynamometerMaxSpeed_${window.participantID ?? 'anon'}`;
+}
+
+/**
+ * Leaves a usable calibration behind when a demo skips this task. The placeholder values
+ * only exist for participant IDs that opt into demo navigation and let the following grip
+ * tasks show their real content instead of their missing-calibration gate.
+ */
+export function cleanUpDynamometerCalibrationDemo(settings = {}) {
+    cancelPendingDynamometerConnection();
+    setForceCallback(() => {});
+
+    if (!(Number.isFinite(window.dynamometerMaxForce) && window.dynamometerMaxForce > 0)) {
+        window.dynamometerMaxForce = 80;
+        sessionStorage.setItem(calStorageKey(), '80');
+    }
+    if (!(Number.isFinite(window.dynamometerMaxSpeed) && window.dynamometerMaxSpeed > 0)) {
+        window.dynamometerMaxSpeed = 5;
+        sessionStorage.setItem(speedStorageKey(), '5');
+    }
+
+    if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+        const sensor = window.dynamometerSensor;
+        window.dynamometerSensor = null;
+        disconnectDynamometer(sensor).catch(() => {});
+    }
 }
 
 function getRecordedPeaks() {

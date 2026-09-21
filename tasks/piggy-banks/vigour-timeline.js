@@ -1,4 +1,8 @@
-import { createVigourCoreTimeline, VIGOUR_PRELOAD_IMAGES } from './vigour-utils.js';
+import {
+    createVigourCoreTimeline,
+    removePersistentCoinContainer,
+    VIGOUR_PRELOAD_IMAGES
+} from './vigour-utils.js';
 import { vigour_instructions } from './vigour-instructions.js';
 import { createPreloadTrial } from '../../core/utils/index.js';
 
@@ -18,4 +22,8 @@ export function createVigourTimeline(settings) {
     ];
     
     return vigourTimeline;
+}
+
+export function cleanUpVigourDemo() {
+    removePersistentCoinContainer();
 }

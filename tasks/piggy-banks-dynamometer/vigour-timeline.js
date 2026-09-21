@@ -1,6 +1,17 @@
-import { createDynVigourCoreTimeline, VIGOUR_PRELOAD_IMAGES } from './vigour-utils.js';
+import {
+    createDynVigourCoreTimeline,
+    removePersistentCoinContainer,
+    VIGOUR_PRELOAD_IMAGES
+} from './vigour-utils.js';
 import { createDynamometerVigourInstructions } from './vigour-instructions.js';
-import { connectDynamometer, isDynamometerConnected, startForceStream } from '@utils/dynamometer.js';
+import {
+    cancelPendingDynamometerConnection,
+    connectDynamometer,
+    disconnectDynamometer,
+    isDynamometerConnected,
+    setForceCallback,
+    startForceStream
+} from '@utils/dynamometer.js';
 import { createPreloadTrial } from '@utils/index.js';
 
 function calStorageKey() {
@@ -100,4 +111,16 @@ export function createDynamometerVigourTimeline(settings) {
         calibrationGate,
         mainTask
     ];
+}
+
+export function cleanUpDynamometerVigourDemo(settings = {}) {
+    cancelPendingDynamometerConnection();
+    setForceCallback(() => {});
+    removePersistentCoinContainer();
+
+    if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+        const sensor = window.dynamometerSensor;
+        window.dynamometerSensor = null;
+        disconnectDynamometer(sensor).catch(() => {});
+    }
 }

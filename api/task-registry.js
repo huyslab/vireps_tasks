@@ -5,12 +5,26 @@ import { computeRelativeCardChoosingBonus, createCardChoosingTimeline, createPos
 import { createGoNoGoTimeline, computeRelativeGoNoGoBonus } from '@tasks/go-no-go/index.js';
 import { createDelayDiscountingTimeline } from '@tasks/delay-discounting/index.js';
 import { createMaxPressTimeline } from '@tasks/max-press-test/task.js';
-import { createVigourTimeline, computeRelativePiggyTasksBonus, createPITTimeline, createVigourTestTimeline } from '@tasks/piggy-banks/index.js';
+import {
+  cleanUpVigourDemo,
+  createVigourTimeline,
+  computeRelativePiggyTasksBonus,
+  createPITTimeline,
+  createVigourTestTimeline
+} from '@tasks/piggy-banks/index.js';
 import { createPavlovianLotteryTimeline } from '@tasks/pavlovian-lottery/task.js';
 import { createControlTimeline, computeRelativeControlBonus } from '@tasks/control/index.js';
 import { createOpenTextTimeline } from '@tasks/open-text/index.js';
-import { createDynamometerCalibrationTimeline } from '@tasks/dynamometer-calibration/task.js';
-import { createDynamometerVigourTimeline, createDynamometerPITTimeline } from '@tasks/piggy-banks-dynamometer/index.js';
+import {
+  cleanUpDynamometerCalibrationDemo,
+  createDynamometerCalibrationTimeline
+} from '@tasks/dynamometer-calibration/task.js';
+import {
+  cleanUpDynamometerPITDemo,
+  cleanUpDynamometerVigourDemo,
+  createDynamometerVigourTimeline,
+  createDynamometerPITTimeline
+} from '@tasks/piggy-banks-dynamometer/index.js';
 import { computeRelativePiggyTasksBonus as computeDynBonus } from '@tasks/piggy-banks/utils.js';
 import { createReversalTimeline, computeRelativeReversalBonus } from '@tasks/reversal/index.js';
 import { createAcceptabilityTimeline } from '@tasks/acceptability-judgment/index.js';
@@ -303,6 +317,7 @@ export const TaskRegistry = {
     name: 'Vigour Task',
     description: 'A task measuring instrumental action vigour as a function of reward rate',
     createTimeline: createVigourTimeline,
+    onDemoSkip: cleanUpVigourDemo,
     computeBonus: () => computeRelativePiggyTasksBonus('vigour_trial'), 
     defaultConfig: {
       task_name: "vigour",
@@ -519,6 +534,7 @@ export const TaskRegistry = {
     name: 'Dynamometer Calibration',
     description: 'Measures maximum squeeze force and squeeze speed using the Vernier Go Direct Hand Dynamometer over Bluetooth',
     createTimeline: createDynamometerCalibrationTimeline,
+    onDemoSkip: cleanUpDynamometerCalibrationDemo,
     computeBonus: () => 0,
     defaultConfig: {
       disconnectOnFinish: true,
@@ -543,6 +559,7 @@ export const TaskRegistry = {
     name: 'Dynamometer Vigour Task',
     description: 'Piggy-bank vigour task driven by hand dynamometer squeezes instead of screen taps',
     createTimeline: createDynamometerVigourTimeline,
+    onDemoSkip: cleanUpDynamometerVigourDemo,
     computeBonus: () => computeDynBonus('dynamometer_vigour_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
@@ -566,6 +583,7 @@ export const TaskRegistry = {
     name: 'Dynamometer Pavlovian-Instrumental Transfer Task',
     description: 'PIT task driven by hand dynamometer squeezes instead of screen taps',
     createTimeline: createDynamometerPITTimeline,
+    onDemoSkip: cleanUpDynamometerPITDemo,
     computeBonus: () => computeDynBonus('dynamometer_pit_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_PIT',

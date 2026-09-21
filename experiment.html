@@ -208,6 +208,25 @@
             padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
             box-sizing: border-box;
         }
+        #demo-skip-task {
+            display: none;
+            position: fixed;
+            top: calc(12px + env(safe-area-inset-top));
+            right: calc(12px + env(safe-area-inset-right));
+            z-index: 99999;
+            border: 1px solid rgba(24, 43, 75, 0.28);
+            border-radius: 999px;
+            background: var(--rlm-surface);
+            color: var(--rlm-ink);
+            padding: 9px 14px;
+            font: 600 14px/1 var(--rlm-font);
+            box-shadow: 0 2px 8px rgba(24, 43, 75, 0.15);
+            cursor: pointer;
+        }
+        #demo-skip-task:disabled {
+            opacity: 0.45;
+            cursor: default;
+        }
         #pending-data-continue,
         #demo-mode-continue {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -223,6 +242,7 @@
 </head>
 <body>
     <div id="display_element"></div>
+    <button id="demo-skip-task" type="button" disabled>Skip to next task</button>
 
     <div id="rotate-overlay">
         <div class="phone-rotate-icon">
@@ -270,7 +290,13 @@
     </script>
 
     <script type="module">
-        import { createModuleTimeline, createTaskTimeline, getModuleInfo, getTaskInfo } from '@api/index.js';
+        import {
+            createModuleTimeline,
+            createTaskTimeline,
+            DEMO_MODULE_ELEMENT_TIMELINE_NAME,
+            getModuleInfo,
+            getTaskInfo
+        } from '@api/index.js';
         import {
             enterExperiment,
             getDeviceAuthorizationStatus,
@@ -308,6 +334,7 @@
         // supported for task-specific examples and automated rendering checks.
         window.participantID = parameters.get('participant_id') || '';
         window.simulating = window.participantID.includes("simulate") || false;
+        const isDemoParticipant = window.participantID.toLowerCase().includes('demo');
         const moduleName = parameters.get('module') || '';
         const taskName = parameters.get('task') || '';
         const sessionNumber = parameters.get('session_number') || '';
@@ -316,7 +343,44 @@
         window.session = sessionConfig?.session || 'wk0';
         window.sessionNumber = sessionNumber ? Number(sessionNumber) : null;
 
+        const demoSkipButton = document.getElementById('demo-skip-task');
+        let activeDemoElement = null;
+
+        function setActiveDemoElement(element) {
+            activeDemoElement = element;
+            demoSkipButton.disabled = !element;
+        }
+
+        function cleanUpSkippedDemoElement() {
+            try {
+                const cleanup = activeDemoElement?.onDemoSkip?.();
+                Promise.resolve(cleanup).catch((error) => {
+                    console.warn('Could not fully clean up skipped demo task:', error);
+                });
+            } catch (error) {
+                console.warn('Could not fully clean up skipped demo task:', error);
+            }
+
+            // Orientation is owned by the shared task wrapper rather than an individual
+            // task, so the demo shell resets it after invoking the task's own cleanup hook.
+            document.body.removeAttribute('data-preferred-orientation');
+        }
+
+        demoSkipButton.addEventListener('click', () => {
+            if (!activeDemoElement || demoSkipButton.disabled) return;
+
+            demoSkipButton.disabled = true;
+            cleanUpSkippedDemoElement();
+            jsPsych.abortTimelineByName(DEMO_MODULE_ELEMENT_TIMELINE_NAME);
+            jsPsych.finishTrial({
+                demo_skip: true,
+                skipped_module_element: activeDemoElement.name,
+                skipped_module_element_index: activeDemoElement.index
+            });
+        });
+
         function showExperimentError(error) {
+            demoSkipButton.style.display = 'none';
             console.error('Error running experiment:', error);
             const errorContainer = jsPsych.getDisplayElement() || document.getElementById('display_element');
             errorContainer.innerHTML = `
@@ -333,6 +397,8 @@
         window.jsPsych = initJsPsych({
             display_element: 'display_element',
             on_finish: function(data) {
+                demoSkipButton.style.display = 'none';
+                setActiveDemoElement(null);
                 jsPsych.getDisplayElement().innerHTML = moduleName
                     ? '<p>Thank you. Please call the experimenter.</p>'
                     : '<p>Thank you for participating! You may now close this tab.</p>';
@@ -356,7 +422,14 @@
                         session: sessionConfig.session,
                         sequence: sessionConfig.session,
                         stimulus_session: sessionConfig.stimulusSession,
-                        session_number: Number(sessionNumber)
+                        session_number: Number(sessionNumber),
+                        enableDemoNavigation: isDemoParticipant,
+                        onDemoElementStart: setActiveDemoElement,
+                        onDemoElementFinish: (element) => {
+                            if (activeDemoElement?.index === element.index) {
+                                setActiveDemoElement(null);
+                            }
+                        }
                     });
                 } else if (taskName) {
                     console.log('Task info:', getTaskInfo(taskName));
@@ -371,6 +444,10 @@
                     enterExperiment,
                     ...timeline
                 ];
+
+                if (isDemoParticipant && moduleName) {
+                    demoSkipButton.style.display = 'block';
+                }
 
                 // Run the experiment
                 if (window.simulating) {
