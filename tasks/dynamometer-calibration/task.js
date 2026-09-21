@@ -1,12 +1,9 @@
 import { connectDynamometer, startForceStream, setForceCallback, disconnectDynamometer } from '@utils/dynamometer.js';
 import { updateState } from '@utils/index.js';
 
-const N_TRIALS = 6;
+const N_SQUEEZES = 10;
 const SQUEEZE_START_THRESHOLD_N = 1.0;
 const SQUEEZE_RELEASE_THRESHOLD_N = 0.5;
-const RELEASE_SETTLE_MS = 100;
-const DEFAULT_SQUEEZE_DURATION_MS = 500;
-const DEFAULT_RELAX_DURATION_MS = 3000;
 const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
 
 let _trialPeak = 0;
@@ -37,11 +34,11 @@ function calStorageKey() {
 function getRecordedPeaks() {
     const rows = jsPsych.data.get()
         .filter({ trialphase: 'dynamometer_calibration' })
-        .last(N_TRIALS)
+        .last(N_SQUEEZES)
         .values();
 
     // Do not combine a partial retry with rows from the previous attempt.
-    const isCompleteAttempt = rows.length === N_TRIALS && rows.every(
+    const isCompleteAttempt = rows.length === N_SQUEEZES && rows.every(
         (row, index) => Number(row.trial_number) === index + 1
     );
     if (!isCompleteAttempt) return [];
@@ -114,9 +111,8 @@ const calibrationInstructions = {
     stimulus: `
         <div id="instruction-container">
             <div id="instruction-text">
-                <h2>Measuring your maximum squeeze</h2>
-                <p>Squeeze the grip as hard as you can <strong>${N_TRIALS} times</strong>.</p>
-                <p>Start when the ring appears. Let go when you see <strong>Rest</strong>.</p>
+                <h2>Grip calibration</h2>
+                <p>Squeeze hard and let go. Repeat <strong>${N_SQUEEZES} times</strong>.</p>
             </div>
         </div>
     `,
@@ -134,14 +130,13 @@ function validDuration(value, fallback) {
 }
 
 function makeCalibrationTrial(trialIndex, settings) {
-    const squeezeDurationMs = validDuration(settings?.squeezeDurationMs, DEFAULT_SQUEEZE_DURATION_MS);
-    const relaxDurationMs = validDuration(settings?.relaxDurationMs, DEFAULT_RELAX_DURATION_MS);
     const squeezeWaitTimeoutMs = validDuration(
         settings?.squeezeWaitTimeoutMs,
         DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS
     );
     let phase = 'awaiting-release';
     let selfInitiationRt = null;
+    let measuredSqueezeDurationMs = null;
 
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -149,14 +144,11 @@ function makeCalibrationTrial(trialIndex, settings) {
         stimulus: `
             <div id="instruction-container">
                 <div id="instruction-text" class="calibration-stage">
-                    <div id="cal-timing-ring" hidden>
-                        <svg viewBox="0 0 120 120" aria-hidden="true">
-                            <circle class="cal-ring-track" cx="60" cy="60" r="52"></circle>
-                            <circle id="cal-ring-progress" cx="60" cy="60" r="52"></circle>
-                        </svg>
-                    </div>
-                    <p id="cal-phase-prompt" role="status" aria-live="polite" aria-atomic="true" hidden>Squeeze hard</p>
-                    <p id="cal-rest-label" role="status" aria-live="polite" aria-atomic="true">Rest</p>
+                    <p id="cal-phase-prompt">Squeeze and release</p>
+                    <p id="cal-squeeze-counter" data-squeeze="${trialIndex + 1}"
+                       role="status" aria-live="polite" aria-atomic="true">
+                        ${trialIndex + 1} / ${N_SQUEEZES}
+                    </p>
                 </div>
             </div>
         `,
@@ -165,8 +157,7 @@ function makeCalibrationTrial(trialIndex, settings) {
             trial_number: trialIndex + 1,
             peak_force_n: () => _trialPeak,
             self_initiation_rt_ms: () => selfInitiationRt,
-            squeeze_duration_ms: squeezeDurationMs,
-            relax_duration_ms: relaxDurationMs,
+            squeeze_duration_ms: () => measuredSqueezeDurationMs,
             squeeze_wait_timeout_ms: squeezeWaitTimeoutMs,
             squeeze_wait_timed_out: false
         },
@@ -174,97 +165,55 @@ function makeCalibrationTrial(trialIndex, settings) {
             _trialPeak = 0;
             phase = 'awaiting-release';
             selfInitiationRt = null;
+            measuredSqueezeDurationMs = null;
         },
         on_load: function () {
-            const prompt = document.getElementById('cal-phase-prompt');
-            const restLabel = document.getElementById('cal-rest-label');
-            const ring = document.getElementById('cal-timing-ring');
-            const ringProgress = document.getElementById('cal-ring-progress');
             let readyAt = null;
-            let releaseStartedAt = null;
-            // Keep automated simulations fast without changing the recorded task settings.
-            const activeSqueezeDuration = window.simulating ? Math.min(squeezeDurationMs, 50) : squeezeDurationMs;
-            const activeRelaxDuration = window.simulating ? Math.min(relaxDurationMs, 50) : relaxDurationMs;
-            const activeReleaseSettle = window.simulating ? Math.min(RELEASE_SETTLE_MS, 10) : RELEASE_SETTLE_MS;
-
-            const showRest = () => {
-                if (ring) ring.hidden = true;
-                if (prompt) prompt.hidden = true;
-                if (restLabel) restLabel.hidden = false;
-            };
-
-            const showSqueeze = () => {
-                if (ring) ring.hidden = false;
-                if (prompt) {
-                    prompt.hidden = false;
-                    prompt.textContent = 'Squeeze hard';
-                }
-                if (restLabel) restLabel.hidden = true;
-            };
+            let squeezeStartedAt = null;
 
             const armSqueeze = () => {
                 if (phase !== 'awaiting-release') return;
                 phase = 'waiting';
                 readyAt = performance.now();
-                showSqueeze();
             };
 
             const beginSqueeze = (forceN) => {
                 if (phase !== 'waiting') return;
                 phase = 'squeezing';
-                selfInitiationRt = Math.round(performance.now() - readyAt);
+                squeezeStartedAt = performance.now();
+                selfInitiationRt = Math.round(squeezeStartedAt - readyAt);
                 _trialPeak = Math.max(_trialPeak, forceN);
+            };
 
-                if (ring) ring.classList.add('active');
-                if (ringProgress) {
-                    ringProgress.style.transitionDuration = `${activeSqueezeDuration}ms`;
-                    // Force the empty-ring style to render before starting the fill.
-                    void ringProgress.getBoundingClientRect();
-                    ringProgress.classList.add('filling');
-                }
-
-                jsPsych.pluginAPI.setTimeout(() => {
-                    phase = 'relaxing';
-                    if (ring) {
-                        ring.classList.remove('active');
-                        ring.classList.add('complete');
-                    }
-                    showRest();
-
-                    jsPsych.pluginAPI.setTimeout(() => {
-                        jsPsych.finishTrial();
-                    }, activeRelaxDuration);
-                }, activeSqueezeDuration);
+            const completeSqueeze = () => {
+                if (phase !== 'squeezing') return;
+                phase = 'complete';
+                measuredSqueezeDurationMs = Math.round(performance.now() - squeezeStartedAt);
+                setForceCallback(() => {});
+                jsPsych.finishTrial();
             };
 
             setForceCallback((forceN) => {
-                const now = performance.now();
-
                 if (phase === 'awaiting-release') {
                     if (forceN <= SQUEEZE_RELEASE_THRESHOLD_N) {
-                        if (releaseStartedAt === null) releaseStartedAt = now;
-                        if (now - releaseStartedAt >= activeReleaseSettle) armSqueeze();
-                    } else {
-                        releaseStartedAt = null;
-                        showRest();
+                        armSqueeze();
                     }
                 } else if (phase === 'waiting' && forceN > SQUEEZE_START_THRESHOLD_N) {
                     beginSqueeze(forceN);
                 } else if (phase === 'squeezing') {
                     _trialPeak = Math.max(_trialPeak, forceN);
+                    if (forceN <= SQUEEZE_RELEASE_THRESHOLD_N) completeSqueeze();
                 }
             });
 
             if (window.simulating) {
-                jsPsych.pluginAPI.setTimeout(armSqueeze, activeReleaseSettle);
-                jsPsych.pluginAPI.setTimeout(
-                    () => beginSqueeze(70 + Math.random() * 20),
-                    activeReleaseSettle + 10
-                );
+                jsPsych.pluginAPI.setTimeout(armSqueeze, 5);
+                jsPsych.pluginAPI.setTimeout(() => beginSqueeze(70 + Math.random() * 20), 10);
+                jsPsych.pluginAPI.setTimeout(completeSqueeze, 20);
             }
 
             jsPsych.pluginAPI.setTimeout(() => {
-                if (phase !== 'awaiting-release' && phase !== 'waiting') return;
+                if (phase === 'complete' || phase === 'timed-out') return;
                 phase = 'timed-out';
                 _streamTimedOut = true;
                 setForceCallback(() => {});
@@ -293,9 +242,9 @@ function createCalibrationResults(settings) {
             const peaks = getRecordedPeaks();
             const validPeaks = peaks.filter(p => p > 1.0);
 
-            // Require at least 5 valid peaks so the result always rests on five
-            // detected squeezes.
-            _needsRetry = validPeaks.length < 5;
+            // Preserve the existing calibration rule: tolerate one bad reading,
+            // but require all remaining squeezes to be valid.
+            _needsRetry = validPeaks.length < N_SQUEEZES - 1;
 
             if (_needsRetry) {
                 return {
@@ -305,12 +254,12 @@ function createCalibrationResults(settings) {
                 };
             }
 
-            // When all 6 peaks are valid, use outlier removal (drop the one farthest
-            // from the median and average the remaining 5).
-            // When exactly 5 are valid, average them directly — passing the full set
+            // When all 10 peaks are valid, use outlier removal (drop the one farthest
+            // from the median and average the remaining 9).
+            // When exactly 9 are valid, average them directly — passing the full set
             // to computeMaxForce could discard the wrong trial if a high outlier is
-            // present (e.g. [0, 40, 42, 43, 44, 200]: outlier removal drops 200 and
-            // averages the zero, producing a biased threshold).
+            // present (e.g. [0, 40, 41, 42, 43, 44, 45, 46, 47, 200]: outlier
+            // removal drops 200 and averages the zero, producing a biased threshold).
             const maxForce = validPeaks.length === peaks.length
                 ? computeMaxForce(peaks).maxForce
                 : validPeaks.reduce((s, v) => s + v, 0) / validPeaks.length;
@@ -373,7 +322,7 @@ export function createDynamometerCalibrationTimeline(settings) {
     _showInstructions = true;
     _needsRetry = false;
 
-    const trials = Array.from({ length: N_TRIALS }, (_, i) => makeCalibrationTrial(i, settings));
+    const trials = Array.from({ length: N_SQUEEZES }, (_, i) => makeCalibrationTrial(i, settings));
     const calibrationResults = createCalibrationResults(settings);
 
     // connectTrial runs first AND on every retry. On retry the existing handle is

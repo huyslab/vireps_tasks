@@ -522,8 +522,6 @@ export const TaskRegistry = {
     computeBonus: () => 0,
     defaultConfig: {
       disconnectOnFinish: true,
-      squeezeDurationMs: 500,
-      relaxDurationMs: 3000,
       squeezeWaitTimeoutMs: 30000
     },
     requirements: {
@@ -532,8 +530,6 @@ export const TaskRegistry = {
     resumptionRules: { enabled: false },
     configOptions: {
       disconnectOnFinish: 'Whether to disconnect the dynamometer after calibration. Default is true; the combined dynamometer module sets this to false so vigour can reuse the connection.',
-      squeezeDurationMs: 'How long in milliseconds to measure force after the participant starts squeezing. Default is 500.',
-      relaxDurationMs: 'How long in milliseconds to rest after each squeeze before showing the next ready screen. Default is 3000.',
       squeezeWaitTimeoutMs: 'How long in milliseconds to wait for a squeeze before reconnecting the dynamometer. Default is 30000.'
     }
   },

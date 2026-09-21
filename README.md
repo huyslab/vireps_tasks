@@ -38,7 +38,7 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 - **`self_report`** — touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires
-- **`dynamometer_calibration`** — six-squeeze maximum-force calibration using a Vernier GDX-HD
+- **`dynamometer_calibration`** — ten quick-squeeze maximum-force calibration using a Vernier GDX-HD
 - **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
 
 The experimenter launcher uses four supervised modules from `api/module-registry.js`:
