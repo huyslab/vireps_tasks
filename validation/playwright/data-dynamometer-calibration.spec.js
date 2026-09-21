@@ -161,6 +161,7 @@ test('calibration uses ten quick self-paced squeezes with simple instructions an
     );
     const speedInstructions = speedProcedure.timeline[0];
     const speedTrial = speedProcedure.timeline[1];
+    const speedFeedback = speedProcedure.timeline[2];
 
     return {
       instructions: instructions.stimulus,
@@ -175,6 +176,8 @@ test('calibration uses ten quick self-paced squeezes with simple instructions an
       speedStimulus: speedTrial.stimulus,
       speedData: speedTrial.data,
       speedTrialCount: speedProcedure.timeline.length,
+      speedFeedbackPhase: speedFeedback.data.trialphase,
+      speedFeedbackChoices: speedFeedback.choices,
     };
   });
 
@@ -198,12 +201,14 @@ test('calibration uses ten quick self-paced squeezes with simple instructions an
   expect(details.dataKeys).not.toContain('relax_duration_ms');
   expect(details.speedInstructions).toContain('measure how quickly you can squeeze and release');
   expect(details.speedInstructions).toContain('7 seconds');
+  expect(details.speedStimulus).toContain('id="grip-speed-indicator"');
   expect(details.speedStimulus).toContain('id="grip-speed-track"');
   expect(details.speedStimulus).toContain('id="grip-speed-bar"');
-  expect(details.speedStimulus).toContain('id="grip-speed-feedback"');
-  expect(details.speedStimulus).toContain('aria-live="polite"');
+  expect(details.speedStimulus).not.toContain('grip-speed-feedback-text');
   expect(details.speedData.threshold_fraction).toBe(0.1);
-  expect(details.speedTrialCount).toBe(2);
+  expect(details.speedTrialCount).toBe(3);
+  expect(details.speedFeedbackPhase).toBe('dynamometer_speed_calibration_feedback');
+  expect(details.speedFeedbackChoices).toEqual(['Continue']);
 });
 
 test('speed calibration records repeated threshold crossings and gives visible feedback', async ({ page }) => {
@@ -222,26 +227,30 @@ test('speed calibration records repeated threshold crossings and gives visible f
     const speedTrial = speedProcedure.timeline.find(
       item => item.data?.trialphase === 'dynamometer_speed_calibration'
     );
+    const speedFeedback = speedProcedure.timeline.find(
+      item => item.data?.trialphase === 'dynamometer_speed_calibration_feedback'
+    );
 
     const runPromise = jsPsych.run([speedTrial]);
     await new Promise(resolve => setTimeout(resolve, 80));
-    const feedback = document.getElementById('grip-speed-feedback');
-    const feedbackBox = feedback?.getBoundingClientRect();
+    const indicator = document.getElementById('grip-speed-indicator');
+    const indicatorBox = indicator?.getBoundingClientRect();
     const live = {
       counter: document.getElementById('grip-speed-counter')?.textContent,
       barWidth: parseFloat(document.getElementById('grip-speed-bar')?.style.width || '0'),
-      feedbackText: document.getElementById('grip-speed-feedback-text')?.textContent,
-      feedbackRegistered: feedback?.classList.contains('grip-speed-registered'),
-      feedbackWidth: feedbackBox?.width,
+      indicatorHit: indicator?.classList.contains('grip-speed-indicator-hit'),
+      indicatorWidth: indicatorBox?.width,
       fitsViewport: document.documentElement.scrollWidth <= window.innerWidth,
     };
     await runPromise;
+    const feedbackMarkup = speedFeedback.stimulus();
 
     const row = jsPsych.data.get().filter({
       trialphase: 'dynamometer_speed_calibration',
     }).last(1).values()[0];
     return {
       live,
+      feedbackMarkup,
       thresholdFraction: row.threshold_fraction,
       durationMs: row.speed_calibration_duration_ms,
       squeezes: row.trial_squeezes,
@@ -252,12 +261,13 @@ test('speed calibration records repeated threshold crossings and gives visible f
     };
   });
 
-  expect(result.live.counter).toMatch(/[1-9] squeeze/);
+  expect(result.live.counter).toMatch(/Squeezes: [1-9]/);
   expect(result.live.barWidth).toBeGreaterThan(0);
-  expect(result.live.feedbackText).toMatch(/registered|Release/);
-  expect(result.live.feedbackRegistered).toBe(true);
-  expect(result.live.feedbackWidth).toBeGreaterThanOrEqual(180);
+  expect(result.live.indicatorHit).toBe(true);
+  expect(result.live.indicatorWidth).toBeGreaterThanOrEqual(120);
   expect(result.live.fitsViewport).toBe(true);
+  expect(result.feedbackMarkup).toContain('5.00 squeezes per second');
+  expect(result.feedbackMarkup).toContain('Continue');
   expect(result.thresholdFraction).toBe(0.1);
   expect(result.durationMs).toBe(7000);
   expect(result.squeezes).toBe(35);

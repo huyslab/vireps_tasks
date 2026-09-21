@@ -377,7 +377,6 @@ function makeSpeedCalibrationTrial(settings) {
 
     let detector = null;
     let countdownInterval = null;
-    let feedbackTimer = null;
     let finishTimer = null;
     let squeezeCount = 0;
     let responseTimes = [];
@@ -391,10 +390,6 @@ function makeSpeedCalibrationTrial(settings) {
             clearInterval(countdownInterval);
             countdownInterval = null;
         }
-        if (feedbackTimer !== null) {
-            clearTimeout(feedbackTimer);
-            feedbackTimer = null;
-        }
         if (finishTimer !== null) {
             clearTimeout(finishTimer);
             finishTimer = null;
@@ -406,27 +401,17 @@ function makeSpeedCalibrationTrial(settings) {
         choices: 'NO_KEYS',
         stimulus: `
             <div id="instruction-container">
-                <div id="instruction-text" class="grip-speed-stage">
-                    <p class="grip-speed-kicker">Squeeze speed</p>
-                    <h2 id="grip-speed-countdown">Squeeze once when ready</h2>
-
-                    <div class="grip-speed-meter">
-                        <div class="grip-speed-meter-labels">
-                            <span>Speed</span>
-                            <span id="grip-speed-rate">0.0 per second</span>
-                        </div>
-                        <div id="grip-speed-track" role="progressbar" aria-label="Squeeze speed"
-                             aria-valuemin="0" aria-valuemax="${speedBarMaxHz}" aria-valuenow="0">
-                            <div id="grip-speed-bar"></div>
-                        </div>
+                <div id="instruction-text" class="grip-speed-live">
+                    <h3 id="grip-speed-countdown">Squeeze once to start.<br>Then squeeze and release as fast as you can!</h3>
+                    <div id="grip-speed-counter" role="status" aria-live="polite">Squeezes: 0</div>
+                    <div id="grip-speed-rate">Speed: 0.00 squeezes/sec</div>
+                    <div id="grip-speed-indicator" aria-hidden="true">
+                        <div class="grip-speed-indicator-core"></div>
                     </div>
-
-                    <div id="grip-speed-feedback" role="status" aria-live="polite" aria-atomic="true">
-                        <span class="grip-speed-check" aria-hidden="true">✓</span>
-                        <span id="grip-speed-feedback-text">Ready</span>
+                    <div id="grip-speed-track" role="progressbar" aria-label="Squeeze speed"
+                         aria-valuemin="0" aria-valuemax="${speedBarMaxHz}" aria-valuenow="0">
+                        <div id="grip-speed-bar"></div>
                     </div>
-                    <p id="grip-speed-counter">0 squeezes</p>
-                    <p class="grip-speed-hint">Squeeze, then fully let go each time.</p>
                 </div>
             </div>
         `,
@@ -450,8 +435,7 @@ function makeSpeedCalibrationTrial(settings) {
             const rate = document.getElementById('grip-speed-rate');
             const track = document.getElementById('grip-speed-track');
             const bar = document.getElementById('grip-speed-bar');
-            const feedback = document.getElementById('grip-speed-feedback');
-            const feedbackText = document.getElementById('grip-speed-feedback-text');
+            const indicator = document.getElementById('grip-speed-indicator');
             const effectiveDurationMs = window.simulating ? 200 : configuredDurationMs;
             let startedAt = null;
             let lastSqueezeAt = null;
@@ -462,22 +446,15 @@ function makeSpeedCalibrationTrial(settings) {
                 const elapsedSeconds = Math.max((now - startedAt) / 1000, 0.1);
                 const speedHz = squeezeCount / Math.min(elapsedSeconds, effectiveDurationMs / 1000);
                 const width = Math.min((speedHz / speedBarMaxHz) * 100, 100);
-                rate.textContent = `${speedHz.toFixed(1)} per second`;
+                rate.textContent = `Speed: ${speedHz.toFixed(2)} squeezes/sec`;
                 bar.style.width = `${width}%`;
                 track.setAttribute('aria-valuenow', String(Math.min(speedHz, speedBarMaxHz).toFixed(1)));
             };
 
             const showRegisteredFeedback = () => {
-                if (feedbackTimer !== null) clearTimeout(feedbackTimer);
-                feedback.classList.remove('grip-speed-registered');
-                void feedback.offsetWidth;
-                feedback.classList.add('grip-speed-registered');
-                feedbackText.textContent = 'Squeeze registered';
-                feedbackTimer = setTimeout(() => {
-                    feedback.classList.remove('grip-speed-registered');
-                    feedbackText.textContent = 'Release, then squeeze again';
-                    feedbackTimer = null;
-                }, 220);
+                indicator.classList.remove('grip-speed-indicator-hit');
+                void indicator.offsetWidth;
+                indicator.classList.add('grip-speed-indicator-hit');
             };
 
             const finishSpeedCalibration = () => {
@@ -528,7 +505,7 @@ function makeSpeedCalibrationTrial(settings) {
                 squeezeCount += 1;
                 responseTimes.push(Math.round(now - lastSqueezeAt));
                 lastSqueezeAt = now;
-                counter.textContent = `${squeezeCount} ${squeezeCount === 1 ? 'squeeze' : 'squeezes'}`;
+                counter.textContent = `Squeezes: ${squeezeCount}`;
                 updateMeter(now);
             };
 
@@ -554,7 +531,34 @@ function makeSpeedCalibrationTrial(settings) {
                 window.dynamometerMaxSpeed = 5;
                 sessionStorage.setItem(speedStorageKey(), '5');
             }
+        }
+    };
+}
 
+function makeSpeedCalibrationFeedback(settings) {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function () {
+            const row = jsPsych.data.get()
+                .filter({ trialphase: 'dynamometer_speed_calibration' })
+                .last(1)
+                .values()[0];
+            const speedHz = Number(row?.avg_speed_hz);
+            const speedLabel = Number.isFinite(speedHz) ? speedHz.toFixed(2) : '0.00';
+            return `
+                <div id="instruction-container">
+                    <div id="instruction-text">
+                        <h2><span class="highlight-txt">Well done!</span></h2>
+                        <p>Your speed was <strong>${speedLabel} squeezes per second</strong>.</p>
+                        <p>Tap <strong>Continue</strong> to go on to the piggy-bank game.</p>
+                    </div>
+                </div>
+            `;
+        },
+        choices: ['Continue'],
+        post_trial_gap: 800,
+        data: { trialphase: 'dynamometer_speed_calibration_feedback' },
+        on_finish: function () {
             // Standalone calibration releases Bluetooth here. Combined modules keep
             // the connection for the immediately following dynamometer task.
             if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
@@ -571,7 +575,8 @@ function createSpeedCalibration(settings) {
     return {
         timeline: [
             makeSpeedCalibrationInstructions(settings),
-            makeSpeedCalibrationTrial(settings)
+            makeSpeedCalibrationTrial(settings),
+            makeSpeedCalibrationFeedback(settings)
         ],
         conditional_function: () => !_needsRetry
     };
