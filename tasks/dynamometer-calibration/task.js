@@ -1,4 +1,10 @@
-import { connectDynamometer, startForceStream, setForceCallback, disconnectDynamometer } from '@utils/dynamometer.js';
+import {
+    connectDynamometer,
+    createPressDetector,
+    startForceStream,
+    setForceCallback,
+    disconnectDynamometer
+} from '@utils/dynamometer.js';
 import { updateState } from '@utils/index.js';
 
 const N_SQUEEZES = 10;
@@ -6,6 +12,9 @@ const SQUEEZE_START_THRESHOLD_N = 1.0;
 const SQUEEZE_RELEASE_THRESHOLD_N = 0.5;
 const DEFAULT_SQUEEZE_WAIT_TIMEOUT_MS = 30000;
 const FINAL_COUNT_DISPLAY_MS = 300;
+const DEFAULT_SPEED_CALIBRATION_DURATION_MS = 7000;
+const DEFAULT_THRESHOLD_FRACTION = 0.1;
+const DEFAULT_SPEED_BAR_MAX_HZ = 5;
 
 let _trialPeak = 0;
 let _streamTimedOut = false;
@@ -30,6 +39,10 @@ function computeMaxForce(peaks) {
 
 function calStorageKey() {
     return `dynamometerMaxForce_${window.participantID ?? 'anon'}`;
+}
+
+function speedStorageKey() {
+    return `dynamometerMaxSpeed_${window.participantID ?? 'anon'}`;
 }
 
 function getRecordedPeaks() {
@@ -112,7 +125,7 @@ const calibrationInstructions = {
     stimulus: `
         <div id="instruction-container">
             <div id="instruction-text">
-                <p>We need to measure how hard you can squeeze the device.</p>
+                <p>First, we need to measure how hard you can squeeze the device.</p>
                 <p>Squeeze as hard as you can and let go <strong>${N_SQUEEZES} times</strong>.</p>
             </div>
         </div>
@@ -251,7 +264,7 @@ function makeCalibrationTrial(trialIndex, settings) {
 
 // ── Compute calibration result without a participant-facing feedback screen ───
 
-function createCalibrationResults(settings) {
+function createCalibrationResults() {
     return {
         type: jsPsychCallFunction,
         func: function () {
@@ -291,15 +304,6 @@ function createCalibrationResults(settings) {
         data: { trialphase: 'dynamometer_calibration_results' },
         on_finish: function (data) {
             Object.assign(data, data.value);
-            if (!_needsRetry) {
-                // Standalone calibration releases Bluetooth here. The combined module
-                // keeps this connection so its immediately following vigour task can reuse it.
-                if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-                    disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-                    window.dynamometerSensor = null;
-                }
-                updateState('dynamometer_calibration_end');
-            }
         }
     };
 }
@@ -326,25 +330,282 @@ const calibrationRetry = {
     conditional_function: () => _needsRetry
 };
 
+// ── Speed calibration at the task's force threshold ──────────────────────────
+
+function validPositiveNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function makeSpeedCalibrationInstructions(settings) {
+    const durationSeconds = validPositiveNumber(
+        settings.speedCalibrationDurationMs,
+        DEFAULT_SPEED_CALIBRATION_DURATION_MS
+    ) / 1000;
+    const durationLabel = Number.isInteger(durationSeconds)
+        ? String(durationSeconds)
+        : durationSeconds.toFixed(1);
+
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `
+            <div id="instruction-container">
+                <div id="instruction-text">
+                    <p>Now we need to measure how quickly you can squeeze and release.</p>
+                    <p>You do not need to squeeze as hard as before. On the next screen, squeeze once when you are ready. Then squeeze and fully let go as fast as you can for <strong>${durationLabel} seconds</strong>.</p>
+                </div>
+            </div>
+        `,
+        choices: ['Start'],
+        data: { trialphase: 'dynamometer_speed_calibration_instructions' }
+    };
+}
+
+function makeSpeedCalibrationTrial(settings) {
+    const configuredDurationMs = validPositiveNumber(
+        settings.speedCalibrationDurationMs,
+        DEFAULT_SPEED_CALIBRATION_DURATION_MS
+    );
+    const thresholdFraction = validPositiveNumber(
+        settings.thresholdFraction,
+        DEFAULT_THRESHOLD_FRACTION
+    );
+    const speedBarMaxHz = validPositiveNumber(
+        settings.speedBarMaxHz,
+        DEFAULT_SPEED_BAR_MAX_HZ
+    );
+
+    let detector = null;
+    let countdownInterval = null;
+    let feedbackTimer = null;
+    let finishTimer = null;
+    let squeezeCount = 0;
+    let responseTimes = [];
+    let averageSpeedHz = 0;
+
+    const cleanUp = () => {
+        detector?.reset();
+        detector = null;
+        setForceCallback(() => {});
+        if (countdownInterval !== null) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+        if (feedbackTimer !== null) {
+            clearTimeout(feedbackTimer);
+            feedbackTimer = null;
+        }
+        if (finishTimer !== null) {
+            clearTimeout(finishTimer);
+            finishTimer = null;
+        }
+    };
+
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        choices: 'NO_KEYS',
+        stimulus: `
+            <div id="instruction-container">
+                <div id="instruction-text" class="grip-speed-stage">
+                    <p class="grip-speed-kicker">Squeeze speed</p>
+                    <h2 id="grip-speed-countdown">Squeeze once when ready</h2>
+
+                    <div class="grip-speed-meter">
+                        <div class="grip-speed-meter-labels">
+                            <span>Speed</span>
+                            <span id="grip-speed-rate">0.0 per second</span>
+                        </div>
+                        <div id="grip-speed-track" role="progressbar" aria-label="Squeeze speed"
+                             aria-valuemin="0" aria-valuemax="${speedBarMaxHz}" aria-valuenow="0">
+                            <div id="grip-speed-bar"></div>
+                        </div>
+                    </div>
+
+                    <div id="grip-speed-feedback" role="status" aria-live="polite" aria-atomic="true">
+                        <span class="grip-speed-check" aria-hidden="true">✓</span>
+                        <span id="grip-speed-feedback-text">Ready</span>
+                    </div>
+                    <p id="grip-speed-counter">0 squeezes</p>
+                    <p class="grip-speed-hint">Squeeze, then fully let go each time.</p>
+                </div>
+            </div>
+        `,
+        data: {
+            trialphase: 'dynamometer_speed_calibration',
+            max_force_n: () => window.dynamometerMaxForce,
+            threshold_fraction: thresholdFraction,
+            speed_calibration_duration_ms: configuredDurationMs,
+            response_time: () => responseTimes,
+            trial_squeezes: () => squeezeCount,
+            avg_speed_hz: () => averageSpeedHz
+        },
+        on_start: function () {
+            squeezeCount = 0;
+            responseTimes = [];
+            averageSpeedHz = 0;
+        },
+        on_load: function () {
+            const countdown = document.getElementById('grip-speed-countdown');
+            const counter = document.getElementById('grip-speed-counter');
+            const rate = document.getElementById('grip-speed-rate');
+            const track = document.getElementById('grip-speed-track');
+            const bar = document.getElementById('grip-speed-bar');
+            const feedback = document.getElementById('grip-speed-feedback');
+            const feedbackText = document.getElementById('grip-speed-feedback-text');
+            const effectiveDurationMs = window.simulating ? 200 : configuredDurationMs;
+            let startedAt = null;
+            let lastSqueezeAt = null;
+            let finished = false;
+
+            const updateMeter = (now = performance.now()) => {
+                if (startedAt === null) return;
+                const elapsedSeconds = Math.max((now - startedAt) / 1000, 0.1);
+                const speedHz = squeezeCount / Math.min(elapsedSeconds, effectiveDurationMs / 1000);
+                const width = Math.min((speedHz / speedBarMaxHz) * 100, 100);
+                rate.textContent = `${speedHz.toFixed(1)} per second`;
+                bar.style.width = `${width}%`;
+                track.setAttribute('aria-valuenow', String(Math.min(speedHz, speedBarMaxHz).toFixed(1)));
+            };
+
+            const showRegisteredFeedback = () => {
+                if (feedbackTimer !== null) clearTimeout(feedbackTimer);
+                feedback.classList.remove('grip-speed-registered');
+                void feedback.offsetWidth;
+                feedback.classList.add('grip-speed-registered');
+                feedbackText.textContent = 'Squeeze registered';
+                feedbackTimer = setTimeout(() => {
+                    feedback.classList.remove('grip-speed-registered');
+                    feedbackText.textContent = 'Release, then squeeze again';
+                    feedbackTimer = null;
+                }, 220);
+            };
+
+            const finishSpeedCalibration = () => {
+                if (finished) return;
+                finished = true;
+                detector?.reset();
+                setForceCallback(() => {});
+                if (countdownInterval !== null) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                averageSpeedHz = squeezeCount / (configuredDurationMs / 1000);
+                window.dynamometerMaxSpeed = averageSpeedHz;
+                sessionStorage.setItem(speedStorageKey(), String(averageSpeedHz));
+                jsPsych.finishTrial();
+            };
+
+            const startTimedCalibration = (now) => {
+                startedAt = now;
+                lastSqueezeAt = now;
+                countdown.textContent = `${(configuredDurationMs / 1000).toFixed(1)} s left`;
+                updateState('dynamometer_speed_calibration_start');
+
+                countdownInterval = setInterval(() => {
+                    const elapsedMs = performance.now() - startedAt;
+                    const remainingSeconds = Math.max(0, (effectiveDurationMs - elapsedMs) / 1000);
+                    countdown.textContent = `${remainingSeconds.toFixed(1)} s left`;
+                    updateMeter();
+                }, 100);
+                finishTimer = setTimeout(() => {
+                    finishTimer = null;
+                    finishSpeedCalibration();
+                }, effectiveDurationMs);
+            };
+
+            const registerSqueeze = () => {
+                if (finished) return;
+                const now = performance.now();
+                showRegisteredFeedback();
+
+                // As in the tapping speed check, the first response self-initiates
+                // the timed period; subsequent responses measure maximum speed.
+                if (startedAt === null) {
+                    startTimedCalibration(now);
+                    return;
+                }
+
+                squeezeCount += 1;
+                responseTimes.push(Math.round(now - lastSqueezeAt));
+                lastSqueezeAt = now;
+                counter.textContent = `${squeezeCount} ${squeezeCount === 1 ? 'squeeze' : 'squeezes'}`;
+                updateMeter(now);
+            };
+
+            detector = createPressDetector(window.dynamometerMaxForce, {
+                thresholdFraction,
+                holdDurationMs: 0,
+                onPress: registerSqueeze
+            });
+            setForceCallback(forceN => detector.update(forceN));
+
+            if (window.simulating) {
+                jsPsych.pluginAPI.setTimeout(registerSqueeze, 5);
+                for (let index = 1; index <= 5; index += 1) {
+                    jsPsych.pluginAPI.setTimeout(registerSqueeze, 20 + index * 25);
+                }
+            }
+        },
+        on_finish: function (data) {
+            cleanUp();
+            if (window.simulating) {
+                data.trial_squeezes = 35;
+                data.avg_speed_hz = 5;
+                window.dynamometerMaxSpeed = 5;
+                sessionStorage.setItem(speedStorageKey(), '5');
+            }
+
+            // Standalone calibration releases Bluetooth here. Combined modules keep
+            // the connection for the immediately following dynamometer task.
+            if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+                disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+                window.dynamometerSensor = null;
+            }
+            updateState('dynamometer_speed_calibration_end');
+            updateState('dynamometer_calibration_end');
+        }
+    };
+}
+
+function createSpeedCalibration(settings) {
+    return {
+        timeline: [
+            makeSpeedCalibrationInstructions(settings),
+            makeSpeedCalibrationTrial(settings)
+        ],
+        conditional_function: () => !_needsRetry
+    };
+}
+
 // ── Public timeline factory ───────────────────────────────────────────────────
 
 export function createDynamometerCalibrationTimeline(settings) {
     // Clear any stale calibration for this participant so vigour cannot pick up
     // a previous participant's max force from the same browser tab.
     sessionStorage.removeItem(calStorageKey());
+    sessionStorage.removeItem(speedStorageKey());
     window.dynamometerMaxForce = undefined;
+    window.dynamometerMaxSpeed = undefined;
     window.dynamometerSensor   = null;
     _streamTimedOut = false;
     _showInstructions = true;
     _needsRetry = false;
 
     const trials = Array.from({ length: N_SQUEEZES }, (_, i) => makeCalibrationTrial(i, settings));
-    const calibrationResults = createCalibrationResults(settings);
+    const calibrationResults = createCalibrationResults();
+    const speedCalibration = createSpeedCalibration(settings);
 
     // connectTrial runs first AND on every retry. On retry the existing handle is
     // retained so connectTrial can disconnect it cleanly before pairing again.
     const calibrationProcedure = {
-        timeline: [connectTrial, calibrationInstructions, ...trials, calibrationResults, calibrationRetry],
+        timeline: [
+            connectTrial,
+            calibrationInstructions,
+            ...trials,
+            calibrationResults,
+            calibrationRetry,
+            speedCalibration
+        ],
         loop_function: function () {
             if (_needsRetry) {
                 // Retain window.dynamometerSensor so the Connect button in connectTrial

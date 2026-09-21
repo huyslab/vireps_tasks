@@ -38,7 +38,7 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 - **`self_report`** — touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires
-- **`dynamometer_calibration`** — ten quick-squeeze maximum-force calibration using a Vernier GDX-HD
+- **`dynamometer_calibration`** — ten quick squeezes to calibrate maximum force, followed by a seven-second squeeze-speed check at the task threshold, using a Vernier GDX-HD
 - **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
 - **`dynamometer_PIT`** — cloudy-place PIT task controlled by the same calibrated grip squeezes
 
