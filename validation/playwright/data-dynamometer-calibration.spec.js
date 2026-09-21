@@ -238,7 +238,7 @@ test('speed calibration records repeated threshold crossings and gives visible f
     const live = {
       counter: document.getElementById('grip-speed-counter')?.textContent,
       barWidth: parseFloat(document.getElementById('grip-speed-bar')?.style.width || '0'),
-      indicatorHit: indicator?.classList.contains('grip-speed-indicator-hit'),
+      indicatorCompressed: indicator?.classList.contains('grip-speed-indicator-compressed'),
       indicatorWidth: indicatorBox?.width,
       fitsViewport: document.documentElement.scrollWidth <= window.innerWidth,
     };
@@ -263,7 +263,7 @@ test('speed calibration records repeated threshold crossings and gives visible f
 
   expect(result.live.counter).toMatch(/Squeezes: [1-9]/);
   expect(result.live.barWidth).toBeGreaterThan(0);
-  expect(result.live.indicatorHit).toBe(true);
+  expect(result.live.indicatorCompressed).toBe(true);
   expect(result.live.indicatorWidth).toBeGreaterThanOrEqual(120);
   expect(result.live.fitsViewport).toBe(true);
   expect(result.feedbackMarkup).toContain('5.00 squeezes per second');
@@ -311,18 +311,28 @@ test('speed calibration counts real force crossings at ten percent of calibrated
 
     const runPromise = jsPsych.run([speedTrial]);
     await new Promise(resolve => setTimeout(resolve, 20));
+    const feedbackStates = [];
+    const captureFeedbackState = () => feedbackStates.push(
+      document.getElementById('grip-speed-indicator')
+        ?.classList.contains('grip-speed-indicator-compressed')
+    );
 
     // The first crossing starts the timer. Each later crossing only counts after
     // a below-threshold sample has re-armed the detector.
     emitForce(11);
+    captureFeedbackState();
     emitForce(12);
+    captureFeedbackState();
     emitForce(0);
     emitForce(11);
+    captureFeedbackState();
     emitForce(0);
     emitForce(15);
+    captureFeedbackState();
     emitForce(0);
     emitForce(9);
     emitForce(10);
+    captureFeedbackState();
 
     await runPromise;
     await disconnectDynamometer(device);
@@ -333,6 +343,7 @@ test('speed calibration counts real force crossings at ten percent of calibrated
       thresholdFraction: row.threshold_fraction,
       squeezes: row.trial_squeezes,
       responseTimes: row.response_time,
+      feedbackStates,
       storedSpeedHz: Number(sessionStorage.getItem(
         `dynamometerMaxSpeed_${window.participantID ?? 'anon'}`
       )),
@@ -342,6 +353,7 @@ test('speed calibration counts real force crossings at ten percent of calibrated
   expect(result.thresholdFraction).toBe(0.1);
   expect(result.squeezes).toBe(3);
   expect(result.responseTimes).toHaveLength(3);
+  expect(result.feedbackStates).toEqual([true, true, false, true, false]);
   expect(result.storedSpeedHz).toBeCloseTo(20, 5);
 });
 

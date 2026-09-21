@@ -440,6 +440,7 @@ function makeSpeedCalibrationTrial(settings) {
             let startedAt = null;
             let lastSqueezeAt = null;
             let finished = false;
+            let indicatorCompressed = false;
 
             const updateMeter = (now = performance.now()) => {
                 if (startedAt === null) return;
@@ -452,9 +453,10 @@ function makeSpeedCalibrationTrial(settings) {
             };
 
             const showRegisteredFeedback = () => {
-                indicator.classList.remove('grip-speed-indicator-hit');
-                void indicator.offsetWidth;
-                indicator.classList.add('grip-speed-indicator-hit');
+                // Keep the new state until the next squeeze so feedback remains
+                // obvious even when sensor samples are sparse or motion is reduced.
+                indicatorCompressed = !indicatorCompressed;
+                indicator.classList.toggle('grip-speed-indicator-compressed', indicatorCompressed);
             };
 
             const finishSpeedCalibration = () => {
