@@ -1,8 +1,6 @@
 // Import functions 
 import { saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 import { updatePiggyTails, shakePiggy } from './utils.js';
-import { setForceCallback, createPressDetector, disconnectDynamometer } from '@utils/dynamometer.js';
-import { generateDebugForceGraph, createDebugForceGraphUpdater } from '@tasks/piggy-banks-dynamometer/vigour-utils.js';
 
 // Define trial sequence - each trial specifies piggy properties and background stimulus
 const PIT_TRIAL_LIST = [{ "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 4110 }, { "magnitude": 5, "ratio": 8, "coin": -0.01, "trialDuration": 6666 }, { "magnitude": 5, "ratio": 8, "coin": 0.01, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4188 }, { "magnitude": 2, "ratio": 8, "coin": -1, "trialDuration": 7490 }, { "magnitude": 2, "ratio": 8, "coin": 1, "trialDuration": 6825 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 4130 }, { "magnitude": 1, "ratio": 1, "coin": 0.01, "trialDuration": 6891 }, { "magnitude": 1, "ratio": 1, "coin": -0.01, "trialDuration": 6902 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4193 }, { "magnitude": 2, "ratio": 8, "coin": -0.5, "trialDuration": 6535 }, { "magnitude": 2, "ratio": 8, "coin": -0.01, "trialDuration": 6652 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 3978 }, { "magnitude": 1, "ratio": 1, "coin": -0.5, "trialDuration": 6888 }, { "magnitude": 1, "ratio": 1, "coin": -1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 3833 }, { "magnitude": 2, "ratio": 16, "coin": 0.5, "trialDuration": 7452 }, { "magnitude": 2, "ratio": 16, "coin": 0.01, "trialDuration": 6954 }, { "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 3913 }, { "magnitude": 5, "ratio": 8, "coin": -0.5, "trialDuration": 6956 }, { "magnitude": 5, "ratio": 8, "coin": 0.5, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4005 }, { "magnitude": 2, "ratio": 8, "coin": 0.5, "trialDuration": 7009 }, { "magnitude": 2, "ratio": 8, "coin": 0.01, "trialDuration": 7228 }, { "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 4114 }, { "magnitude": 5, "ratio": 8, "coin": -1, "trialDuration": 7386 }, { "magnitude": 5, "ratio": 8, "coin": 1, "trialDuration": 7221 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 4245 }, { "magnitude": 2, "ratio": 16, "coin": 1, "trialDuration": 6679 }, { "magnitude": 2, "ratio": 16, "coin": -0.01, "trialDuration": 7207 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 3767 }, { "magnitude": 1, "ratio": 1, "coin": 1, "trialDuration": 7236 }, { "magnitude": 1, "ratio": 1, "coin": 0.5, "trialDuration": 6501 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 3826 }, { "magnitude": 2, "ratio": 16, "coin": -0.5, "trialDuration": 7465 }, { "magnitude": 2, "ratio": 16, "coin": -1, "trialDuration": 6827 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4118 }, { "magnitude": 2, "ratio": 8, "coin": -0.5, "trialDuration": 6535 }, { "magnitude": 2, "ratio": 8, "coin": 1, "trialDuration": 6825 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 3751 }, { "magnitude": 1, "ratio": 1, "coin": 0.01, "trialDuration": 6891 }, { "magnitude": 1, "ratio": 1, "coin": -1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 3946 }, { "magnitude": 2, "ratio": 16, "coin": -0.01, "trialDuration": 7207 }, { "magnitude": 2, "ratio": 16, "coin": -1, "trialDuration": 6827 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 3981 }, { "magnitude": 1, "ratio": 1, "coin": 0.5, "trialDuration": 6501 }, { "magnitude": 1, "ratio": 1, "coin": 1, "trialDuration": 7236 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 3944 }, { "magnitude": 2, "ratio": 16, "coin": 0.5, "trialDuration": 7452 }, { "magnitude": 2, "ratio": 16, "coin": 1, "trialDuration": 6679 }, { "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 3951 }, { "magnitude": 5, "ratio": 8, "coin": -1, "trialDuration": 7386 }, { "magnitude": 5, "ratio": 8, "coin": -0.5, "trialDuration": 6956 }, { "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 3839 }, { "magnitude": 5, "ratio": 8, "coin": -0.01, "trialDuration": 6666 }, { "magnitude": 5, "ratio": 8, "coin": 0.01, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4226 }, { "magnitude": 2, "ratio": 8, "coin": 0.01, "trialDuration": 7228 }, { "magnitude": 2, "ratio": 8, "coin": -1, "trialDuration": 7490 }, { "magnitude": 1, "ratio": 1, "coin": 0, "trialDuration": 3977 }, { "magnitude": 1, "ratio": 1, "coin": -0.01, "trialDuration": 6902 }, { "magnitude": 1, "ratio": 1, "coin": -0.5, "trialDuration": 6888 }, { "magnitude": 2, "ratio": 16, "coin": 0, "trialDuration": 3913 }, { "magnitude": 2, "ratio": 16, "coin": 0.01, "trialDuration": 6954 }, { "magnitude": 2, "ratio": 16, "coin": -0.5, "trialDuration": 7465 }, { "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration": 4233 }, { "magnitude": 5, "ratio": 8, "coin": 1, "trialDuration": 7221 }, { "magnitude": 5, "ratio": 8, "coin": 0.5, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 8, "coin": 0, "trialDuration": 4104 }, { "magnitude": 2, "ratio": 8, "coin": -0.01, "trialDuration": 6652 }, { "magnitude": 2, "ratio": 8, "coin": 0.5, "trialDuration": 7009 }];
@@ -10,15 +8,24 @@ const PIT_TRIAL_LIST = [{ "magnitude": 5, "ratio": 8, "coin": 0, "trialDuration"
 // Extract unique piggy bank parameters for UI configuration
 const unique_magnitudes = [...new Set(PIT_TRIAL_LIST.map(item => item.magnitude))].sort((a, b) => a - b);
 const unique_ratios = [...new Set(PIT_TRIAL_LIST.map(item => item.ratio))].sort((a, b) => b - a); // Sort ratios descending
-const DYNAMOMETER_RATIO_MAP = { 1: 1, 8: 5, 16: 10 };
 
 function usesDynamometer(settings) {
   return settings.inputMode === 'dynamometer';
 }
 
+function dynamometerRatio(ratio) {
+  const numericRatio = Number(ratio);
+  if (!(Number.isFinite(numericRatio) && numericRatio > 0)) {
+    throw new Error(`Invalid PIT response ratio: ${ratio}`);
+  }
+  // Preserve FR1 and scale the remaining tap ratios to the grip's lower
+  // response rate: 1 -> 1, 8 -> 5, 16 -> 10.
+  return Math.max(1, Math.round(numericRatio * 5 / 8));
+}
+
 function ratiosFor(settings) {
   return usesDynamometer(settings)
-    ? unique_ratios.map(ratio => DYNAMOMETER_RATIO_MAP[ratio])
+    ? unique_ratios.map(dynamometerRatio)
     : unique_ratios;
 }
 
@@ -89,7 +96,7 @@ function generatePITstimulus(coin, ratio, settings) {
         <div id="obstructor-container">
           <img id="obstructor" src="./assets/images/piggy-banks/occluding_clouds.png" alt="Obstructor">
         </div>
-        ${usesDynamometer(settings) ? generateDebugForceGraph(settings) : ''}
+        ${settings.inputAdapter?.renderFeedback?.() ?? ''}
       </div>
     </div>
   `;
@@ -101,7 +108,6 @@ let taskTotalPresses = 0;
 let taskTotalReward = 0;
 let fsChangeHandler = null;
 let pitTapListener = null;
-let pitDetector = null;
 
 /**
  * Creates a single PIT trial with vigour task mechanics and Pavlovian background
@@ -110,6 +116,7 @@ let pitDetector = null;
  */
 function PITTrial(settings) {
   const dynamometer = usesDynamometer(settings);
+  let cleanupInput = null;
   // Create trial state in closure scope so it's accessible to data functions
   const trialState = {
     trialPresses: 0,
@@ -133,11 +140,6 @@ function PITTrial(settings) {
       pit_coin: jsPsych.timelineVariable('coin'),
       trial_duration: jsPsych.timelineVariable('trialDuration'),
       response_time: () => { return trialState.responseTime },
-      // Matches the vigour trial's telemetry: the two tasks are compared press
-      // for press, so they have to record input the same way.
-      pointer_type: () => { return trialState.pointerType },
-      pointer_type_counts: () => { return trialState.pointerTypeCounts },
-      pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 },
       trial_presses: () => { return trialState.trialPresses },
       trial_reward: () => { return trialState.trialReward },
       // Record global data
@@ -148,7 +150,11 @@ function PITTrial(settings) {
         max_force_n: () => window.dynamometerMaxForce,
         threshold_fraction: settings.thresholdFraction,
         hold_duration_ms: settings.holdDurationMs
-      } : {})
+      } : {
+        pointer_type: () => { return trialState.pointerType },
+        pointer_type_counts: () => { return trialState.pointerTypeCounts },
+        pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 }
+      })
     },
     on_start: function (trial) {
       // Shorten trial duration for simulation mode
@@ -216,16 +222,10 @@ function PITTrial(settings) {
       };
 
       if (dynamometer && !window.simulating) {
-        pitDetector = createPressDetector(window.dynamometerMaxForce, {
-          thresholdFraction: settings.thresholdFraction,
-          holdDurationMs: settings.holdDurationMs,
-          onPress: handlePress
-        });
-        const updateDebugGraph = createDebugForceGraphUpdater(settings);
-        setForceCallback(forceN => {
-          pitDetector.update(forceN);
-          updateDebugGraph(forceN);
-        });
+        if (typeof settings.inputAdapter?.bind !== 'function') {
+          throw new Error('Dynamometer PIT input adapter is not configured');
+        }
+        cleanupInput = settings.inputAdapter.bind(handlePress);
       } else if (!dynamometer) {
         // PIT uses the same input as its preceding vigour task: screen taps in the
         // standard battery, or threshold-crossing grip squeezes in the dynamometer battery.
@@ -248,9 +248,8 @@ function PITTrial(settings) {
       // Clean up listeners
       cleanupTapListener(pitTapListener);
       pitTapListener = null;
-      pitDetector?.reset();
-      pitDetector = null;
-      if (dynamometer) setForceCallback(() => {});
+      cleanupInput?.();
+      cleanupInput = null;
       jsPsych.pluginAPI.cancelAllKeyboardResponses();
       PITtrialCounter += 1;
       data.pit_trial_number = PITtrialCounter;
@@ -289,7 +288,7 @@ function PITTrial(settings) {
 export function createPITCoreTimeline(settings) {
   const dynamometer = usesDynamometer(settings);
   const trialSequence = dynamometer
-    ? PIT_TRIAL_LIST.map(trial => ({ ...trial, ratio: DYNAMOMETER_RATIO_MAP[trial.ratio] }))
+    ? PIT_TRIAL_LIST.map(trial => ({ ...trial, ratio: dynamometerRatio(trial.ratio) }))
     : PIT_TRIAL_LIST;
   let PITtrials = [];
   // Create a timeline for each trial with kick-out and fullscreen checks
@@ -311,10 +310,7 @@ export function createPITCoreTimeline(settings) {
   };
 
   PITtrials.at(-1)["on_timeline_finish"] = () => {
-    if (dynamometer && settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-      disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-      window.dynamometerSensor = null;
-    }
+    settings.inputAdapter?.finish?.();
   };
 
   return PITtrials;

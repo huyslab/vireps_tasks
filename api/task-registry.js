@@ -543,7 +543,7 @@ export const TaskRegistry = {
     name: 'Dynamometer Vigour Task',
     description: 'Piggy-bank vigour task driven by hand dynamometer squeezes instead of screen taps',
     createTimeline: createDynamometerVigourTimeline,
-    computeBonus: () => computeDynBonus('dynamometer_vigour_trial'),
+    computeBonus: () => computeDynBonus('dynamometer_vigour_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
       thresholdFraction: 0.05,
@@ -566,7 +566,7 @@ export const TaskRegistry = {
     name: 'Dynamometer Pavlovian-Instrumental Transfer Task',
     description: 'PIT task driven by hand dynamometer squeezes instead of screen taps',
     createTimeline: createDynamometerPITTimeline,
-    computeBonus: () => computeDynBonus('dynamometer_pit_trial'),
+    computeBonus: () => computeDynBonus('dynamometer_pit_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_PIT',
       thresholdFraction: 0.05,

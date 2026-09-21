@@ -42,18 +42,18 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
 - **`dynamometer_PIT`** — cloudy-place PIT task controlled by the same calibrated grip squeezes
 
-The experimenter launcher uses five supervised modules from `api/module-registry.js`:
+The experimenter launcher uses three supervised modules from `api/module-registry.js`:
 `module_1` (reversal and Faces Go/No-Go), `module_2` (the linked learning and
-dynamometer effort tasks), `questionnaires` (STAI, ARI, BIS, and STAXI-2), `dynamometer`
-(calibration followed by dynamometer-controlled vigour), and `dynamometer_pit`
-(calibration followed directly by dynamometer-controlled PIT). In Modules 1 and 2,
-every behavioural task is followed by acceptability ratings. The older
-`full_battery` and `screening` definitions remain available through the API.
+dynamometer effort tasks), and `questionnaires` (STAI, ARI, BIS, and STAXI-2).
+In Modules 1 and 2, every behavioural task is followed by acceptability ratings.
+The focused `dynamometer` and `dynamometer_pit` diagnostic modules, plus the older
+`full_battery` and `screening` definitions, remain available by direct URL or through
+the API but are not shown in the launcher.
 
 ## Input modality and devices
 
-All five launcher modules can be completed without a keyboard. Module 2 and the dynamometer
-module use touch for navigation and grip squeezes for vigour and PIT responses. Two other
+All three launcher modules can be completed without a keyboard. Module 2 uses touch for
+navigation and grip squeezes for vigour and PIT responses. Two other
 input patterns are in use:
 
 **Pointer-driven on every device** - one input path, taps and mouse clicks alike,

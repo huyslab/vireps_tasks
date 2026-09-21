@@ -75,3 +75,39 @@ test('the pre-calibration experimenter pause persists the ratings that preceded 
     'the snapshot should contain the ratings collected before the break, not just any data'
   ).toBe(true);
 });
+
+test('vigour-test entry persists the PIT ratings without adding a break', async ({ page }) => {
+  await page.addInitScript(() => { window.__forceOnlineRedcapForTesting = true; });
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const result = await page.evaluate(async () => {
+    const { createVigourTestTimeline } = await import(`/tasks/piggy-banks/vigour-test.js?v=${Date.now()}`);
+    const { getPendingCount, listQueuedRecords } = await import(`/core/utils/data-queue.js?v=${Date.now()}`);
+
+    window.participantID = 'vigour_test_checkpoint';
+    window.module_start_time = '2026-01-01 00:00:00';
+    window.session = 'wk0';
+    window.module = 'module_2';
+    jsPsych.data.get().push({
+      trial_type: 'self-report-item',
+      trialphase: 'acceptability_dynamometer_PIT',
+      item_id: 'dynamometer_PIT_difficulty',
+      response: 2,
+    });
+
+    const before = await getPendingCount();
+    createVigourTestTimeline({ session: 'wk0' })[0].on_start();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const after = await getPendingCount();
+    const queued = await listQueuedRecords();
+    return {
+      before,
+      after,
+      mentionsRating: queued.some((record) => JSON.stringify(record).includes('dynamometer_PIT_difficulty')),
+    };
+  });
+
+  expect(result.after).toBeGreaterThan(result.before);
+  expect(result.mentionsRating).toBe(true);
+});

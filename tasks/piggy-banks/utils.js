@@ -82,6 +82,7 @@ function updatePiggyTails(magnitude, ratio, settings) {
  * Computes bonus payments for relative piggy bank tasks based on trial performance.
  * 
  * @param {string} trialphase - The trial phase identifier to filter trials by
+ * @param {number} [maxResponsesPerSecond=10] - Physical input-rate ceiling used for the theoretical maximum
  * @returns {Object} Bonus calculation results
  * @returns {number} returns.earned - Actual bonus earned from the last trial's total reward (converted to currency units)
  * @returns {number} returns.min - Minimum possible bonus based on task parameters
@@ -91,12 +92,14 @@ function updatePiggyTails(magnitude, ratio, settings) {
  * Calculates three bonus values:
  * - earned: Takes the final total_reward and converts to currency (×0.01)
  * - min: Sum of minimum rewards (1 × magnitude ÷ ratio) across all trials
- * - max: Sum of maximum rewards (10 × duration × magnitude ÷ ratio) across all trials
+ * - max: Sum of maximum rewards (rate ceiling × duration × magnitude ÷ ratio) across all trials
  * 
  * Returns zero values if no trials found or calculations result in NaN.
  */
-function computeRelativePiggyTasksBonus(trialphase) {
+function computeRelativePiggyTasksBonus(trialphase, maxResponsesPerSecond = 10) {
     const trials = jsPsych.data.get().filter({trialphase});
+    const parsedRate = Number(maxResponsesPerSecond);
+    const responseRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 10;
 
     if (trials.count() === 0) {
         // console.log(`No trials found for ${trialphase}. Returning default values.`);
@@ -110,7 +113,7 @@ function computeRelativePiggyTasksBonus(trialphase) {
         sum + (1 * trial.timeline_variables.magnitude * 0.01 / trial.timeline_variables.ratio), 0);
 
     const max = values.reduce((sum, trial) => 
-        sum + (10 * trial.trial_duration / 1000 * 
+        sum + (responseRate * trial.trial_duration / 1000 *
             (trial.timeline_variables.magnitude * 0.01 / trial.timeline_variables.ratio)), 0);
 
     return { 

@@ -170,6 +170,9 @@ const postVigourInstructions = {
   simulation_options: { data: { response: 0 } },
   post_trial_gap: 400,
   on_start: () => {
+    // updateState persists a cumulative snapshot here, before the participant
+    // can enter the first choice. This protects the preceding PIT ratings
+    // without inserting another break into Module 2.
     updateState(`vigour_test_instructions_start`);
   },
   on_finish: () => {

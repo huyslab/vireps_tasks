@@ -1,6 +1,14 @@
 import { createPITCoreTimeline, PITPreloadImages } from '@tasks/piggy-banks/PIT-utils.js';
 import { PITInstructions } from '@tasks/piggy-banks/PIT-instructions.js';
-import { connectDynamometer, startForceStream } from '@utils/dynamometer.js';
+import {
+    connectDynamometer,
+    createPressDetector,
+    disconnectDynamometer,
+    isDynamometerConnected,
+    setForceCallback,
+    startForceStream
+} from '@utils/dynamometer.js';
+import { generateDebugForceGraph, createDebugForceGraphUpdater } from './vigour-utils.js';
 import { createPreloadTrial } from '@utils/index.js';
 
 function calibrationStorageKey() {
@@ -42,6 +50,34 @@ function makeReconnectTrial() {
     };
 }
 
+function makeDynamometerInputAdapter(settings) {
+    return {
+        renderFeedback: () => generateDebugForceGraph(settings),
+        bind(onPress) {
+            const detector = createPressDetector(window.dynamometerMaxForce, {
+                thresholdFraction: settings.thresholdFraction,
+                holdDurationMs: settings.holdDurationMs,
+                onPress
+            });
+            const updateDebugGraph = createDebugForceGraphUpdater(settings);
+            setForceCallback(forceN => {
+                detector.update(forceN);
+                updateDebugGraph(forceN);
+            });
+            return () => {
+                detector.reset();
+                setForceCallback(() => {});
+            };
+        },
+        finish() {
+            if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
+                disconnectDynamometer(window.dynamometerSensor).catch(() => {});
+                window.dynamometerSensor = null;
+            }
+        }
+    };
+}
+
 export function createDynamometerPITTimeline(settings) {
     if (!window.dynamometerMaxForce) {
         const stored = sessionStorage.getItem(calibrationStorageKey());
@@ -49,20 +85,21 @@ export function createDynamometerPITTimeline(settings) {
     }
 
     const dynamometerSettings = { ...settings, inputMode: 'dynamometer' };
+    dynamometerSettings.inputAdapter = makeDynamometerInputAdapter(dynamometerSettings);
     const calibrationGate = {
         timeline: [{
-            type: jsPsychHtmlKeyboardResponse,
-            choices: 'NO_KEYS',
-            trial_duration: null,
+            type: jsPsychHtmlButtonResponse,
+            choices: ['Return to setup'],
             stimulus: `
                 <div id="instruction-container">
                     <div id="instruction-text">
                         <h2>Calibration required</h2>
-                        <p>No valid calibration was found. Please complete the grip calibration task before starting this task.</p>
+                        <p>No valid grip calibration was found. Please return to setup and restart Module 2.</p>
                     </div>
                 </div>
             `,
-            data: { trialphase: 'dynamometer_pit_missing_calibration' }
+            data: { trialphase: 'dynamometer_pit_missing_calibration' },
+            on_finish: () => { window.location.assign('./index.html'); }
         }],
         conditional_function: function () {
             return !(Number.isFinite(window.dynamometerMaxForce) && window.dynamometerMaxForce > 0);
@@ -72,7 +109,7 @@ export function createDynamometerPITTimeline(settings) {
     const reconnectStep = {
         timeline: [makeReconnectTrial()],
         conditional_function: function () {
-            return !window.dynamometerSensor && !window.simulating;
+            return !isDynamometerConnected(window.dynamometerSensor) && !window.simulating;
         }
     };
 

@@ -1,6 +1,6 @@
 import { createDynVigourCoreTimeline, VIGOUR_PRELOAD_IMAGES } from './vigour-utils.js';
 import { createDynamometerVigourInstructions } from './vigour-instructions.js';
-import { connectDynamometer, startForceStream } from '@utils/dynamometer.js';
+import { connectDynamometer, isDynamometerConnected, startForceStream } from '@utils/dynamometer.js';
 import { createPreloadTrial } from '@utils/index.js';
 
 function calStorageKey() {
@@ -57,18 +57,18 @@ export function createDynamometerVigourTimeline(settings) {
     // when sessionStorage was cleared since the last run.
     const calibrationGate = {
         timeline: [{
-            type: jsPsychHtmlKeyboardResponse,
-            choices: 'NO_KEYS',
-            trial_duration: null,
+            type: jsPsychHtmlButtonResponse,
+            choices: ['Return to setup'],
             stimulus: `
                 <div id="instruction-container">
                     <div id="instruction-text">
                         <h2>Calibration required</h2>
-                        <p>No valid calibration was found. Please complete the grip calibration task before starting this task.</p>
+                        <p>No valid grip calibration was found. Please return to setup and restart Module 2.</p>
                     </div>
                 </div>
             `,
-            data: { trialphase: 'dynamometer_vigour_missing_calibration' }
+            data: { trialphase: 'dynamometer_vigour_missing_calibration' },
+            on_finish: () => { window.location.assign('./index.html'); }
         }],
         conditional_function: function () {
             return !(Number.isFinite(window.dynamometerMaxForce) && window.dynamometerMaxForce > 0);
@@ -79,7 +79,7 @@ export function createDynamometerVigourTimeline(settings) {
     const reconnectStep = {
         timeline: [makeReconnectTrial()],
         conditional_function: function () {
-            return !window.dynamometerSensor && !window.simulating;
+            return !isDynamometerConnected(window.dynamometerSensor) && !window.simulating;
         }
     };
 

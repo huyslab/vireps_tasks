@@ -39,6 +39,80 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   });
 });
 
+test('dynamometer bonuses use the five-squeezes-per-second ceiling', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const bonuses = await page.evaluate(async () => {
+    const { TaskRegistry } = await import('/api/task-registry.js');
+    const row = (trialphase) => ({
+      trialphase,
+      total_reward: 10,
+      trial_duration: 1000,
+      timeline_variables: { magnitude: 2, ratio: 1 },
+    });
+    jsPsych.data.get().push(row('dynamometer_vigour_trial'));
+    jsPsych.data.get().push(row('dynamometer_pit_trial'));
+    return {
+      vigour: TaskRegistry.dynamometer_vigour.computeBonus(),
+      pit: TaskRegistry.dynamometer_PIT.computeBonus(),
+    };
+  });
+
+  expect(bonuses.vigour).toMatchObject({ earned: 0.1, min: 0.02, max: 0.1 });
+  expect(bonuses.pit).toMatchObject({ earned: 0.1, min: 0.02, max: 0.1 });
+});
+
+test('missing calibration is recoverable and stale grip handles trigger reconnection', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const details = await page.evaluate(async () => {
+    const { createDynamometerVigourTimeline } = await import(
+      '/tasks/piggy-banks-dynamometer/vigour-timeline.js'
+    );
+    const { createDynamometerPITTimeline } = await import(
+      '/tasks/piggy-banks-dynamometer/PIT-timeline.js'
+    );
+    window.simulating = false;
+    window.dynamometerMaxForce = undefined;
+    window.dynamometerSensor = null;
+    sessionStorage.clear();
+    const settings = {
+      session: 'wk0',
+      task_name: 'dynamometer_PIT',
+      thresholdFraction: 0.05,
+      holdDurationMs: 0,
+      disconnectOnFinish: true,
+    };
+    const summarise = (timeline) => {
+      const gateTrial = timeline[1].timeline[0];
+      const reconnect = timeline[2].timeline[0];
+      window.dynamometerSensor = { opened: false };
+      const reconnectsStale = reconnect.conditional_function();
+      window.dynamometerSensor = { opened: true };
+      const skipsLive = !reconnect.conditional_function();
+      return {
+        usesButtonTrial: gateTrial.type === jsPsychHtmlButtonResponse,
+        choices: gateTrial.choices,
+        hasIndefiniteDuration: gateTrial.trial_duration === null,
+        reconnectsStale,
+        skipsLive,
+      };
+    };
+    return {
+      vigour: summarise(createDynamometerVigourTimeline(settings)),
+      pit: summarise(createDynamometerPITTimeline(settings)),
+    };
+  });
+
+  for (const task of [details.vigour, details.pit]) {
+    expect(task.usesButtonTrial).toBe(true);
+    expect(task.choices).toEqual(['Return to setup']);
+    expect(task.hasIndefiniteDuration).toBe(false);
+    expect(task.reconnectsStale).toBe(true);
+    expect(task.skipsLive).toBe(true);
+  }
+});
+
 test('squeezing is the primary action on the dynamometer start screen', async ({ page }) => {
   await openTimelineHarness(page);
 
@@ -89,7 +163,12 @@ test('dynamometer PIT preserves the standard sequence with mapped force ratios',
       holdDurationMs: 0,
     });
     const variables = timeline => timeline.map(trial => trial.timeline_variables[0]);
-    return { standard: variables(standard), dynamometer: variables(dynamometer) };
+    return {
+      standard: variables(standard),
+      dynamometer: variables(dynamometer),
+      standardDataKeys: Object.keys(standard[0].timeline[2].data),
+      dynamometerDataKeys: Object.keys(dynamometer[0].timeline[2].data),
+    };
   });
 
   const ratioMap = { 1: 1, 8: 5, 16: 10 };
@@ -98,6 +177,10 @@ test('dynamometer PIT preserves the standard sequence with mapped force ratios',
     ...trial,
     ratio: ratioMap[trial.ratio],
   })));
+  expect(comparison.standardDataKeys).toContain('pointer_type');
+  expect(comparison.dynamometerDataKeys).not.toContain('pointer_type');
+  expect(comparison.dynamometerDataKeys).not.toContain('pointer_type_counts');
+  expect(comparison.dynamometerDataKeys).not.toContain('pointer_mixed');
 });
 
 test('debug participants get a live force graph with the target marked', async ({ page }) => {
@@ -234,12 +317,11 @@ test('speed calibration records repeated threshold crossings and gives visible f
     const runPromise = jsPsych.run([speedTrial]);
     await new Promise(resolve => setTimeout(resolve, 80));
     const indicator = document.getElementById('grip-speed-indicator');
-    const indicatorBox = indicator?.getBoundingClientRect();
     const live = {
       counter: document.getElementById('grip-speed-counter')?.textContent,
       barWidth: parseFloat(document.getElementById('grip-speed-bar')?.style.width || '0'),
       indicatorCompressed: indicator?.classList.contains('grip-speed-indicator-compressed'),
-      indicatorWidth: indicatorBox?.width,
+      indicatorWidth: indicator?.offsetWidth,
       fitsViewport: document.documentElement.scrollWidth <= window.innerWidth,
     };
     await runPromise;
