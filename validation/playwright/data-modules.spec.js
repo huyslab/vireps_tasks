@@ -14,18 +14,28 @@ const expectedModules = {
     ['vigour_test', 'vigour_test'],
     ['post_PILT_test', 'post_PILT_test'],
   ],
+  module_2_without_dynamometer: [
+    ['max_press_test', 'max_press_test'],
+    ['pavlovian_lottery', 'pavlovian_lottery'],
+    ['PILT', 'PILT'],
+    ['vigour', 'vigour'],
+    ['PIT', 'PIT'],
+    ['vigour_test', 'vigour_test'],
+    ['post_PILT_test', 'post_PILT_test'],
+  ],
 };
 
 test('study modules contain the requested tasks and rate every task immediately afterward', async ({ page }) => {
   await page.goto('/index.html');
 
-  const modules = await page.evaluate(async () => {
+  const moduleNames = Object.keys(expectedModules);
+  const modules = await page.evaluate(async (names) => {
     const { ModuleRegistry } = await import('/api/module-registry.js');
-    return Object.fromEntries(['module_1', 'module_2'].map((moduleName) => [
+    return Object.fromEntries(names.map((moduleName) => [
       moduleName,
       ModuleRegistry[moduleName].elements,
     ]));
-  });
+  }, moduleNames);
 
   for (const [moduleName, expectedTasks] of Object.entries(expectedModules)) {
     const elements = modules[moduleName];
@@ -93,6 +103,25 @@ test('module 2 calibrates once and keeps the grip connected through vigour and P
   expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
 });
 
+test('module 2 without a dynamometer uses the tap-based effort tasks and no grip break', async ({ page }) => {
+  await page.goto('/index.html');
+
+  const elements = await page.evaluate(async () => {
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    return ModuleRegistry.module_2_without_dynamometer.elements;
+  });
+  const taskNames = elements
+    .filter((element) => element.type === 'task')
+    .map((element) => element.name);
+
+  expect(taskNames).toContain('vigour');
+  expect(taskNames).toContain('PIT');
+  expect(taskNames).not.toContain('dynamometer_calibration');
+  expect(taskNames).not.toContain('dynamometer_vigour');
+  expect(taskNames).not.toContain('dynamometer_PIT');
+  expect(elements.filter((element) => element.config?.text === 'break_message')).toHaveLength(0);
+});
+
 test('questionnaire module presents every questionnaire in the configured order', async ({ page }) => {
   await page.goto('/index.html');
 
@@ -153,7 +182,7 @@ test('dynamometer PIT test module calibrates before PIT and keeps the connection
 // the five-session RELMED launcher and had been failing ever since. experiment.html
 // keeps SESSION_CONFIG entries for weeks 4-28 so repeat-session sequences still build
 // (see the timeline test below) - they are simply not offered to the experimenter.
-test('experimenter launcher offers two sessions and the three participant modules', async ({ page }) => {
+test('experimenter launcher offers two sessions and the four participant modules', async ({ page }) => {
   await page.goto('/index.html');
 
   await expect(page.locator('#sessionNumber option')).toHaveCount(3);
@@ -162,11 +191,12 @@ test('experimenter launcher offers two sessions and the three participant module
     'Session 1',
     'Session 2',
   ]);
-  await expect(page.locator('#module option')).toHaveCount(4);
+  await expect(page.locator('#module option')).toHaveCount(5);
   await expect(page.locator('#module option').evaluateAll((options) => options.map(({ value }) => value))).resolves.toEqual([
     '',
     'module_1',
     'module_2',
+    'module_2_without_dynamometer',
     'questionnaires',
   ]);
 });
@@ -199,6 +229,19 @@ test('the experiment page accepts the dynamometer PIT launcher route', async ({ 
   await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toHaveCount(0);
 });
 
+test('the experiment page accepts the module 2 without dynamometer route', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
+  });
+
+  await page.goto(
+    '/experiment.html?participant_id=route_check&session_number=1&module=module_2_without_dynamometer'
+  );
+
+  await expect(page.locator('#display_element')).not.toBeEmpty();
+  await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toHaveCount(0);
+});
+
 test('all complete module timelines build with repeat-session sequences', async ({ page }) => {
   // The invalid ID stops experiment.html before device authorisation or an automatic run,
   // while still loading the import map, jsPsych plugins, and API used to build timelines.
@@ -213,6 +256,12 @@ test('all complete module timelines build with repeat-session sequences', async 
       session_number: 5,
     });
     const module2 = await createModuleTimeline('module_2', {
+      session: 'wk4',
+      sequence: 'wk4',
+      stimulus_session: 3,
+      session_number: 3,
+    });
+    const module2WithoutDynamometer = await createModuleTimeline('module_2_without_dynamometer', {
       session: 'wk4',
       sequence: 'wk4',
       stimulus_session: 3,
@@ -239,6 +288,7 @@ test('all complete module timelines build with repeat-session sequences', async 
     return {
       module1: module1.length,
       module2: module2.length,
+      module2WithoutDynamometer: module2WithoutDynamometer.length,
       questionnaires: questionnaires.length,
       dynamometer: dynamometer.length,
       dynamometerPit: dynamometerPit.length,
@@ -247,6 +297,7 @@ test('all complete module timelines build with repeat-session sequences', async 
 
   expect(lengths.module1).toBeGreaterThan(10);
   expect(lengths.module2).toBeGreaterThan(lengths.module1);
+  expect(lengths.module2WithoutDynamometer).toBeGreaterThan(lengths.module1);
   expect(lengths.questionnaires).toBeGreaterThan(2);
   expect(lengths.dynamometer).toBeGreaterThan(2);
   expect(lengths.dynamometerPit).toBeGreaterThan(2);

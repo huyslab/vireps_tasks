@@ -71,6 +71,21 @@ export const messages = {
             allow_backward: false
         }
     },
+    module_2_without_dynamometer: {
+        start_message: [
+            `<p><b>Welcome to Part 2.</b></p>
+            <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
+            <p>At the end there are two short quizzes about what you learned.</p>
+            <p>After each game we will ask you a few short questions about it.</p>`,
+            `<p>Please stay with the games until the end, and do not close this page.</p>
+            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
+        ],
+        end_message: {
+            message: `<p><b>That is the end of Part 2. Thank you.</b></p>
+                <p>Please tell the person running the study that you have finished.</p>`,
+            on_start: endExperiment
+        }
+    },
     questionnaires: {
         start_message: [
             `<p><b>Questions about you</b></p>

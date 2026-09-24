@@ -47,6 +47,31 @@ export const ModuleRegistry = {
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
+    module_2_without_dynamometer: {
+        name: "Module 2: Learning and Effort Tasks (No Dynamometer)",
+        moduleConfig: {
+            session: "wk0",
+            sequence: "wk0"
+        },
+        elements: [
+            { type: "instructions", config: { text: "start_message" } },
+            { type: "task", name: "max_press_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "tapping test" } },
+            { type: "task", name: "pavlovian_lottery" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
+            { type: "task", name: "PILT" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
+            { type: "task", name: "vigour" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
+            { type: "task", name: "PIT" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
+            { type: "task", name: "vigour_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank choices" } },
+            { type: "task", name: "post_PILT_test" },
+            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "last round of the card game" } },
+            { type: "instructions", config: { text: "end_message" } }
+        ]
+    },
     questionnaires: {
         name: "Questionnaires",
         moduleConfig: {

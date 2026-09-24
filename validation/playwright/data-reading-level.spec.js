@@ -103,7 +103,7 @@ test('module messages read at Year 5 level or simpler', async ({ page }) => {
   const passages = await page.evaluate(async () => {
     const { messages } = await import(`/api/messages.js?v=${Date.now()}`);
     const out = {};
-    for (const moduleName of ['module_1', 'module_2', 'questionnaires']) {
+    for (const moduleName of ['module_1', 'module_2', 'module_2_without_dynamometer', 'questionnaires']) {
       for (const [key, value] of Object.entries(messages[moduleName])) {
         const content = typeof value === 'function' ? value({ session: 'wk0' }) : value;
         const pages = Array.isArray(content) ? content
@@ -153,7 +153,7 @@ test('no participant-facing screen uses staff or study jargon', async ({ page })
     const { messages } = await import(`/api/messages.js?v=${Date.now()}`);
     const banned = /\b(experimenter|module \d|intuitive|promptly|questionnaires?)\b/i;
     const hits = [];
-    for (const moduleName of ['module_1', 'module_2', 'questionnaires']) {
+    for (const moduleName of ['module_1', 'module_2', 'module_2_without_dynamometer', 'questionnaires']) {
       for (const [key, value] of Object.entries(messages[moduleName])) {
         const content = typeof value === 'function' ? value({ session: 'wk0' }) : value;
         const pages = Array.isArray(content) ? content
