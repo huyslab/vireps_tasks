@@ -22,8 +22,8 @@ const MANIFEST_PATH = './tasks/go-no-go/sequences/stimuli-manifest.json';
 const OUTCOME_SOUNDS = {
   10: './assets/sounds/go-no-go/win_large.mp3',
   1: './assets/sounds/go-no-go/win_small.mp3',
-  '-1': './assets/sounds/go-no-go/loss_small.mp3',
-  '-10': './assets/sounds/go-no-go/loss_large.mp3',
+  '-1': './assets/sounds/go-no-go/loss_small.mp3?v=2',
+  '-10': './assets/sounds/go-no-go/loss_large.mp3?v=2',
 };
 
 const COIN_IMAGES = {
