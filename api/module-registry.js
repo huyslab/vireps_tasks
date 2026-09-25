@@ -38,9 +38,7 @@ export const ModuleRegistry = {
             { type: "task", name: "dynamometer_PIT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_PIT", game_description: "piggy-bank game in the clouds" } },
             { type: "task", name: "vigour_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank choices" } },
             { type: "task", name: "post_PILT_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "last round of the card game" } },
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
@@ -53,9 +51,7 @@ export const ModuleRegistry = {
         elements: [
             { type: "instructions", config: { text: "start_message" } },
             { type: "task", name: "max_press_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "tapping test" } },
             { type: "task", name: "pavlovian_lottery" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
             { type: "task", name: "PILT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
             { type: "task", name: "vigour" },
@@ -63,9 +59,7 @@ export const ModuleRegistry = {
             { type: "task", name: "PIT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
             { type: "task", name: "vigour_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour_test", game_description: "piggy-bank choices" } },
             { type: "task", name: "post_PILT_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "post_PILT_test", game_description: "last round of the card game" } },
             { type: "instructions", config: { text: "end_message" } }
         ]
     },
