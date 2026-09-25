@@ -28,10 +28,7 @@ export const ModuleRegistry = {
         },
         elements: [
             { type: "instructions", config: { text: "start_message" } },
-            { type: "task", name: "max_press_test" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "max_press_test", game_description: "tapping test" } },
             { type: "task", name: "pavlovian_lottery" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "pavlovian_lottery", game_description: "lottery game" } },
             { type: "task", name: "PILT" },
             { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
             { type: "instructions", config: { text: "break_message" } },
