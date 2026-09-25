@@ -7,6 +7,7 @@
 import { postToParent } from './data-handling.js';
 import { preventParticipantTermination } from './participation-validation.js';
 import { formatDateString } from './calculations.js';
+import { startScreenWakeLock } from './wake-lock.js';
 
 /**
  * Dynamically loads a JavaScript file with Promise-based interface
@@ -232,6 +233,10 @@ const enterExperiment = {
             preventParticipantTermination();
         }
 
+        // Keep study tablets awake for the complete module. The helper requests the
+        // lock again if Android temporarily backgrounds the installed web app.
+        startScreenWakeLock();
+
         // Capture device/viewport covariates
         logDeviceInfo();
     }
@@ -246,4 +251,3 @@ export {
     enterExperiment,
     loadCSS
 };
-

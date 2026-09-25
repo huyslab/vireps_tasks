@@ -15,3 +15,4 @@ export * from './setup.js';
 export * from './touch.js';
 export * from './resumption.js';
 export * from './quiz.js';
+export * from './wake-lock.js';

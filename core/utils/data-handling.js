@@ -1,6 +1,7 @@
 import { preventRefresh} from "./participation-validation.js"
 import { submitRecord } from "./data-queue.js"
 import { createREDCapRecordId } from "./participant-id.js"
+import { stopScreenWakeLock } from "./wake-lock.js"
 
 let finalSaveGeneration = 0;
 
@@ -131,6 +132,9 @@ function endExperiment() {
 
     // Print end experiment message
     console.log("Experiment finished. Saving final data...");
+
+    // The final screen no longer needs to keep the tablet display awake.
+    stopScreenWakeLock();
 
     // Some module timelines invoke endExperiment more than once near completion (for
     // example, on bonus finish and again on the final message). Re-arm the guard and only
