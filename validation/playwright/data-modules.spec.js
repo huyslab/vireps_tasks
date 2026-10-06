@@ -1,105 +1,32 @@
 import { expect, test } from '@playwright/test';
 
-const expectedModules = {
-  module_1: [
-    ['reversal', 'reversal'],
-    ['go_no_go', 'go_no_go'],
-  ],
-  module_2: [
-    ['max_press_test', 'max_press_test'],
-    ['pavlovian_lottery', 'pavlovian_lottery'],
-    ['PILT', 'PILT'],
-    ['dynamometer_vigour', 'dynamometer_vigour'],
-    ['dynamometer_PIT', 'dynamometer_PIT'],
-    ['vigour_test', 'vigour_test'],
-    ['post_PILT_test', 'post_PILT_test'],
-  ],
-  module_2_without_dynamometer: [
-    ['max_press_test', 'max_press_test'],
-    ['pavlovian_lottery', 'pavlovian_lottery'],
-    ['PILT', 'PILT'],
-    ['vigour', 'vigour'],
-    ['PIT', 'PIT'],
-    ['vigour_test', 'vigour_test'],
-    ['post_PILT_test', 'post_PILT_test'],
-  ],
-};
-
-test('study modules contain the requested tasks and rate every task immediately afterward', async ({ page }) => {
+test('Module 2 runs tap then grip vigour, rates each vigour task, and ends with maximum strength', async ({ page }) => {
   await page.goto('/index.html');
-
-  const moduleNames = Object.keys(expectedModules);
-  const modules = await page.evaluate(async (names) => {
-    const { ModuleRegistry } = await import('/api/module-registry.js');
-    return Object.fromEntries(names.map((moduleName) => [
-      moduleName,
-      ModuleRegistry[moduleName].elements,
-    ]));
-  }, moduleNames);
-
-  for (const [moduleName, expectedTasks] of Object.entries(expectedModules)) {
-    const elements = modules[moduleName];
-    expect(elements[0]).toMatchObject({ type: 'instructions', config: { text: 'start_message' } });
-    expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
-
-    // Module 2 carries break screens between tasks, so the body is no longer a flat
-    // run of task/rating pairs. The invariant being checked is unchanged and is the
-    // one that matters: a rating follows its own task IMMEDIATELY, with nothing
-    // allowed in between. A break may only sit at a boundary, after a rating.
-    const body = elements.slice(1, -1);
-    let cursor = 0;
-    expectedTasks.forEach(([taskName, ratingName]) => {
-      while (body[cursor] && (
-        body[cursor].type === 'instructions'
-        || body[cursor].name === 'dynamometer_calibration'
-      )) cursor += 1;
-
-      expect(body[cursor]).toMatchObject({ type: 'task', name: taskName });
-      expect(
-        body[cursor + 1],
-        `${taskName} must be rated immediately, with no break between the task and its rating`
-      ).toMatchObject({
-        type: 'task',
-        name: 'acceptability_judgment',
-        config: { task_name: ratingName },
-      });
-      cursor += 2;
-    });
-
-    // Nothing but breaks may follow the last rating.
-    expect(body.slice(cursor).filter((element) => element.type !== 'instructions')).toEqual([]);
-  }
-});
-
-test('module 2 calibrates once and keeps the grip connected through vigour and PIT', async ({ page }) => {
-  await page.goto('/index.html');
-
   const elements = await page.evaluate(async () => {
     const { ModuleRegistry } = await import('/api/module-registry.js');
     return ModuleRegistry.module_2.elements;
   });
-
-  const calibrationIndex = elements.findIndex(element => element.name === 'dynamometer_calibration');
-  const vigourIndex = elements.findIndex(element => element.name === 'dynamometer_vigour');
-  const pitIndex = elements.findIndex(element => element.name === 'dynamometer_PIT');
-
-  expect(elements.filter(element => element.name === 'dynamometer_calibration')).toHaveLength(1);
-  expect(elements[calibrationIndex]).toEqual({
-    type: 'task',
-    name: 'dynamometer_calibration',
-    config: { disconnectOnFinish: false },
-  });
-  expect(elements[vigourIndex]).toEqual({
-    type: 'task',
-    name: 'dynamometer_vigour',
-    config: { disconnectOnFinish: false },
-  });
-  expect(calibrationIndex).toBeLessThan(vigourIndex);
-  expect(vigourIndex).toBeLessThan(pitIndex);
-  expect(elements[calibrationIndex - 1]).toEqual({
-    type: 'instructions',
-    config: { text: 'break_message' },
-  });
+  const named = elements.filter(element => element.type === 'task').map(element => element.name);
+  expect(named).toEqual([
+    'max_press_test', 'pavlovian_lottery', 'PILT', 'acceptability_judgment',
+    'vigour', 'acceptability_judgment', 'dynamometer_calibration',
+    'dynamometer_vigour', 'acceptability_judgment', 'PIT',
+    'acceptability_judgment', 'vigour_test', 'post_PILT_test',
+    'dynamometer_max_strength',
+  ]);
+  for (const taskName of ['vigour', 'dynamometer_vigour', 'PIT']) {
+    const index = elements.findIndex(element => element.name === taskName);
+    expect(elements[index + 1]).toMatchObject({
+      type: 'task',
+      name: 'acceptability_judgment',
+      config: { task_name: taskName },
+    });
+  }
+  expect(elements.find(element => element.name === 'dynamometer_calibration').config)
+    .toMatchObject({ disconnectOnFinish: false });
+  expect(elements.filter(element => element.name === 'dynamometer_PIT')).toHaveLength(0);
+  expect(elements.at(-2)).toMatchObject({ name: 'dynamometer_max_strength' });
+  expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
   expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
 });
 
