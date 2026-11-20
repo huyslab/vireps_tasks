@@ -38,7 +38,7 @@ Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 - **`open_text`** — open-ended text responses
 - **`acceptability_judgment`** — post-task acceptability ratings
 - **`self_report`** — touch-friendly BIS, ARI, STAXI-2, and STAI questionnaires
-- **`dynamometer_calibration`** — seven-second maximum quick-squeeze rate test; the median squeeze peak sets the vigour threshold at 50%, using a Vernier GDX-HD
+- **`dynamometer_calibration`** — seven-second maximum quick-squeeze rate test using a Vernier GDX-HD; grip vigour and PIT then count squeezes with the same rule, with no strength target
 - **`dynamometer_vigour`** — piggy-bank vigour task controlled by calibrated grip squeezes
 - **`dynamometer_max_strength`** — ten maximal grip squeezes at the end of Module 2
 - **`dynamometer_PIT`** — cloudy-place PIT task controlled by the same calibrated grip squeezes
@@ -48,7 +48,7 @@ The experimenter launcher uses three supervised modules from `api/module-registr
 dynamometer effort tasks), and `questionnaires` (STAI, ARI, BIS, and STAXI-2).
 Module 1's games and Module 2's PILT, vigour, and PIT games are followed by acceptability ratings.
 Module 2 starts effort testing with the maximum tap rate and tap vigour tasks. After
-the grip setup break, a quick-squeeze rate test sets the threshold for 27 grip
+the grip setup break, a quick-squeeze rate test comes before 27 grip
 vigour trials (three repeats of each condition). PIT uses taps. Ten maximal grip
 squeezes finish the module after the learning tests.
 The focused `dynamometer` and `dynamometer_pit` diagnostic modules, plus the older

@@ -1,27 +1,19 @@
+import { cleanUpGripTask, createSqueezeTracker, releaseGrip, setForceCallback } from '@utils/dynamometer.js';
 import {
-    cancelPendingDynamometerConnection,
-    connectDynamometer,
-    disconnectDynamometer,
-    setForceCallback,
-    SQUEEZE_PROMINENCE_FRACTION,
-    startForceStream
-} from '@utils/dynamometer.js';
+    clearGripCalibration,
+    getGripCalibration,
+    makeConnectStep,
+    saveGripCalibration
+} from '@utils/grip-session.js';
 import { updateState } from '@utils/index.js';
 
-const START_FORCE_N = 1.0;
-const RELEASE_FORCE_N = 0.5;
 const MIN_SQUEEZES = 3;
 const DEFAULT_DURATION_MS = 7000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30000;
-const DEFAULT_THRESHOLD_FRACTION = 0.5;
 const DEFAULT_SPEED_BAR_MAX_HZ = 5;
 
 let needsRetry = false;
 let signalLost = false;
-
-function storageKey(kind) {
-    return `dynamometer${kind}_${window.participantID ?? 'anon'}`;
-}
 
 function positiveNumber(value, fallback) {
     const number = Number(value);
@@ -36,130 +28,11 @@ export function median(values) {
         : sorted[middle];
 }
 
-/**
- * Detects discrete squeezes in the force trace.
- *
- * The lowest force since the last squeeze is the trough. A squeeze starts once
- * force rises START_FORCE_N above it, so a grip that rests slightly above zero
- * (sensor drift, a hand resting on it) still works, and a squeeze already under
- * way when tracking starts only sets a high trough and is never counted.
- *
- * - `fullRelease: true` (maximum strength): a squeeze ends only once force is
- *   back within RELEASE_FORCE_N of the trough, i.e. the grip was let go.
- * - `fullRelease: false` (default, quick squeezes): fast squeezing rarely gets
- *   back to rest, so the trace looks like a wave riding above zero. A squeeze
- *   ends at the dip after each peak, and the minimum of that dip becomes the
- *   trough the next squeeze rises from. Rise and fall both have to exceed
- *   SQUEEZE_PROMINENCE_FRACTION (core/utils/dynamometer.js) of the squeeze height (and at least
- *   START_FORCE_N), so small wobbles at the top or bottom are not counted.
- */
-export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {}, fullRelease = false } = {}) {
-    let trough = Infinity;
-    let startTrough = 0;
-    let lastHeight = 0;
-    let squeezing = false;
-    let peak = 0;
-    return {
-        update(forceN) {
-            const force = Math.max(0, Number(forceN) || 0);
-            if (!squeezing) {
-                trough = Math.min(trough, force);
-                const rise = fullRelease
-                    ? START_FORCE_N
-                    : Math.max(START_FORCE_N, SQUEEZE_PROMINENCE_FRACTION * lastHeight);
-                if (force > trough + rise) {
-                    squeezing = true;
-                    startTrough = trough;
-                    peak = force;
-                    onStart(force);
-                }
-                return;
-            }
-            peak = Math.max(peak, force);
-            const backToRest = force <= startTrough + RELEASE_FORCE_N;
-            const pastPeak = !fullRelease && force <= peak
-                - Math.max(START_FORCE_N, SQUEEZE_PROMINENCE_FRACTION * (peak - startTrough));
-            if (backToRest || pastPeak) {
-                squeezing = false;
-                lastHeight = peak - startTrough;
-                trough = force;
-                onRelease(peak);
-            }
-        },
-        get peak() { return peak; }
-    };
-}
 
-/**
- * Connect step for a calibration-style procedure that loops on retry. It is
- * shown on the first pass and again only when `shouldReconnect()` says the
- * signal was lost, or no grip is connected; otherwise a retry reuses the live
- * connection instead of asking the experimenter to pair the grip again.
- */
-export function makeConnectStep(shouldReconnect) {
-    let firstPass = true;
-    return {
-        timeline: [makeConnectTrial()],
-        conditional_function: () => {
-            const show = firstPass || shouldReconnect() || !window.dynamometerSensor;
-            firstPass = false;
-            return show;
-        }
-    };
-}
-
+// A skipped demo still needs a calibration so the grip games that follow run.
 export function cleanUpDynamometerCalibrationDemo(settings = {}) {
-    cancelPendingDynamometerConnection();
-    setForceCallback(() => {});
-    if (!(Number.isFinite(window.dynamometerMaxForce) && window.dynamometerMaxForce > 0)) {
-        window.dynamometerMaxForce = 80;
-        sessionStorage.setItem(storageKey('MaxForce'), '80');
-    }
-    if (!(Number.isFinite(window.dynamometerMaxSpeed) && window.dynamometerMaxSpeed > 0)) {
-        window.dynamometerMaxSpeed = 5;
-        sessionStorage.setItem(storageKey('MaxSpeed'), '5');
-    }
-    if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-        const sensor = window.dynamometerSensor;
-        window.dynamometerSensor = null;
-        disconnectDynamometer(sensor).catch(() => {});
-    }
-}
-
-export function makeConnectTrial() {
-    return {
-        type: jsPsychHtmlKeyboardResponse,
-        choices: 'NO_KEYS',
-        stimulus: () => `
-            <div id="instruction-container"><div id="instruction-text">
-                <h2>For the experimenter</h2>
-                <p>Switch on the grip and select <strong>Connect grip</strong>.</p>
-                <p id="connect-status" class="cal-connection-status" role="status" aria-live="polite"></p>
-                <button id="connect-btn" class="jspsych-btn">Connect grip</button>
-            </div></div>`,
-        data: { trialphase: 'dynamometer_connect' },
-        on_load: () => {
-            const button = document.getElementById('connect-btn');
-            const status = document.getElementById('connect-status');
-            button.addEventListener('click', async () => {
-                button.disabled = true;
-                status.textContent = 'Connecting…';
-                try {
-                    if (window.dynamometerSensor) {
-                        try { await disconnectDynamometer(window.dynamometerSensor); } catch (_) {}
-                        window.dynamometerSensor = null;
-                    }
-                    window.dynamometerSensor = await connectDynamometer();
-                    startForceStream(window.dynamometerSensor, () => {});
-                    jsPsych.finishTrial({ connected: true });
-                } catch (error) {
-                    status.textContent = `Could not connect: ${error.message}. Please try again.`;
-                    button.disabled = false;
-                }
-            });
-            if (window.simulating) jsPsych.pluginAPI.setTimeout(() => button.click(), 100);
-        }
-    };
+    cleanUpGripTask(settings);
+    if (getGripCalibration() === null) saveGripCalibration(80);
 }
 
 function makeInstructions(settings) {
@@ -179,7 +52,6 @@ function makeInstructions(settings) {
 function makeRateTrial(settings) {
     const durationMs = positiveNumber(settings.speedCalibrationDurationMs, DEFAULT_DURATION_MS);
     const waitTimeoutMs = positiveNumber(settings.squeezeWaitTimeoutMs, DEFAULT_WAIT_TIMEOUT_MS);
-    const thresholdFraction = positiveNumber(settings.thresholdFraction, DEFAULT_THRESHOLD_FRACTION);
     const speedBarMaxHz = positiveNumber(settings.speedBarMaxHz, DEFAULT_SPEED_BAR_MAX_HZ);
     let cleanUp = () => {};
 
@@ -199,8 +71,7 @@ function makeRateTrial(settings) {
             </div></div>`,
         data: {
             trialphase: 'dynamometer_speed_calibration',
-            speed_calibration_duration_ms: durationMs,
-            threshold_fraction: thresholdFraction
+            speed_calibration_duration_ms: durationMs
         },
         on_load: () => {
             const countdown = document.getElementById('grip-speed-countdown');
@@ -245,19 +116,10 @@ function makeRateTrial(settings) {
                 const speedHz = responseTimes.length / (effectiveDurationMs / 1000);
                 needsRetry = timedOut || medianPeakN === null;
                 signalLost = needsRetry && !signalSeen;
-                if (!needsRetry) {
-                    window.dynamometerMaxForce = medianPeakN;
-                    window.dynamometerMaxSpeed = speedHz;
-                    sessionStorage.setItem(storageKey('MaxForce'), String(medianPeakN));
-                    sessionStorage.setItem(storageKey('MaxSpeed'), String(window.dynamometerMaxSpeed));
-                }
+                if (!needsRetry) saveGripCalibration(medianPeakN);
                 jsPsych.finishTrial({
                     peak_forces_n: peaks,
                     median_squeeze_force_n: medianPeakN,
-                    // Grip tasks scale their threshold from this value; it is the
-                    // median quick-squeeze peak, not maximal strength.
-                    calibration_force_n: medianPeakN,
-                    threshold_force_n: medianPeakN === null ? null : medianPeakN * thresholdFraction,
                     trial_squeezes: responseTimes.length,
                     response_time: responseTimes,
                     avg_speed_hz: speedHz,
@@ -344,10 +206,7 @@ function makeFeedback(settings) {
             post_trial_gap: 800,
             data: { trialphase: 'dynamometer_speed_calibration_feedback' },
             on_finish: () => {
-                if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-                    disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-                    window.dynamometerSensor = null;
-                }
+                releaseGrip(settings);
                 updateState('dynamometer_speed_calibration_end');
                 updateState('dynamometer_calibration_end');
             }
@@ -357,11 +216,7 @@ function makeFeedback(settings) {
 }
 
 export function createDynamometerCalibrationTimeline(settings = {}) {
-    sessionStorage.removeItem(storageKey('MaxForce'));
-    sessionStorage.removeItem(storageKey('MaxSpeed'));
-    window.dynamometerMaxForce = undefined;
-    window.dynamometerMaxSpeed = undefined;
-    window.dynamometerSensor = null;
+    clearGripCalibration();
     needsRetry = false;
     signalLost = false;
 

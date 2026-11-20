@@ -6,7 +6,7 @@ async function openTimelineHarness(page) {
   await page.goto('/experiment.html?participant_id=invalid%20participant');
 }
 
-test('dynamometer tasks expose the requested calibration and vigour defaults', async ({ page }) => {
+test('dynamometer tasks expose the requested defaults and no strength target', async ({ page }) => {
   await openTimelineHarness(page);
 
   const defaults = await page.evaluate(async () => {
@@ -21,22 +21,18 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
   expect(defaults.calibration).toMatchObject({
     disconnectOnFinish: true,
     squeezeWaitTimeoutMs: 30000,
-    thresholdFraction: 0.5,
     speedCalibrationDurationMs: 7000,
     speedBarMaxHz: 5,
   });
   expect(defaults.calibration).not.toHaveProperty('squeezeDurationMs');
   expect(defaults.calibration).not.toHaveProperty('relaxDurationMs');
-  expect(defaults.vigour).toMatchObject({
-    thresholdFraction: 0.5,
-    holdDurationMs: 0,
-    disconnectOnFinish: true,
-  });
-  expect(defaults.pit).toMatchObject({
-    thresholdFraction: 0.5,
-    holdDurationMs: 0,
-    disconnectOnFinish: true,
-  });
+  for (const config of [defaults.calibration, defaults.vigour, defaults.pit]) {
+    // Grip games count squeezes with the speed test's rule; there is no strength target.
+    expect(config).not.toHaveProperty('thresholdFraction');
+    expect(config).not.toHaveProperty('holdDurationMs');
+  }
+  expect(defaults.vigour).toMatchObject({ disconnectOnFinish: true });
+  expect(defaults.pit).toMatchObject({ disconnectOnFinish: true });
 });
 
 test('dynamometer bonuses use the five-squeezes-per-second ceiling', async ({ page }) => {
@@ -73,14 +69,11 @@ test('missing calibration is recoverable and stale grip handles trigger reconnec
       '/tasks/piggy-banks-dynamometer/PIT-timeline.js'
     );
     window.simulating = false;
-    window.dynamometerMaxForce = undefined;
     window.dynamometerSensor = null;
     sessionStorage.clear();
     const settings = {
       session: 'wk0',
       task_name: 'dynamometer_PIT',
-      thresholdFraction: 0.05,
-      holdDurationMs: 0,
       disconnectOnFinish: true,
     };
     const summarise = (timeline) => {
@@ -121,8 +114,6 @@ test('squeezing is the primary action on the dynamometer start screen', async ({
       '/tasks/piggy-banks-dynamometer/vigour-instructions.js'
     );
     const instructions = createDynamometerVigourInstructions({
-      thresholdFraction: 0.05,
-      holdDurationMs: 0,
     });
     return instructions.timeline[2].stimulus();
   });
@@ -138,7 +129,7 @@ test('dynamometer vigour uses balanced FR1, FR5, and FR10 conditions', async ({ 
     const { createDynVigourCoreTimeline } = await import(
       '/tasks/piggy-banks-dynamometer/vigour-utils.js'
     );
-    return createDynVigourCoreTimeline({ thresholdFraction: 0.5, holdDurationMs: 0 })
+    return createDynVigourCoreTimeline({})
       .map(trial => trial.timeline_variables[0]);
   });
 
@@ -166,8 +157,6 @@ test('dynamometer PIT preserves the standard sequence with mapped force ratios',
     const dynamometer = createPITCoreTimeline({
       session: 'wk0',
       inputMode: 'dynamometer',
-      thresholdFraction: 0.05,
-      holdDurationMs: 0,
     });
     const variables = timeline => timeline.map(trial => trial.timeline_variables[0]);
     return {
@@ -190,51 +179,60 @@ test('dynamometer PIT preserves the standard sequence with mapped force ratios',
   expect(comparison.dynamometerDataKeys).not.toContain('pointer_mixed');
 });
 
-test('debug participants get a live force graph with the target marked', async ({ page }) => {
+test('debug participants see the squeeze rule live on the force graph', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
-    const {
-      createDynVigourCoreTimeline,
-      createDebugForceGraphUpdater,
-    } = await import('/tasks/piggy-banks-dynamometer/vigour-utils.js');
+    const { createDynVigourCoreTimeline } = await import('/tasks/piggy-banks-dynamometer/vigour-utils.js');
+    const { createDebugForceGraphUpdater } = await import('/tasks/piggy-banks-dynamometer/debug-graph.js');
+    const { createSqueezeTracker } = await import('/core/utils/dynamometer.js');
+    const { saveGripCalibration } = await import('/core/utils/grip-session.js');
 
     window.participantID = 'study_debug_001';
-    window.dynamometerMaxForce = 200;
-    const settings = { thresholdFraction: 0.5, holdDurationMs: 1 };
-    const firstTrial = createDynVigourCoreTimeline(settings)[0].timeline.find(
+    saveGripCalibration(30);
+    const firstTrial = createDynVigourCoreTimeline({})[0].timeline.find(
       item => item.data?.trialphase === 'dynamometer_vigour_trial'
     );
     document.getElementById('display_element').innerHTML = firstTrial.stimulus();
 
-    const updateGraph = createDebugForceGraphUpdater(settings);
-    updateGraph(25);
-    updateGraph(100);
+    const updateGraph = createDebugForceGraphUpdater();
+    const tracker = createSqueezeTracker();
+    const feed = force => { tracker.update(force); updateGraph(force, tracker); };
+    [0, 20, 40, 35].forEach(feed);
+    const midSqueeze = document.getElementById('dynamometer-debug-trigger').textContent;
+    [10, 30, 40].forEach(feed);
 
-    const graph = document.getElementById('dynamometer-debug-graph');
-    const target = graph.querySelector('.dynamometer-debug-target');
-    const trace = document.getElementById('dynamometer-debug-trace');
+    const text = id => document.getElementById(id).textContent;
     const debugResult = {
-      targetForceN: Number(graph.dataset.targetForceN),
-      targetY1: Number(target.getAttribute('y1')),
-      targetY2: Number(target.getAttribute('y2')),
-      tracePoints: trace.getAttribute('points').split(' ').length,
-      current: document.getElementById('dynamometer-debug-current').textContent,
+      midSqueeze,
+      waiting: null,
+      current: text('dynamometer-debug-current'),
+      count: text('dynamometer-debug-count'),
+      ticks: document.querySelectorAll('#dynamometer-debug-squeezes line').length,
+      tracePoints: document.getElementById('dynamometer-debug-trace').getAttribute('points').split(' ').length,
+      triggerPoints: document.getElementById('dynamometer-debug-trigger-line').getAttribute('points').split(' ').length,
     };
+    feed(5);
+    debugResult.waiting = text('dynamometer-debug-trigger');
 
     window.participantID = 'study_001';
     const normalMarkup = firstTrial.stimulus();
     return { ...debugResult, normalMarkup };
   });
 
-  expect(result.targetForceN).toBe(100);
-  expect(result.targetY1).toBe(result.targetY2);
-  expect(result.tracePoints).toBe(2);
-  expect(result.current).toBe('100.0 N');
+  // Peak 40 N from a 0 N trough: the squeeze ends below 40 - 25% x 40 = 30 N.
+  expect(result.midSqueeze).toBe('Ends below 30.0 N');
+  expect(result.current).toBe('40.0 N');
+  expect(result.count).toBe('2');
+  expect(result.ticks).toBe(2);
+  expect(result.tracePoints).toBe(7);
+  expect(result.triggerPoints).toBe(7);
+  // After the second squeeze ends at 5 N, the next starts 25% x 30 N above that dip.
+  expect(result.waiting).toBe('Next above 12.5 N');
   expect(result.normalMarkup).not.toContain('dynamometer-debug-graph');
 });
 
-test('quick-squeeze test uses the median completed squeeze peak for the vigour threshold', async ({ page }) => {
+test('quick-squeeze test records the median completed squeeze peak', async ({ page }) => {
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
@@ -244,7 +242,6 @@ test('quick-squeeze test uses the median completed squeeze peak for the vigour t
     window.participantID = 'median_quick_squeeze';
     const timeline = await createTaskTimeline('dynamometer_calibration', {
       speedCalibrationDurationMs: 350,
-      thresholdFraction: 0.5,
     });
     const rateTrial = timeline[0].timeline.find(
       item => item.data?.trialphase === 'dynamometer_speed_calibration'
@@ -271,8 +268,7 @@ test('quick-squeeze test uses the median completed squeeze peak for the vigour t
     return {
       peaks: row.peak_forces_n,
       median: row.median_squeeze_force_n,
-      threshold: row.threshold_force_n,
-      stored: Number(sessionStorage.getItem('dynamometerMaxForce_median_quick_squeeze')),
+      stored: (await import('/core/utils/grip-session.js')).getGripCalibration(),
       speed: row.avg_speed_hz,
       retry: row.calibration_retry,
     };
@@ -280,7 +276,6 @@ test('quick-squeeze test uses the median completed squeeze peak for the vigour t
 
   expect(result.peaks).toEqual([10, 20, 40, 30]);
   expect(result.median).toBe(25);
-  expect(result.threshold).toBe(12.5);
   expect(result.stored).toBe(25);
   expect(result.speed).toBeCloseTo(3 / 0.35);
   expect(result.retry).toBe(false);
@@ -378,7 +373,7 @@ test('grip retries reuse a live connection and reconnect only after signal loss'
   await openTimelineHarness(page);
 
   const result = await page.evaluate(async () => {
-    const { makeConnectStep } = await import('/tasks/dynamometer-calibration/task.js');
+    const { makeConnectStep } = await import('/core/utils/grip-session.js');
     let lost = false;
     const step = makeConnectStep(() => lost);
     window.dynamometerSensor = { opened: true };
@@ -398,46 +393,4 @@ test('grip retries reuse a live connection and reconnect only after signal loss'
     retryAfterLoss: true,
     retryWithoutSensor: true,
   });
-});
-
-test('quick squeezes count each wave of the grip trace, even without letting go fully', async ({ page }) => {
-  await openTimelineHarness(page);
-
-  const result = await page.evaluate(async () => {
-    const { createSqueezeTracker } = await import('/tasks/dynamometer-calibration/task.js');
-    const count = (trace, options = {}) => {
-      const peaks = [];
-      let starts = 0;
-      const tracker = createSqueezeTracker({ ...options, onStart: () => starts++, onRelease: peak => peaks.push(peak) });
-      trace.forEach(force => tracker.update(force));
-      return { starts, peaks };
-    };
-    // Five fast squeezes sampled every 20 ms at about 4 per second, dipping only to
-    // 8-10 N between squeezes - the grip is never back near zero.
-    const lows = [0, 8, 10, 8, 10, 0];
-    const fast = [0];
-    for (let squeeze = 0; squeeze < 5; squeeze++) {
-      const [from, to] = [lows[squeeze], lows[squeeze + 1]];
-      for (let step = 1; step <= 12; step++) {
-        const phase = Math.PI * step / 12;
-        // Rise from this dip to 30 N, then fall to the next dip.
-        fast.push(step <= 6 ? from + (30 - from) * Math.sin(phase) : to + (30 - to) * Math.sin(phase));
-      }
-    }
-    // One squeeze with wobbles at the top and in the valley that must not split it.
-    const wobbly = [0, 10, 25, 30, 27, 30, 29, 12, 4, 5, 3, 4, 0];
-    return {
-      fast: count(fast),
-      fastFullRelease: count(fast, { fullRelease: true }),
-      wobbly: count(wobbly),
-    };
-  });
-
-  expect(result.fast.starts).toBe(5);
-  expect(result.fast.peaks).toHaveLength(5);
-  for (const peak of result.fast.peaks) expect(peak).toBeCloseTo(30, 0);
-  // Maximum strength requires letting go, so the same trace is one long squeeze.
-  expect(result.fastFullRelease.starts).toBe(1);
-  expect(result.wobbly.starts).toBe(1);
-  expect(result.wobbly.peaks).toEqual([30]);
 });

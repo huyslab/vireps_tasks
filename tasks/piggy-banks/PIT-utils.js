@@ -146,11 +146,7 @@ function PITTrial(settings) {
       total_presses: () => { return taskTotalPresses },
       total_reward: () => { return taskTotalReward },
       input_type: dynamometer ? 'dynamometer' : 'pointer',
-      ...(dynamometer ? {
-        calibration_force_n: () => window.dynamometerMaxForce,
-        threshold_fraction: settings.thresholdFraction,
-        hold_duration_ms: settings.holdDurationMs
-      } : {
+      ...(dynamometer ? {} : {
         pointer_type: () => { return trialState.pointerType },
         pointer_type_counts: () => { return trialState.pointerTypeCounts },
         pointer_mixed: () => { return Object.keys(trialState.pointerTypeCounts).length > 1 }
@@ -228,7 +224,7 @@ function PITTrial(settings) {
         cleanupInput = settings.inputAdapter.bind(handlePress);
       } else if (!dynamometer) {
         // PIT uses the same input as its preceding vigour task: screen taps in the
-        // standard battery, or threshold-crossing grip squeezes in the dynamometer battery.
+        // standard battery, or grip squeezes (createSqueezeTracker) in the dynamometer battery.
         pitTapListener = setupTapListener(piggyContainer, handlePress);
       }
 

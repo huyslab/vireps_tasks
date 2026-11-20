@@ -302,20 +302,11 @@ test('skipping demo calibration supplies values for the following grip tasks', a
 
     return {
       hookIsDeclared: typeof activeElement.onDemoSkip === 'function',
-      maxForce: window.dynamometerMaxForce,
-      maxSpeed: window.dynamometerMaxSpeed,
-      storedForce: sessionStorage.getItem('dynamometerMaxForce_tablet_demo'),
-      storedSpeed: sessionStorage.getItem('dynamometerMaxSpeed_tablet_demo'),
+      calibration: (await import('/core/utils/grip-session.js')).getGripCalibration(),
     };
   });
 
-  expect(result).toEqual({
-    hookIsDeclared: true,
-    maxForce: 80,
-    maxSpeed: 5,
-    storedForce: '80',
-    storedSpeed: '5',
-  });
+  expect(result).toEqual({ hookIsDeclared: true, calibration: 80 });
 });
 
 test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery', async ({ browser }) => {

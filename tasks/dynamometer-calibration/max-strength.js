@@ -1,6 +1,7 @@
-import { cancelPendingDynamometerConnection, disconnectDynamometer, setForceCallback } from '@utils/dynamometer.js';
+import { cleanUpGripTask, createSqueezeTracker, releaseGrip, setForceCallback } from '@utils/dynamometer.js';
+import { makeConnectStep } from '@utils/grip-session.js';
 import { updateState } from '@utils/index.js';
-import { createSqueezeTracker, makeConnectStep, median } from './task.js';
+import { median } from './task.js';
 
 const N_SQUEEZES = 10;
 const WAIT_TIMEOUT_MS = 30000;
@@ -98,10 +99,7 @@ function makeResults(settings) {
             on_finish: data => {
                 Object.assign(data, data.value);
                 if (!needsRetry) {
-                    if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-                        disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-                        window.dynamometerSensor = null;
-                    }
+                    releaseGrip(settings);
                     updateState('dynamometer_max_strength_end');
                 }
             }
@@ -158,11 +156,4 @@ export function createDynamometerMaxStrengthTimeline(settings = {}) {
     }];
 }
 
-export function cleanUpDynamometerMaxStrengthDemo() {
-    cancelPendingDynamometerConnection();
-    setForceCallback(() => {});
-    if (window.dynamometerSensor) {
-        disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-        window.dynamometerSensor = null;
-    }
-}
+export const cleanUpDynamometerMaxStrengthDemo = cleanUpGripTask;

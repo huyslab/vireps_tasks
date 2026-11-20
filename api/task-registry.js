@@ -544,7 +544,6 @@ export const TaskRegistry = {
     defaultConfig: {
       disconnectOnFinish: true,
       squeezeWaitTimeoutMs: 30000,
-      thresholdFraction: 0.5,
       speedCalibrationDurationMs: 7000,
       speedBarMaxHz: 5
     },
@@ -555,7 +554,6 @@ export const TaskRegistry = {
     configOptions: {
       disconnectOnFinish: 'Whether to disconnect the dynamometer after calibration. Default is true; the combined dynamometer module sets this to false so vigour can reuse the connection.',
       squeezeWaitTimeoutMs: 'How long in milliseconds to wait for the first quick squeeze before reconnecting the dynamometer. Default is 30000.',
-      thresholdFraction: 'Fraction of the median quick-squeeze peak used to register squeezes in vigour. Default is 0.5 (50%).',
       speedCalibrationDurationMs: 'Duration of the maximum quick-squeeze rate test in milliseconds. Default is 7000 (7 seconds).',
       speedBarMaxHz: 'Squeeze rate represented by a full speed bar. Default is 5 squeezes per second.'
     }
@@ -578,8 +576,6 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_vigour_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
-      thresholdFraction: 0.5,
-      holdDurationMs: 0,
       disconnectOnFinish: true,
       preferredOrientation: 'portrait'
     },
@@ -588,8 +584,6 @@ export const TaskRegistry = {
     },
     resumptionRules: { enabled: true },
     configOptions: {
-      thresholdFraction: 'Fraction of the median quick-squeeze peak the participant must reach for a squeeze to count. Default is 0.5 (50%).',
-      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
       disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
     }
@@ -602,8 +596,6 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_pit_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_PIT',
-      thresholdFraction: 0.5,
-      holdDurationMs: 0,
       disconnectOnFinish: true,
       preferredOrientation: 'portrait'
     },
@@ -612,8 +604,6 @@ export const TaskRegistry = {
     },
     resumptionRules: { enabled: true },
     configOptions: {
-      thresholdFraction: 'Fraction of the median quick-squeeze peak the participant must reach for a squeeze to count. Default is 0.5 (50%), matching dynamometer vigour.',
-      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
       disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard PIT task."
     }
