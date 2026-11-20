@@ -185,7 +185,7 @@ function piggyBankTrial(settings) {
             trial_reward:   () => trialState.trialReward,
             total_presses:  () => taskTotalPresses,
             total_reward:   () => taskTotalReward,
-            max_force_n:          () => window.dynamometerMaxForce,
+            calibration_force_n:  () => window.dynamometerMaxForce,
             threshold_fraction:   settings.thresholdFraction,
             hold_duration_ms:     settings.holdDurationMs
         },

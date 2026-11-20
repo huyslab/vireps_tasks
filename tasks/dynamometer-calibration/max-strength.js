@@ -1,12 +1,11 @@
 import { cancelPendingDynamometerConnection, disconnectDynamometer, setForceCallback } from '@utils/dynamometer.js';
 import { updateState } from '@utils/index.js';
-import { makeConnectTrial } from './task.js';
+import { createSqueezeTracker, makeConnectStep, median } from './task.js';
 
 const N_SQUEEZES = 10;
-const START_FORCE_N = 1.0;
-const RELEASE_FORCE_N = 0.5;
 const WAIT_TIMEOUT_MS = 30000;
 let needsRetry = false;
+let signalLost = false;
 
 function makeStrengthTrial(index) {
     let peak = 0;
@@ -32,7 +31,7 @@ function makeStrengthTrial(index) {
                 complete = false;
             },
             on_load: () => {
-                let phase = 'awaiting-release';
+                let signalSeen = false;
                 const finish = () => {
                     if (complete) return;
                     complete = true;
@@ -40,17 +39,16 @@ function makeStrengthTrial(index) {
                     document.getElementById('cal-squeeze-counter').textContent = `${index + 1} / ${N_SQUEEZES}`;
                     jsPsych.pluginAPI.setTimeout(() => jsPsych.finishTrial(), index === N_SQUEEZES - 1 ? 300 : 50);
                 };
+                const tracker = createSqueezeTracker({
+                    onRelease: squeezePeak => {
+                        peak = squeezePeak;
+                        finish();
+                    }
+                });
                 setForceCallback(forceN => {
                     if (complete) return;
-                    const force = Math.max(0, Number(forceN) || 0);
-                    if (phase === 'awaiting-release' && force <= RELEASE_FORCE_N) phase = 'ready';
-                    else if (phase === 'ready' && force > START_FORCE_N) {
-                        phase = 'squeezing';
-                        peak = force;
-                    } else if (phase === 'squeezing') {
-                        peak = Math.max(peak, force);
-                        if (force <= RELEASE_FORCE_N) finish();
-                    }
+                    signalSeen = true;
+                    tracker.update(forceN);
                 });
                 if (window.simulating) {
                     jsPsych.pluginAPI.setTimeout(() => {
@@ -62,6 +60,7 @@ function makeStrengthTrial(index) {
                     if (complete) return;
                     timedOut = true;
                     needsRetry = true;
+                    signalLost = !signalSeen;
                     complete = true;
                     setForceCallback(() => {});
                     jsPsych.finishTrial();
@@ -81,17 +80,16 @@ function makeResults(settings) {
                 const rows = jsPsych.data.get().filter({ trialphase: 'dynamometer_max_strength_trial' })
                     .last(N_SQUEEZES).values();
                 const completeAttempt = rows.length === N_SQUEEZES && rows.every(
-                    (row, index) => row.trial_number === index + 1 && row.peak_force_n > START_FORCE_N
+                    (row, index) => row.trial_number === index + 1 && row.peak_force_n > 0
                 );
                 needsRetry = !completeAttempt;
                 if (!completeAttempt) return { calibration_retry: true };
                 const peaks = rows.map(row => row.peak_force_n);
-                const ordered = [...peaks].sort((a, b) => a - b);
                 return {
                     calibration_retry: false,
                     peak_forces_n: peaks,
-                    maximum_peak_force_n: ordered.at(-1),
-                    median_peak_force_n: (ordered[4] + ordered[5]) / 2
+                    maximum_peak_force_n: Math.max(...peaks),
+                    median_peak_force_n: median(peaks)
                 };
             },
             data: { trialphase: 'dynamometer_max_strength_results' },
@@ -110,11 +108,31 @@ function makeResults(settings) {
     };
 }
 
+function makeRetryPrompt() {
+    return {
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            stimulus: () => signalLost
+                ? `<div id="instruction-container"><div id="instruction-text">
+                    <p>The grip stopped sending a signal. Please ask the experimenter to check the grip and connect it again.</p>
+                </div></div>`
+                : `<div id="instruction-container"><div id="instruction-text">
+                    <p>We did not detect a full squeeze and release in time. Let's start the ${N_SQUEEZES} squeezes again.</p>
+                    <p>Squeeze <strong>as hard as you can</strong>, then fully let go each time.</p>
+                </div></div>`,
+            choices: ['Continue'],
+            data: { trialphase: 'dynamometer_max_strength_retry', signal_lost: () => signalLost }
+        }],
+        conditional_function: () => needsRetry
+    };
+}
+
 export function createDynamometerMaxStrengthTimeline(settings = {}) {
     needsRetry = false;
+    signalLost = false;
     return [{
         timeline: [
-            makeConnectTrial(),
+            makeConnectStep(() => signalLost),
             {
                 type: jsPsychHtmlButtonResponse,
                 stimulus: `<div id="instruction-container"><div id="instruction-text">
@@ -122,21 +140,13 @@ export function createDynamometerMaxStrengthTimeline(settings = {}) {
                     <p>Squeeze the grip <strong>as hard as you can</strong>, then fully let go. Do this <strong>${N_SQUEEZES} times</strong>.</p>
                 </div></div>`,
                 choices: ['Start'],
-                data: { trialphase: 'dynamometer_max_strength_instructions' }
+                data: { trialphase: 'dynamometer_max_strength_instructions' },
+                // The connect step has already read the previous attempt's flag.
+                on_start: () => { signalLost = false; }
             },
             ...Array.from({ length: N_SQUEEZES }, (_, index) => makeStrengthTrial(index)),
             makeResults(settings),
-            {
-                timeline: [{
-                    type: jsPsychHtmlButtonResponse,
-                    stimulus: `<div id="instruction-container"><div id="instruction-text">
-                        <p>The grip signal was interrupted. Please ask the experimenter to check the grip, then try again.</p>
-                    </div></div>`,
-                    choices: ['Continue'],
-                    data: { trialphase: 'dynamometer_max_strength_retry' }
-                }],
-                conditional_function: () => needsRetry
-            }
+            makeRetryPrompt()
         ],
         loop_function: () => {
             const retry = needsRetry;

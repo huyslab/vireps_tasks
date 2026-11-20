@@ -16,6 +16,7 @@ const DEFAULT_THRESHOLD_FRACTION = 0.5;
 const DEFAULT_SPEED_BAR_MAX_HZ = 5;
 
 let needsRetry = false;
+let signalLost = false;
 
 function storageKey(kind) {
     return `dynamometer${kind}_${window.participantID ?? 'anon'}`;
@@ -26,12 +27,64 @@ function positiveNumber(value, fallback) {
     return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-function median(values) {
+export function median(values) {
     const sorted = [...values].sort((a, b) => a - b);
     const middle = Math.floor(sorted.length / 2);
     return sorted.length % 2 === 0
         ? (sorted[middle - 1] + sorted[middle]) / 2
         : sorted[middle];
+}
+
+/**
+ * Detects discrete squeezes relative to the lowest force seen so far, so a grip
+ * that rests slightly above zero (sensor drift, a hand resting on it) still
+ * registers squeezes and releases. A squeeze starts START_FORCE_N above that
+ * baseline and ends once force falls back to within RELEASE_FORCE_N of it.
+ * A squeeze already under way when tracking starts only raises the baseline,
+ * so it is never counted.
+ */
+export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {} } = {}) {
+    let baseline = Infinity;
+    let squeezing = false;
+    let peak = 0;
+    return {
+        update(forceN) {
+            const force = Math.max(0, Number(forceN) || 0);
+            if (!squeezing) {
+                baseline = Math.min(baseline, force);
+                if (force > baseline + START_FORCE_N) {
+                    squeezing = true;
+                    peak = force;
+                    onStart(force);
+                }
+                return;
+            }
+            peak = Math.max(peak, force);
+            if (force <= baseline + RELEASE_FORCE_N) {
+                squeezing = false;
+                onRelease(peak);
+            }
+        },
+        get peak() { return peak; }
+    };
+}
+
+/**
+ * Connect step for a calibration-style procedure that loops on retry. It is
+ * shown on the first pass and again only when `shouldReconnect()` says the
+ * signal was lost, or no grip is connected; otherwise a retry reuses the live
+ * connection instead of asking the experimenter to pair the grip again.
+ */
+export function makeConnectStep(shouldReconnect) {
+    let firstPass = true;
+    return {
+        timeline: [makeConnectTrial()],
+        conditional_function: () => {
+            const show = firstPass || shouldReconnect() || !window.dynamometerSensor;
+            firstPass = false;
+            return show;
+        }
+    };
 }
 
 export function cleanUpDynamometerCalibrationDemo(settings = {}) {
@@ -140,9 +193,7 @@ function makeRateTrial(settings) {
             const responseTimes = [];
             let startedAt = null;
             let lastSqueezeAt = null;
-            let ready = false;
-            let squeezing = false;
-            let peak = 0;
+            let signalSeen = false;
             let finished = false;
             let finishTimer = null;
             let waitTimer = null;
@@ -170,34 +221,34 @@ function makeRateTrial(settings) {
                 finished = true;
                 cleanUp();
                 const medianPeakN = peaks.length >= MIN_SQUEEZES ? median(peaks) : null;
+                const speedHz = responseTimes.length / (effectiveDurationMs / 1000);
                 needsRetry = timedOut || medianPeakN === null;
+                signalLost = needsRetry && !signalSeen;
                 if (!needsRetry) {
                     window.dynamometerMaxForce = medianPeakN;
-                    window.dynamometerMaxSpeed = responseTimes.length / (durationMs / 1000);
+                    window.dynamometerMaxSpeed = speedHz;
                     sessionStorage.setItem(storageKey('MaxForce'), String(medianPeakN));
                     sessionStorage.setItem(storageKey('MaxSpeed'), String(window.dynamometerMaxSpeed));
                 }
                 jsPsych.finishTrial({
                     peak_forces_n: peaks,
                     median_squeeze_force_n: medianPeakN,
-                    max_force_n: medianPeakN, // Existing grip tasks read this calibration value.
+                    // Grip tasks scale their threshold from this value; it is the
+                    // median quick-squeeze peak, not maximal strength.
+                    calibration_force_n: medianPeakN,
                     threshold_force_n: medianPeakN === null ? null : medianPeakN * thresholdFraction,
                     trial_squeezes: responseTimes.length,
                     response_time: responseTimes,
-                    avg_speed_hz: responseTimes.length / (durationMs / 1000),
+                    avg_speed_hz: speedHz,
                     squeeze_wait_timed_out: timedOut,
+                    signal_lost: signalLost,
                     calibration_retry: needsRetry
                 });
             };
 
-            const onForce = forceN => {
-                if (finished) return;
-                const force = Math.max(0, Number(forceN) || 0);
-                if (!ready && force <= RELEASE_FORCE_N) ready = true;
-                if (!ready) return;
-                if (!squeezing && force > START_FORCE_N) {
-                    squeezing = true;
-                    peak = force;
+            const tracker = createSqueezeTracker({
+                onRelease: peak => peaks.push(peak),
+                onStart: () => {
                     const now = performance.now();
                     if (startedAt === null) {
                         startedAt = now;
@@ -213,13 +264,13 @@ function makeRateTrial(settings) {
                         indicator.classList.toggle('grip-speed-indicator-compressed');
                         updateDisplay();
                     }
-                } else if (squeezing) {
-                    peak = Math.max(peak, force);
-                    if (force <= RELEASE_FORCE_N) {
-                        peaks.push(peak);
-                        squeezing = false;
-                    }
                 }
+            });
+
+            const onForce = forceN => {
+                if (finished) return;
+                signalSeen = true;
+                tracker.update(forceN);
             };
 
             setForceCallback(onForce);
@@ -240,10 +291,15 @@ function makeRetryPrompt() {
     return {
         timeline: [{
             type: jsPsychHtmlButtonResponse,
-            stimulus: `<div id="instruction-container"><div id="instruction-text">
-                <h2>Grip not detected</h2>
-                <p>We need at least three quick squeezes to set up the game. Please ask the experimenter to check the grip, then try again.</p>
-            </div></div>`,
+            stimulus: () => signalLost
+                ? `<div id="instruction-container"><div id="instruction-text">
+                    <h2>Grip not detected</h2>
+                    <p>The grip stopped sending a signal. Please ask the experimenter to check the grip and connect it again.</p>
+                </div></div>`
+                : `<div id="instruction-container"><div id="instruction-text">
+                    <h2>Let's try that again</h2>
+                    <p>We need at least three quick squeezes to set up the game. Squeeze and fully let go as quickly as you can.</p>
+                </div></div>`,
             choices: ['Continue'],
             data: { trialphase: 'dynamometer_calibration_retry' }
         }],
@@ -286,10 +342,11 @@ export function createDynamometerCalibrationTimeline(settings = {}) {
     window.dynamometerMaxSpeed = undefined;
     window.dynamometerSensor = null;
     needsRetry = false;
+    signalLost = false;
 
     return [{
         timeline: [
-            makeConnectTrial(),
+            makeConnectStep(() => signalLost),
             makeInstructions(settings),
             makeRateTrial(settings),
             makeRetryPrompt(),

@@ -33,7 +33,7 @@ test('dynamometer tasks expose the requested calibration and vigour defaults', a
     disconnectOnFinish: true,
   });
   expect(defaults.pit).toMatchObject({
-    thresholdFraction: 0.05,
+    thresholdFraction: 0.5,
     holdDurationMs: 0,
     disconnectOnFinish: true,
   });
@@ -316,4 +316,86 @@ test('maximum-strength test is separate and records ten maximal squeeze peaks', 
   expect(result.row.maximum_peak_force_n).toBe(69);
   expect(result.row.median_peak_force_n).toBe(64.5);
   expect(result.row.peak_forces_n).toHaveLength(10);
+});
+
+test('maximum-strength trials record peaks when the resting grip reads above zero', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const { startForceStream, disconnectDynamometer } = await import('/core/utils/dynamometer.js');
+    window.simulating = false;
+    const timeline = await createTaskTimeline('dynamometer_max_strength', { disconnectOnFinish: false });
+    const nodes = timeline[0].timeline.filter(item =>
+      item.timeline?.[0]?.data?.trialphase === 'dynamometer_max_strength_trial'
+      || item.timeline?.[0]?.data?.trialphase === 'dynamometer_max_strength_results'
+    );
+    let emit;
+    const sensor = {
+      enabled: true,
+      value: 0,
+      on: (_event, handler) => {
+        emit = force => {
+          sensor.value = force;
+          handler(sensor);
+        };
+      },
+    };
+    const device = { sensors: [sensor], start: () => {}, close: async () => {} };
+    startForceStream(device, () => {});
+    const run = jsPsych.run(nodes);
+    const waitFor = async predicate => {
+      for (let tries = 0; tries < 200 && !predicate(); tries++) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    };
+    let previousCounter = null;
+    for (let index = 0; index < 10; index++) {
+      // Each trial renders a fresh counter; the finished trial briefly shows the next
+      // count too, so wait for the new element rather than matching text alone.
+      await waitFor(() => {
+        const counter = document.getElementById('cal-squeeze-counter');
+        return counter && counter !== previousCounter && counter.textContent === `${index} / 10`;
+      });
+      previousCounter = document.getElementById('cal-squeeze-counter');
+      // Resting force drifts to 0.8-0.9 N, above the old absolute 0.5 N release level.
+      for (const force of [0.8, 20, 40 + index, 15, 0.9]) emit(force);
+    }
+    await run;
+    await disconnectDynamometer(device);
+    const trials = jsPsych.data.get().filter({ trialphase: 'dynamometer_max_strength_trial' }).values();
+    const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_max_strength_results' }).last(1).values()[0];
+    return { trialPeaks: trials.map(trial => trial.peak_force_n), row };
+  });
+
+  expect(result.trialPeaks).toEqual([40, 41, 42, 43, 44, 45, 46, 47, 48, 49]);
+  expect(result.row.calibration_retry).toBe(false);
+  expect(result.row.maximum_peak_force_n).toBe(49);
+  expect(result.row.median_peak_force_n).toBe(44.5);
+});
+
+test('grip retries reuse a live connection and reconnect only after signal loss', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { makeConnectStep } = await import('/tasks/dynamometer-calibration/task.js');
+    let lost = false;
+    const step = makeConnectStep(() => lost);
+    window.dynamometerSensor = { opened: true };
+    const firstPass = step.conditional_function();
+    const retryWithSignal = step.conditional_function();
+    lost = true;
+    const retryAfterLoss = step.conditional_function();
+    lost = false;
+    window.dynamometerSensor = null;
+    const retryWithoutSensor = step.conditional_function();
+    return { firstPass, retryWithSignal, retryAfterLoss, retryWithoutSensor };
+  });
+
+  expect(result).toEqual({
+    firstPass: true,
+    retryWithSignal: false,
+    retryAfterLoss: true,
+    retryWithoutSensor: true,
+  });
 });

@@ -147,7 +147,7 @@ function PITTrial(settings) {
       total_reward: () => { return taskTotalReward },
       input_type: dynamometer ? 'dynamometer' : 'pointer',
       ...(dynamometer ? {
-        max_force_n: () => window.dynamometerMaxForce,
+        calibration_force_n: () => window.dynamometerMaxForce,
         threshold_fraction: settings.thresholdFraction,
         hold_duration_ms: settings.holdDurationMs
       } : {
