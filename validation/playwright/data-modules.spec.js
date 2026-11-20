@@ -28,25 +28,45 @@ test('Module 2 runs tap then grip vigour, rates each vigour task, and ends with 
   expect(elements.at(-2)).toMatchObject({ name: 'dynamometer_max_strength' });
   expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
   expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
+  // After the grip game, a screen lets participants put the grip down before tapping PIT.
+  const pitIndex = elements.findIndex(element => element.name === 'PIT');
+  expect(elements[pitIndex - 1]).toEqual({ type: 'instructions', config: { text: 'grip_down_message' } });
+  expect(elements.some(element => 'grip' in element)).toBe(false);
 });
 
-test('module 2 without a dynamometer uses the tap-based effort tasks and no grip break', async ({ page }) => {
-  await page.goto('/index.html');
+test('module 2 without a dynamometer is exactly module 2 minus its grip steps', async ({ page }) => {
+  // experiment.html carries the import map that messages.js needs.
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
 
-  const elements = await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     const { ModuleRegistry } = await import('/api/module-registry.js');
-    return ModuleRegistry.module_2_without_dynamometer.elements;
+    const { messages } = await import('/api/messages.js');
+    const withGrip = ModuleRegistry.module_2;
+    const withoutGrip = ModuleRegistry.module_2_without_dynamometer;
+    const isGripStep = element =>
+      element.name?.startsWith('dynamometer_')
+      || element.config?.task_name?.startsWith('dynamometer_')
+      || ['break_message', 'grip_down_message'].includes(element.config?.text);
+    return {
+      expected: withGrip.elements.filter(element => !isGripStep(element)),
+      actual: withoutGrip.elements,
+      sameConfig: JSON.stringify(withGrip.moduleConfig) === JSON.stringify(withoutGrip.moduleConfig),
+      startWith: messages.module_2.start_message,
+      startWithout: messages.module_2_without_dynamometer.start_message,
+      sameEnd: messages.module_2.end_message === messages.module_2_without_dynamometer.end_message,
+      gripMessages: Object.keys(messages.module_2_without_dynamometer),
+    };
   });
-  const taskNames = elements
-    .filter((element) => element.type === 'task')
-    .map((element) => element.name);
 
-  expect(taskNames).toContain('vigour');
-  expect(taskNames).toContain('PIT');
-  expect(taskNames).not.toContain('dynamometer_calibration');
-  expect(taskNames).not.toContain('dynamometer_vigour');
-  expect(taskNames).not.toContain('dynamometer_PIT');
-  expect(elements.filter((element) => element.config?.text === 'break_message')).toHaveLength(0);
+  expect(result.actual).toEqual(result.expected);
+  expect(result.sameConfig).toBe(true);
+  expect(result.sameEnd).toBe(true);
+  expect(result.gripMessages).toEqual(['start_message', 'end_message']);
+  // The start text matches apart from the line about setting up the grip.
+  const dropGripLine = text => text.replace(/\n?<p>Part-way through[^<]*<\/p>/, '');
+  expect(result.startWithout).toEqual(result.startWith.map(dropGripLine));
+  expect(result.startWith[1]).toContain('grip device');
+  expect(result.startWithout[1]).not.toContain('grip');
 });
 
 test('questionnaire module presents every questionnaire in the configured order', async ({ page }) => {

@@ -22,6 +22,27 @@ const formatted_warning_msg = `
 `;
 
 
+// Module 2 and its no-grip variant share their text; only the grip line differs.
+function module2StartMessage({ withGrip }) {
+    return [
+        `<p><b>Welcome to Part 2.</b></p>
+        <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
+        <p>At the end there are two short quizzes about what you learned.</p>
+        <p>After each game we will ask you a few short questions about it.</p>`,
+        [
+            `<p>Please stay with the games until the end, and do not close this page.</p>`,
+            withGrip && `<p>Part-way through, you will be asked to call the experimenter to set up the grip device.</p>`,
+            `<p>Someone from the study team is in the room. Ask them any time you need help.</p>`
+        ].filter(Boolean).join('\n')
+    ];
+}
+
+const module2EndMessage = {
+    message: `<p><b>That is the end of Part 2. Thank you.</b></p>
+        <p>Please tell the person running the study that you have finished.</p>`,
+    on_start: endExperiment
+};
+
 export const messages = {
     module_1: {
         start_message: [
@@ -40,20 +61,8 @@ export const messages = {
         }
     },
     module_2: {
-        start_message: [
-            `<p><b>Welcome to Part 2.</b></p>
-            <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
-            <p>At the end there are two short quizzes about what you learned.</p>
-            <p>After each game we will ask you a few short questions about it.</p>`,
-            `<p>Please stay with the games until the end, and do not close this page.</p>
-            <p>Part-way through, you will be asked to call the experimenter to set up the grip device.</p>
-            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
-        ],
-        end_message: {
-            message: `<p><b>That is the end of Part 2. Thank you.</b></p>
-                <p>Please tell the person running the study that you have finished.</p>`,
-            on_start: endExperiment
-        },
+        start_message: module2StartMessage({ withGrip: true }),
+        end_message: module2EndMessage,
         // Pause before calibration so the experimenter can set up the grip. Deliberately
         // NOT the full_battery break_message,
         // which advances on the 'c' key with its clickable nav switched off and so
@@ -69,22 +78,19 @@ export const messages = {
             message: `<p><b>Please call the experimenter.</b></p>`,
             button_label_next: 'Continue',
             allow_backward: false
-        }
+        },
+        // After the grip piggy-bank game: the cloud game that follows is played by tapping.
+        grip_down_message: [
+            `<p><b>You can put the grip down now.</b></p>
+            <p>You will use it again once more at the very end.</p>`,
+            `<p>In the next game you <span class="highlight-txt">tap the screen</span> again.</p>
+            <p>Tap the piggy bank, just like in the first piggy bank game.</p>`
+        ]
     },
+    // Same text as module_2, without the grip parts (see module-registry.js).
     module_2_without_dynamometer: {
-        start_message: [
-            `<p><b>Welcome to Part 2.</b></p>
-            <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
-            <p>At the end there are two short quizzes about what you learned.</p>
-            <p>After each game we will ask you a few short questions about it.</p>`,
-            `<p>Please stay with the games until the end, and do not close this page.</p>
-            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
-        ],
-        end_message: {
-            message: `<p><b>That is the end of Part 2. Thank you.</b></p>
-                <p>Please tell the person running the study that you have finished.</p>`,
-            on_start: endExperiment
-        }
+        start_message: module2StartMessage({ withGrip: false }),
+        end_message: module2EndMessage
     },
     questionnaires: {
         start_message: [
