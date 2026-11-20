@@ -430,6 +430,7 @@ export const TaskRegistry = {
         max_result_display_time: "Maximum time to display the result before automatically continuing, in milliseconds. Default is 4000.",
         continue_message_delay: "Delay before showing the 'Press any key to continue' message, in milliseconds. Default is 1500.",
         session: "Session identifier to select the appropriate stimulus set. Default is 'wk0'.",
+        preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). A hint screen asks participants to turn the device before the task starts, and a 'please rotate' overlay blocks it while held the other way. No default; Module 2 sets 'landscape' for the tablet. On a landscape phone the result screen is taller than the viewport, so leave it unset for phone modules.",
     },
     requirements: {
       css: ['@tasks/pavlovian-lottery/styles.css'],

@@ -317,3 +317,42 @@ test('skipping demo calibration supplies values for the following grip tasks', a
     storedSpeed: '5',
   });
 });
+
+test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 1180, height: 820 } });
+  const page = await context.newPage();
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const result = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const { TaskRegistry } = await import('/api/task-registry.js');
+    const lotteryConfigs = ['module_2', 'module_2_without_dynamometer'].map(name =>
+      ModuleRegistry[name].elements.find(element => element.name === 'pavlovian_lottery').config
+    );
+    const timeline = await createTaskTimeline('pavlovian_lottery', lotteryConfigs[0]);
+    const hint = timeline.find(item => item.data?.trialphase === 'orientation_hint');
+    const hintIndex = timeline.indexOf(hint);
+    const gated = timeline[hintIndex + 1];
+    gated.on_timeline_start();
+    const gatedOrientation = document.body.getAttribute('data-preferred-orientation');
+    gated.on_timeline_finish();
+    return {
+      hintText: hint?.stimulus(),
+      hintComesBeforeTask: hintIndex >= 0 && Array.isArray(gated?.timeline),
+      gatedOrientation,
+      lotteryConfigs,
+      taskDefault: TaskRegistry.pavlovian_lottery.defaultConfig.preferredOrientation ?? null,
+    };
+  });
+  await context.close();
+
+  expect(result.hintComesBeforeTask).toBe(true);
+  expect(result.hintText).toContain('<strong>landscape (on its side)</strong>');
+  expect(result.gatedOrientation).toBe('landscape');
+  for (const config of result.lotteryConfigs) {
+    expect(config).toEqual({ preferredOrientation: 'landscape' });
+  }
+  // Phone modules keep the lottery ungated: its result screen overflows a landscape phone.
+  expect(result.taskDefault).toBeNull();
+});
