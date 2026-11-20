@@ -310,13 +310,25 @@ export async function disconnectDynamometer(device) {
     await device.close();
 }
 
+// Fast squeezing rarely gets back to rest, so the force trace looks like a wave
+// riding above zero. A squeeze counts as over once force has dipped this fraction
+// of its height below its peak, and the next one as started once force has risen
+// the same fraction of the previous squeeze's height above the dip between them.
+// Both changes must also be at least SQUEEZE_MIN_CHANGE_N, so sensor noise and
+// small wobbles at the top or bottom of a squeeze are not counted.
+export const SQUEEZE_PROMINENCE_FRACTION = 0.25;
+export const SQUEEZE_MIN_CHANGE_N = 1.0;
+
 /**
  * Press detector state machine.
  *
  * A press fires onPress() when force is held at or above
- * (maxForce × thresholdFraction) continuously for holdDurationMs.
- * Force must then drop below the threshold before the next press starts,
- * so a single sustained squeeze counts only once.
+ * (maxForce × thresholdFraction) continuously for holdDurationMs, and has risen
+ * clearly from the dip before it. The detector then re-arms once force either
+ * drops below the threshold or dips clearly below the squeeze's peak (see
+ * SQUEEZE_PROMINENCE_FRACTION), so fast squeezes count even when the grip is
+ * never let go below the threshold, while a single sustained squeeze still
+ * counts only once.
  *
  * Call detector.update(forceN) on every force reading.
  * Call detector.reset() to clear state between trials.
@@ -336,6 +348,12 @@ export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDu
         : 40;
     let state = 'IDLE'; // IDLE | PRESSING | COOLDOWN
     let holdTimer = null;
+    // Lowest force since the last press re-armed. Starting at zero means a squeeze
+    // already under way when a trial starts counts at once, as it always has.
+    let trough = 0;
+    let pressTrough = 0;  // trough the current squeeze rose from
+    let peak = 0;         // highest force in the current squeeze
+    let lastHeight = 0;   // peak - trough of the previous squeeze
 
     function cancelHold() {
         if (holdTimer !== null) {
@@ -351,13 +369,24 @@ export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDu
         if (onPress) onPress();
     }
 
+    function rearm(force) {
+        lastHeight = peak - pressTrough;
+        trough = force;
+        state = 'IDLE';
+    }
+
     return {
         update(forceN) {
-            const above = forceN >= threshold;
+            const force = Math.max(0, Number(forceN) || 0);
+            const above = force >= threshold;
 
             if (state === 'IDLE') {
-                if (above) {
+                trough = Math.min(trough, force);
+                const rise = Math.max(SQUEEZE_MIN_CHANGE_N, SQUEEZE_PROMINENCE_FRACTION * lastHeight);
+                if (above && force >= trough + rise) {
                     state = 'PRESSING';
+                    pressTrough = trough;
+                    peak = force;
                     if (requiredHoldMs === 0) {
                         completePress();
                     } else {
@@ -369,19 +398,26 @@ export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDu
                     }
                 }
             } else if (state === 'PRESSING') {
+                peak = Math.max(peak, force);
                 if (!above) {
                     cancelHold();
                     state = 'IDLE';
+                    trough = force;
                 }
             } else if (state === 'COOLDOWN') {
-                if (!above) {
-                    state = 'IDLE';
+                peak = Math.max(peak, force);
+                const dip = Math.max(SQUEEZE_MIN_CHANGE_N, SQUEEZE_PROMINENCE_FRACTION * (peak - pressTrough));
+                if (!above || force <= peak - dip) {
+                    rearm(force);
                 }
             }
         },
         reset() {
             cancelHold();
             state = 'IDLE';
+            trough = 0;
+            peak = 0;
+            lastHeight = 0;
         }
     };
 }

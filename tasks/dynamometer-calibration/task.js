@@ -3,6 +3,7 @@ import {
     connectDynamometer,
     disconnectDynamometer,
     setForceCallback,
+    SQUEEZE_PROMINENCE_FRACTION,
     startForceStream
 } from '@utils/dynamometer.js';
 import { updateState } from '@utils/index.js';
@@ -35,11 +36,6 @@ export function median(values) {
         : sorted[middle];
 }
 
-// In valley mode, a squeeze ends once force has fallen this fraction of the
-// squeeze's height below its peak, and the next one starts once force has risen
-// the same fraction of the previous squeeze's height above the valley between them.
-export const SQUEEZE_PROMINENCE_FRACTION = 0.25;
-
 /**
  * Detects discrete squeezes in the force trace.
  *
@@ -54,7 +50,7 @@ export const SQUEEZE_PROMINENCE_FRACTION = 0.25;
  *   back to rest, so the trace looks like a wave riding above zero. A squeeze
  *   ends at the dip after each peak, and the minimum of that dip becomes the
  *   trough the next squeeze rises from. Rise and fall both have to exceed
- *   SQUEEZE_PROMINENCE_FRACTION of the squeeze height (and at least
+ *   SQUEEZE_PROMINENCE_FRACTION (core/utils/dynamometer.js) of the squeeze height (and at least
  *   START_FORCE_N), so small wobbles at the top or bottom are not counted.
  */
 export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {}, fullRelease = false } = {}) {

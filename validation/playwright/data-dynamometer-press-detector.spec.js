@@ -94,3 +94,43 @@ test('dropping below target or resetting cancels a pending press', async ({ page
   expect(result.afterRelease).toBe(0);
   expect(result.afterReset).toBe(0);
 });
+
+test('fast squeezes that never drop below the target still count once each', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createPressDetector } = await import('/core/utils/dynamometer.js');
+    const count = trace => {
+      let presses = 0;
+      const detector = createPressDetector(100, {
+        thresholdFraction: 0.5,
+        holdDurationMs: 0,
+        onPress: () => { presses += 1; },
+      });
+      trace.forEach(force => detector.update(force));
+      return presses;
+    };
+    // Four squeezes peaking at 90 N; after the first, the grip only dips to 55-60 N,
+    // above the 50 N target.
+    const lows = [0, 55, 60, 55, 0];
+    const fast = [0];
+    for (let squeeze = 0; squeeze < 4; squeeze++) {
+      const [from, to] = [lows[squeeze], lows[squeeze + 1]];
+      for (let step = 1; step <= 12; step++) {
+        const phase = Math.PI * step / 12;
+        fast.push(step <= 6 ? from + (90 - from) * Math.sin(phase) : to + (90 - to) * Math.sin(phase));
+      }
+    }
+    return {
+      fast: count(fast),
+      // One sustained squeeze wobbling a few newtons at the top.
+      sustained: count([0, 60, 80, 76, 80, 78, 81, 77, 80, 0]),
+      // A small dip mid-squeeze that rises only slightly again.
+      smallDip: count([0, 60, 80, 62, 66, 64, 0]),
+    };
+  });
+
+  expect(result.fast).toBe(4);
+  expect(result.sustained).toBe(1);
+  expect(result.smallDip).toBe(1);
+});
