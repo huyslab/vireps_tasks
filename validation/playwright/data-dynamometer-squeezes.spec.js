@@ -39,6 +39,11 @@ test('one squeeze rule: counts at the start of each squeeze, with no strength ta
       restingAboveZero: count([0.8, 20, 40, 15, 0.9, 25, 30, 0.8]),
       fast: count(fast),
       fastFullRelease: count(fast, { fullRelease: true }),
+      hardThenLight: (() => {
+        const tracker = createSqueezeTracker();
+        [0, 80, 0, 10, 0, 10, 0, 10, 0].forEach(force => tracker.update(force));
+        return { starts: tracker.count, triggerN: tracker.triggerN };
+      })(),
     };
   }, WAVE_SOURCE);
 
@@ -50,6 +55,8 @@ test('one squeeze rule: counts at the start of each squeeze, with no strength ta
   expect(result.fast.starts).toBe(5);               // each wave counts without letting go
   expect(result.fast.peaks).toEqual([30, 30, 30, 30, 30]);
   expect(result.fastFullRelease.starts).toBe(1);    // maximum strength needs a full release
+  // After letting go fully, light squeezes count again even after a hard one.
+  expect(result.hardThenLight).toEqual({ starts: 4, triggerN: 1 });
 });
 
 test('grip games take their presses from the force stream with the same rule', async ({ page }) => {

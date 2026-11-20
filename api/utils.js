@@ -96,6 +96,7 @@ export async function createTaskTimeline(taskName, config = {}) {
         const orientationLabel = orientation === 'portrait' ? 'portrait (upright)' : 'landscape (on its side)';
 
         const preferredOrientationQuery = window.matchMedia(`(orientation: ${orientation})`);
+        let continueOnceTurned = () => {};
 
         // Shown only when the device is held the wrong way, and it cannot be dismissed:
         // it moves on by itself once the device is turned, so the task never starts in
@@ -118,13 +119,16 @@ export async function createTaskTimeline(taskName, config = {}) {
             data: { trialphase: 'orientation_hint' },
             on_load: function() {
                 document.body.setAttribute('data-preferred-orientation', orientation);
-                const continueOnceTurned = () => {
-                    if (!preferredOrientationQuery.matches) return;
-                    preferredOrientationQuery.removeEventListener('change', continueOnceTurned);
-                    jsPsych.finishTrial();
+                continueOnceTurned = () => {
+                    if (preferredOrientationQuery.matches) jsPsych.finishTrial();
                 };
                 preferredOrientationQuery.addEventListener('change', continueOnceTurned);
                 continueOnceTurned();
+            },
+            // Also runs when the step is skipped (demo navigation) in the wrong
+            // orientation, so a later rotation cannot end some other trial.
+            on_finish: function() {
+                preferredOrientationQuery.removeEventListener('change', continueOnceTurned);
             }
         };
 

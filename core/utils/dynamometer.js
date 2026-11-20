@@ -328,7 +328,9 @@ export const SQUEEZE_REST_N = 0.5;
  *
  * The lowest force since the last squeeze is the trough. A squeeze starts once
  * force rises SQUEEZE_MIN_CHANGE_N above it (or SQUEEZE_PROMINENCE_FRACTION of
- * the previous squeeze's height, if larger). There is no minimum strength, and a
+ * the previous squeeze's height, if larger, while the grip has only dipped
+ * between squeezes; once it is let go back to rest, a light squeeze after a hard
+ * one counts again). There is no minimum strength, and a
  * grip that rests slightly above zero (sensor drift, a hand resting on it) still
  * works. A squeeze already held when tracking starts only sets a high trough,
  * so it is not counted unless force then rises clearly above it.
@@ -345,6 +347,7 @@ export const SQUEEZE_REST_N = 0.5;
  */
 export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {}, fullRelease = false } = {}) {
     let trough = Infinity;
+    let restLevel = Infinity;  // lowest force seen: the grip at rest
     let startTrough = 0;
     let lastHeight = 0;
     let squeezing = false;
@@ -360,8 +363,12 @@ export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {},
     return {
         update(forceN) {
             const force = Math.max(0, Number(forceN) || 0);
+            restLevel = Math.min(restLevel, force);
+            // Back at rest: the previous squeeze's height no longer sets the bar.
+            const atRest = force <= restLevel + SQUEEZE_REST_N;
             if (!squeezing) {
                 trough = Math.min(trough, force);
+                if (atRest) lastHeight = 0;
                 if (force > startLevel()) {
                     squeezing = true;
                     startTrough = trough;
@@ -374,7 +381,7 @@ export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {},
             peak = Math.max(peak, force);
             if (force <= endLevel()) {
                 squeezing = false;
-                lastHeight = peak - startTrough;
+                lastHeight = atRest ? 0 : peak - startTrough;
                 trough = force;
                 onRelease(peak);
             }

@@ -362,6 +362,26 @@ test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery
   await page.setViewportSize({ width: 1180, height: 820 });                  // turn the tablet
   await expect.poll(() => page.evaluate(() => window.__orientationDone)).toBe(true);
 
+  // Skipping the step in the wrong orientation (demo navigation) must not leave its
+  // listener behind to end a later trial when the device is turned.
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const timeline = await createTaskTimeline('pavlovian_lottery', { preferredOrientation: 'landscape' });
+    const orientationStep = timeline.find(node => node.timeline?.[0]?.data?.trialphase === 'orientation_hint');
+    window.__laterTrialDone = false;
+    jsPsych.run([
+      orientationStep,
+      { type: jsPsychHtmlKeyboardResponse, choices: 'NO_KEYS', stimulus: '<p id="later-trial">Later trial</p>' },
+    ]).then(() => { window.__laterTrialDone = true; });
+  });
+  await expect(message).toBeAttached();
+  await page.evaluate(() => jsPsych.finishTrial());                          // skip it
+  await expect(page.locator('#later-trial')).toBeAttached();
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__laterTrialDone)).toBe(false);
+
   // Already in landscape: the message is skipped.
   const skippedWhenCorrect = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');
