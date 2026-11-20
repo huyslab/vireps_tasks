@@ -35,33 +35,58 @@ export function median(values) {
         : sorted[middle];
 }
 
+// In valley mode, a squeeze ends once force has fallen this fraction of the
+// squeeze's height below its peak, and the next one starts once force has risen
+// the same fraction of the previous squeeze's height above the valley between them.
+export const SQUEEZE_PROMINENCE_FRACTION = 0.25;
+
 /**
- * Detects discrete squeezes relative to the lowest force seen so far, so a grip
- * that rests slightly above zero (sensor drift, a hand resting on it) still
- * registers squeezes and releases. A squeeze starts START_FORCE_N above that
- * baseline and ends once force falls back to within RELEASE_FORCE_N of it.
- * A squeeze already under way when tracking starts only raises the baseline,
- * so it is never counted.
+ * Detects discrete squeezes in the force trace.
+ *
+ * The lowest force since the last squeeze is the trough. A squeeze starts once
+ * force rises START_FORCE_N above it, so a grip that rests slightly above zero
+ * (sensor drift, a hand resting on it) still works, and a squeeze already under
+ * way when tracking starts only sets a high trough and is never counted.
+ *
+ * - `fullRelease: true` (maximum strength): a squeeze ends only once force is
+ *   back within RELEASE_FORCE_N of the trough, i.e. the grip was let go.
+ * - `fullRelease: false` (default, quick squeezes): fast squeezing rarely gets
+ *   back to rest, so the trace looks like a wave riding above zero. A squeeze
+ *   ends at the dip after each peak, and the minimum of that dip becomes the
+ *   trough the next squeeze rises from. Rise and fall both have to exceed
+ *   SQUEEZE_PROMINENCE_FRACTION of the squeeze height (and at least
+ *   START_FORCE_N), so small wobbles at the top or bottom are not counted.
  */
-export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {} } = {}) {
-    let baseline = Infinity;
+export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {}, fullRelease = false } = {}) {
+    let trough = Infinity;
+    let startTrough = 0;
+    let lastHeight = 0;
     let squeezing = false;
     let peak = 0;
     return {
         update(forceN) {
             const force = Math.max(0, Number(forceN) || 0);
             if (!squeezing) {
-                baseline = Math.min(baseline, force);
-                if (force > baseline + START_FORCE_N) {
+                trough = Math.min(trough, force);
+                const rise = fullRelease
+                    ? START_FORCE_N
+                    : Math.max(START_FORCE_N, SQUEEZE_PROMINENCE_FRACTION * lastHeight);
+                if (force > trough + rise) {
                     squeezing = true;
+                    startTrough = trough;
                     peak = force;
                     onStart(force);
                 }
                 return;
             }
             peak = Math.max(peak, force);
-            if (force <= baseline + RELEASE_FORCE_N) {
+            const backToRest = force <= startTrough + RELEASE_FORCE_N;
+            const pastPeak = !fullRelease && force <= peak
+                - Math.max(START_FORCE_N, SQUEEZE_PROMINENCE_FRACTION * (peak - startTrough));
+            if (backToRest || pastPeak) {
                 squeezing = false;
+                lastHeight = peak - startTrough;
+                trough = force;
                 onRelease(peak);
             }
         },

@@ -39,7 +39,9 @@ function makeStrengthTrial(index) {
                     document.getElementById('cal-squeeze-counter').textContent = `${index + 1} / ${N_SQUEEZES}`;
                     jsPsych.pluginAPI.setTimeout(() => jsPsych.finishTrial(), index === N_SQUEEZES - 1 ? 300 : 50);
                 };
+                // Maximal squeezes must be fully let go, so a dip mid-squeeze is not a release.
                 const tracker = createSqueezeTracker({
+                    fullRelease: true,
                     onRelease: squeezePeak => {
                         peak = squeezePeak;
                         finish();

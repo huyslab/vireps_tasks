@@ -399,3 +399,45 @@ test('grip retries reuse a live connection and reconnect only after signal loss'
     retryWithoutSensor: true,
   });
 });
+
+test('quick squeezes count each wave of the grip trace, even without letting go fully', async ({ page }) => {
+  await openTimelineHarness(page);
+
+  const result = await page.evaluate(async () => {
+    const { createSqueezeTracker } = await import('/tasks/dynamometer-calibration/task.js');
+    const count = (trace, options = {}) => {
+      const peaks = [];
+      let starts = 0;
+      const tracker = createSqueezeTracker({ ...options, onStart: () => starts++, onRelease: peak => peaks.push(peak) });
+      trace.forEach(force => tracker.update(force));
+      return { starts, peaks };
+    };
+    // Five fast squeezes sampled every 20 ms at about 4 per second, dipping only to
+    // 8-10 N between squeezes - the grip is never back near zero.
+    const lows = [0, 8, 10, 8, 10, 0];
+    const fast = [0];
+    for (let squeeze = 0; squeeze < 5; squeeze++) {
+      const [from, to] = [lows[squeeze], lows[squeeze + 1]];
+      for (let step = 1; step <= 12; step++) {
+        const phase = Math.PI * step / 12;
+        // Rise from this dip to 30 N, then fall to the next dip.
+        fast.push(step <= 6 ? from + (30 - from) * Math.sin(phase) : to + (30 - to) * Math.sin(phase));
+      }
+    }
+    // One squeeze with wobbles at the top and in the valley that must not split it.
+    const wobbly = [0, 10, 25, 30, 27, 30, 29, 12, 4, 5, 3, 4, 0];
+    return {
+      fast: count(fast),
+      fastFullRelease: count(fast, { fullRelease: true }),
+      wobbly: count(wobbly),
+    };
+  });
+
+  expect(result.fast.starts).toBe(5);
+  expect(result.fast.peaks).toHaveLength(5);
+  for (const peak of result.fast.peaks) expect(peak).toBeCloseTo(30, 0);
+  // Maximum strength requires letting go, so the same trace is one long squeeze.
+  expect(result.fastFullRelease.starts).toBe(1);
+  expect(result.wobbly.starts).toBe(1);
+  expect(result.wobbly.peaks).toEqual([30]);
+});
