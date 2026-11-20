@@ -20,6 +20,10 @@ import {
   createDynamometerCalibrationTimeline
 } from '@tasks/dynamometer-calibration/task.js';
 import {
+  cleanUpDynamometerMaxStrengthDemo,
+  createDynamometerMaxStrengthTimeline
+} from '@tasks/dynamometer-calibration/max-strength.js';
+import {
   cleanUpDynamometerPITDemo,
   cleanUpDynamometerVigourDemo,
   createDynamometerVigourTimeline,
@@ -426,6 +430,7 @@ export const TaskRegistry = {
         max_result_display_time: "Maximum time to display the result before automatically continuing, in milliseconds. Default is 4000.",
         continue_message_delay: "Delay before showing the 'Press any key to continue' message, in milliseconds. Default is 1500.",
         session: "Session identifier to select the appropriate stimulus set. Default is 'wk0'.",
+        preferredOrientation: "Preferred device orientation on touch devices ('portrait' or 'landscape'). A hint screen asks participants to turn the device before the task starts, and a 'please rotate' overlay blocks it while held the other way. No default; Module 2 sets 'landscape' for the tablet. On a landscape phone the result screen is taller than the viewport, so leave it unset for phone modules.",
     },
     requirements: {
       css: ['@tasks/pavlovian-lottery/styles.css'],
@@ -531,15 +536,14 @@ export const TaskRegistry = {
     dataNotes: 'One row per screen. Live answers are navigation === "forward" && !superseded, one per item_id.'
   },
   dynamometer_calibration: {
-    name: 'Dynamometer Calibration',
-    description: 'Measures maximum squeeze force and squeeze speed using the Vernier Go Direct Hand Dynamometer over Bluetooth',
+    name: 'Dynamometer Maximum Squeeze Rate Test',
+    description: 'Measures maximum quick-squeeze rate and median squeeze force using the Vernier Go Direct Hand Dynamometer over Bluetooth',
     createTimeline: createDynamometerCalibrationTimeline,
     onDemoSkip: cleanUpDynamometerCalibrationDemo,
     computeBonus: () => 0,
     defaultConfig: {
       disconnectOnFinish: true,
       squeezeWaitTimeoutMs: 30000,
-      thresholdFraction: 0.05,
       speedCalibrationDurationMs: 7000,
       speedBarMaxHz: 5
     },
@@ -549,11 +553,20 @@ export const TaskRegistry = {
     resumptionRules: { enabled: false },
     configOptions: {
       disconnectOnFinish: 'Whether to disconnect the dynamometer after calibration. Default is true; the combined dynamometer module sets this to false so vigour can reuse the connection.',
-      squeezeWaitTimeoutMs: 'How long in milliseconds to wait for a squeeze during force calibration before reconnecting the dynamometer. Default is 30000.',
-      thresholdFraction: 'Fraction of calibrated maximum force used to register squeezes during speed calibration. Default is 0.05 (5%), matching the dynamometer tasks.',
-      speedCalibrationDurationMs: 'Duration of the dynamometer speed calibration in milliseconds. Default is 7000 (7 seconds).',
+      squeezeWaitTimeoutMs: 'How long in milliseconds to wait for the first quick squeeze before reconnecting the dynamometer. Default is 30000.',
+      speedCalibrationDurationMs: 'Duration of the maximum quick-squeeze rate test in milliseconds. Default is 7000 (7 seconds).',
       speedBarMaxHz: 'Squeeze rate represented by a full speed bar. Default is 5 squeezes per second.'
     }
+  },
+  dynamometer_max_strength: {
+    name: 'Dynamometer Maximum Strength Test',
+    description: 'Ten maximal grip squeezes after the effort tasks',
+    createTimeline: createDynamometerMaxStrengthTimeline,
+    onDemoSkip: cleanUpDynamometerMaxStrengthDemo,
+    computeBonus: () => 0,
+    defaultConfig: { disconnectOnFinish: true },
+    requirements: { css: ['@tasks/dynamometer-calibration/styles.css'] },
+    resumptionRules: { enabled: false }
   },
   dynamometer_vigour: {
     name: 'Dynamometer Vigour Task',
@@ -563,8 +576,6 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_vigour_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_vigour',
-      thresholdFraction: 0.05,
-      holdDurationMs: 0,
       disconnectOnFinish: true,
       preferredOrientation: 'portrait'
     },
@@ -573,9 +584,7 @@ export const TaskRegistry = {
     },
     resumptionRules: { enabled: true },
     configOptions: {
-      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.05 (5%).',
-      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
-      disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true; Module 2 keeps it connected for the following dynamometer PIT task.',
+      disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard vigour task."
     }
   },
@@ -587,8 +596,6 @@ export const TaskRegistry = {
     computeBonus: () => computeDynBonus('dynamometer_pit_trial', 5),
     defaultConfig: {
       task_name: 'dynamometer_PIT',
-      thresholdFraction: 0.05,
-      holdDurationMs: 0,
       disconnectOnFinish: true,
       preferredOrientation: 'portrait'
     },
@@ -597,8 +604,6 @@ export const TaskRegistry = {
     },
     resumptionRules: { enabled: true },
     configOptions: {
-      thresholdFraction: 'Fraction of calibrated max force the participant must reach for a squeeze to count. Default is 0.05 (5%).',
-      holdDurationMs: 'How long in milliseconds the squeeze must stay above threshold to count as one press. Default is 0, so it counts immediately on crossing the threshold.',
       disconnectOnFinish: 'Whether to disconnect the dynamometer after the task. Default is true.',
       preferredOrientation: "Preferred device orientation ('portrait' or 'landscape'). Default is 'portrait', matching the standard PIT task."
     }

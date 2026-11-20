@@ -1,6 +1,34 @@
 // A module is a collection of tasks to be completed in a single sitting.
 // Each module can contain one or more tasks, and each task can have its own configuration settings.
 
+const MODULE_2_CONFIG = {
+    session: "wk0",
+    sequence: "wk0"
+};
+
+// Module 2. Steps marked `grip: true` need the hand grip; module_2_without_dynamometer
+// is this same list with those steps removed.
+const MODULE_2_ELEMENTS = [
+    { type: "instructions", config: { text: "start_message" } },
+    { type: "task", name: "max_press_test" },
+    { type: "task", name: "pavlovian_lottery", config: { preferredOrientation: "landscape" } },
+    { type: "task", name: "PILT" },
+    { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
+    { type: "task", name: "vigour" },
+    { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
+    { type: "instructions", config: { text: "break_message" }, grip: true },
+    { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false }, grip: true },
+    { type: "task", name: "dynamometer_vigour", grip: true },
+    { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_vigour", game_description: "piggy-bank game" }, grip: true },
+    { type: "instructions", config: { text: "grip_down_message" }, grip: true },
+    { type: "task", name: "PIT" },
+    { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
+    { type: "task", name: "vigour_test" },
+    { type: "task", name: "post_PILT_test" },
+    { type: "task", name: "dynamometer_max_strength", grip: true },
+    { type: "instructions", config: { text: "end_message" } }
+];
+
 export const ModuleRegistry = {
     module_1: {
         // Participants are never shown these names. To them this module is the
@@ -22,46 +50,14 @@ export const ModuleRegistry = {
     },
     module_2: {
         name: "Module 2: Learning and Effort Tasks",
-        moduleConfig: {
-            session: "wk0",
-            sequence: "wk0"
-        },
-        elements: [
-            { type: "instructions", config: { text: "start_message" } },
-            { type: "task", name: "pavlovian_lottery" },
-            { type: "task", name: "PILT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
-            { type: "instructions", config: { text: "break_message" } },
-            { type: "task", name: "dynamometer_calibration", config: { disconnectOnFinish: false } },
-            { type: "task", name: "dynamometer_vigour", config: { disconnectOnFinish: false } },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_vigour", game_description: "piggy-bank game" } },
-            { type: "task", name: "dynamometer_PIT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "dynamometer_PIT", game_description: "piggy-bank game in the clouds" } },
-            { type: "task", name: "vigour_test" },
-            { type: "task", name: "post_PILT_test" },
-            { type: "instructions", config: { text: "end_message" } }
-        ]
+        moduleConfig: { ...MODULE_2_CONFIG },
+        elements: MODULE_2_ELEMENTS.map(({ grip, ...element }) => element)
     },
+    // Exactly Module 2 with every grip step left out, so the two cannot drift apart.
     module_2_without_dynamometer: {
         name: "Module 2: Learning and Effort Tasks (No Dynamometer)",
-        moduleConfig: {
-            session: "wk0",
-            sequence: "wk0"
-        },
-        elements: [
-            { type: "instructions", config: { text: "start_message" } },
-            { type: "task", name: "max_press_test" },
-            { type: "task", name: "pavlovian_lottery" },
-            { type: "task", name: "PILT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PILT", game_description: "card choosing game" } },
-            { type: "task", name: "vigour" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "vigour", game_description: "piggy-bank game" } },
-            { type: "task", name: "PIT" },
-            { type: "task", name: "acceptability_judgment", config: { task_name: "PIT", game_description: "piggy-bank game in the clouds" } },
-            { type: "task", name: "vigour_test" },
-            { type: "task", name: "post_PILT_test" },
-            { type: "instructions", config: { text: "end_message" } }
-        ]
+        moduleConfig: { ...MODULE_2_CONFIG },
+        elements: MODULE_2_ELEMENTS.filter(element => !element.grip).map(({ grip, ...element }) => element)
     },
     questionnaires: {
         name: "Questionnaires",

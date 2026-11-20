@@ -113,7 +113,17 @@
   background: rgba(236, 239, 241, 0.75);
 }
 
-.dynamometer-debug-target {
+#dynamometer-debug-trace {
+  fill: none;
+  stroke: #1565c0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The level the trace must cross next to start or end a squeeze. */
+#dynamometer-debug-trigger-line {
   fill: none;
   stroke: #c62828;
   stroke-width: 1.5;
@@ -121,12 +131,10 @@
   vector-effect: non-scaling-stroke;
 }
 
-#dynamometer-debug-trace {
-  fill: none;
-  stroke: #1565c0;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* One tick per counted squeeze. */
+#dynamometer-debug-squeezes line {
+  stroke: #2e7d32;
+  stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
 

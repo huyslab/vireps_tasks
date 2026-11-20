@@ -1,5 +1,5 @@
 import { updateState, pressVerb, simulateTap } from '@utils/index.js';
-import { setForceCallback, createPressDetector } from '@utils/dynamometer.js';
+import { listenForSqueezes } from '@utils/dynamometer.js';
 
 function usesDynamometer(settings) {
   return settings.inputMode === 'dynamometer';
@@ -104,7 +104,7 @@ function PITMainInstructions(settings) {
  */
 function makeStartPITConfirmation(settings) {
   const dynamometer = usesDynamometer(settings);
-  let detector = null;
+  let stopListening = () => {};
 
   return {
   type: jsPsychHtmlKeyboardResponse,
@@ -137,21 +137,13 @@ function makeStartPITConfirmation(settings) {
     const finishOnce = function (response) {
       if (confirmed) return;
       confirmed = true;
-      if (dynamometer) {
-        detector?.reset();
-        setForceCallback(() => {});
-      }
+      stopListening();
       jsPsych.finishTrial({ response });
     };
 
     const piggyContainer = document.getElementById('piggy-container');
     if (dynamometer) {
-      detector = createPressDetector(window.dynamometerMaxForce, {
-        thresholdFraction: settings.thresholdFraction,
-        holdDurationMs: settings.holdDurationMs,
-        onPress: () => finishOnce('b')
-      });
-      setForceCallback(forceN => detector.update(forceN));
+      stopListening = listenForSqueezes(() => finishOnce('b'));
     } else if (piggyContainer) {
       piggyContainer.addEventListener('pointerdown', function handler(event) {
         if (!event.isPrimary || event.button !== 0) return;

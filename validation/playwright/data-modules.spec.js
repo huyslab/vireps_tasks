@@ -1,125 +1,72 @@
 import { expect, test } from '@playwright/test';
 
-const expectedModules = {
-  module_1: [
-    ['reversal', 'reversal'],
-    ['go_no_go', 'go_no_go'],
-  ],
-  module_2: [
-    ['max_press_test', 'max_press_test'],
-    ['pavlovian_lottery', 'pavlovian_lottery'],
-    ['PILT', 'PILT'],
-    ['dynamometer_vigour', 'dynamometer_vigour'],
-    ['dynamometer_PIT', 'dynamometer_PIT'],
-    ['vigour_test', 'vigour_test'],
-    ['post_PILT_test', 'post_PILT_test'],
-  ],
-  module_2_without_dynamometer: [
-    ['max_press_test', 'max_press_test'],
-    ['pavlovian_lottery', 'pavlovian_lottery'],
-    ['PILT', 'PILT'],
-    ['vigour', 'vigour'],
-    ['PIT', 'PIT'],
-    ['vigour_test', 'vigour_test'],
-    ['post_PILT_test', 'post_PILT_test'],
-  ],
-};
-
-test('study modules contain the requested tasks and rate every task immediately afterward', async ({ page }) => {
+test('Module 2 runs tap then grip vigour, rates each vigour task, and ends with maximum strength', async ({ page }) => {
   await page.goto('/index.html');
-
-  const moduleNames = Object.keys(expectedModules);
-  const modules = await page.evaluate(async (names) => {
-    const { ModuleRegistry } = await import('/api/module-registry.js');
-    return Object.fromEntries(names.map((moduleName) => [
-      moduleName,
-      ModuleRegistry[moduleName].elements,
-    ]));
-  }, moduleNames);
-
-  for (const [moduleName, expectedTasks] of Object.entries(expectedModules)) {
-    const elements = modules[moduleName];
-    expect(elements[0]).toMatchObject({ type: 'instructions', config: { text: 'start_message' } });
-    expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
-
-    // Module 2 carries break screens between tasks, so the body is no longer a flat
-    // run of task/rating pairs. The invariant being checked is unchanged and is the
-    // one that matters: a rating follows its own task IMMEDIATELY, with nothing
-    // allowed in between. A break may only sit at a boundary, after a rating.
-    const body = elements.slice(1, -1);
-    let cursor = 0;
-    expectedTasks.forEach(([taskName, ratingName]) => {
-      while (body[cursor] && (
-        body[cursor].type === 'instructions'
-        || body[cursor].name === 'dynamometer_calibration'
-      )) cursor += 1;
-
-      expect(body[cursor]).toMatchObject({ type: 'task', name: taskName });
-      expect(
-        body[cursor + 1],
-        `${taskName} must be rated immediately, with no break between the task and its rating`
-      ).toMatchObject({
-        type: 'task',
-        name: 'acceptability_judgment',
-        config: { task_name: ratingName },
-      });
-      cursor += 2;
-    });
-
-    // Nothing but breaks may follow the last rating.
-    expect(body.slice(cursor).filter((element) => element.type !== 'instructions')).toEqual([]);
-  }
-});
-
-test('module 2 calibrates once and keeps the grip connected through vigour and PIT', async ({ page }) => {
-  await page.goto('/index.html');
-
   const elements = await page.evaluate(async () => {
     const { ModuleRegistry } = await import('/api/module-registry.js');
     return ModuleRegistry.module_2.elements;
   });
-
-  const calibrationIndex = elements.findIndex(element => element.name === 'dynamometer_calibration');
-  const vigourIndex = elements.findIndex(element => element.name === 'dynamometer_vigour');
-  const pitIndex = elements.findIndex(element => element.name === 'dynamometer_PIT');
-
-  expect(elements.filter(element => element.name === 'dynamometer_calibration')).toHaveLength(1);
-  expect(elements[calibrationIndex]).toEqual({
-    type: 'task',
-    name: 'dynamometer_calibration',
-    config: { disconnectOnFinish: false },
-  });
-  expect(elements[vigourIndex]).toEqual({
-    type: 'task',
-    name: 'dynamometer_vigour',
-    config: { disconnectOnFinish: false },
-  });
-  expect(calibrationIndex).toBeLessThan(vigourIndex);
-  expect(vigourIndex).toBeLessThan(pitIndex);
-  expect(elements[calibrationIndex - 1]).toEqual({
-    type: 'instructions',
-    config: { text: 'break_message' },
-  });
+  const named = elements.filter(element => element.type === 'task').map(element => element.name);
+  expect(named).toEqual([
+    'max_press_test', 'pavlovian_lottery', 'PILT', 'acceptability_judgment',
+    'vigour', 'acceptability_judgment', 'dynamometer_calibration',
+    'dynamometer_vigour', 'acceptability_judgment', 'PIT',
+    'acceptability_judgment', 'vigour_test', 'post_PILT_test',
+    'dynamometer_max_strength',
+  ]);
+  for (const taskName of ['vigour', 'dynamometer_vigour', 'PIT']) {
+    const index = elements.findIndex(element => element.name === taskName);
+    expect(elements[index + 1]).toMatchObject({
+      type: 'task',
+      name: 'acceptability_judgment',
+      config: { task_name: taskName },
+    });
+  }
+  expect(elements.find(element => element.name === 'dynamometer_calibration').config)
+    .toMatchObject({ disconnectOnFinish: false });
+  expect(elements.filter(element => element.name === 'dynamometer_PIT')).toHaveLength(0);
+  expect(elements.at(-2)).toMatchObject({ name: 'dynamometer_max_strength' });
+  expect(elements.at(-1)).toMatchObject({ type: 'instructions', config: { text: 'end_message' } });
   expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
+  // After the grip game, a screen lets participants put the grip down before tapping PIT.
+  const pitIndex = elements.findIndex(element => element.name === 'PIT');
+  expect(elements[pitIndex - 1]).toEqual({ type: 'instructions', config: { text: 'grip_down_message' } });
+  expect(elements.some(element => 'grip' in element)).toBe(false);
 });
 
-test('module 2 without a dynamometer uses the tap-based effort tasks and no grip break', async ({ page }) => {
-  await page.goto('/index.html');
+test('module 2 without a dynamometer is exactly module 2 minus its grip steps', async ({ page }) => {
+  // experiment.html carries the import map that messages.js needs.
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
 
-  const elements = await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     const { ModuleRegistry } = await import('/api/module-registry.js');
-    return ModuleRegistry.module_2_without_dynamometer.elements;
+    const { messages } = await import('/api/messages.js');
+    const withGrip = ModuleRegistry.module_2;
+    const withoutGrip = ModuleRegistry.module_2_without_dynamometer;
+    const isGripStep = element =>
+      element.name?.startsWith('dynamometer_')
+      || element.config?.task_name?.startsWith('dynamometer_')
+      || ['break_message', 'grip_down_message'].includes(element.config?.text);
+    return {
+      expected: withGrip.elements.filter(element => !isGripStep(element)),
+      actual: withoutGrip.elements,
+      sameConfig: JSON.stringify(withGrip.moduleConfig) === JSON.stringify(withoutGrip.moduleConfig),
+      startWith: messages.module_2.start_message,
+      startWithout: messages.module_2_without_dynamometer.start_message,
+      sameEnd: messages.module_2.end_message === messages.module_2_without_dynamometer.end_message,
+      gripMessages: Object.keys(messages.module_2_without_dynamometer),
+    };
   });
-  const taskNames = elements
-    .filter((element) => element.type === 'task')
-    .map((element) => element.name);
 
-  expect(taskNames).toContain('vigour');
-  expect(taskNames).toContain('PIT');
-  expect(taskNames).not.toContain('dynamometer_calibration');
-  expect(taskNames).not.toContain('dynamometer_vigour');
-  expect(taskNames).not.toContain('dynamometer_PIT');
-  expect(elements.filter((element) => element.config?.text === 'break_message')).toHaveLength(0);
+  expect(result.actual).toEqual(result.expected);
+  expect(result.sameConfig).toBe(true);
+  expect(result.sameEnd).toBe(true);
+  expect(result.gripMessages).toEqual(['start_message', 'end_message']);
+  // The start text matches apart from the line about setting up the grip.
+  const dropGripLine = text => text.replace(/\n?<p>Part-way through[^<]*<\/p>/, '');
+  expect(result.startWithout).toEqual(result.startWith.map(dropGripLine));
+  expect(result.startWith[1]).toContain('grip device');
+  expect(result.startWithout[1]).not.toContain('grip');
 });
 
 test('questionnaire module presents every questionnaire in the configured order', async ({ page }) => {
@@ -375,18 +322,79 @@ test('skipping demo calibration supplies values for the following grip tasks', a
 
     return {
       hookIsDeclared: typeof activeElement.onDemoSkip === 'function',
-      maxForce: window.dynamometerMaxForce,
-      maxSpeed: window.dynamometerMaxSpeed,
-      storedForce: sessionStorage.getItem('dynamometerMaxForce_tablet_demo'),
-      storedSpeed: sessionStorage.getItem('dynamometerMaxSpeed_tablet_demo'),
+      calibration: (await import('/core/utils/grip-session.js')).getGripCalibration(),
     };
   });
 
-  expect(result).toEqual({
-    hookIsDeclared: true,
-    maxForce: 80,
-    maxSpeed: 5,
-    storedForce: '80',
-    storedSpeed: '5',
+  expect(result).toEqual({ hookIsDeclared: true, calibration: 80 });
+});
+
+test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 820, height: 1180 } });
+  const page = await context.newPage();
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  const setup = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const { TaskRegistry } = await import('/api/task-registry.js');
+    const lotteryConfigs = ['module_2', 'module_2_without_dynamometer'].map(name =>
+      ModuleRegistry[name].elements.find(element => element.name === 'pavlovian_lottery').config
+    );
+    const timeline = await createTaskTimeline('pavlovian_lottery', lotteryConfigs[0]);
+    const orientationStep = timeline.find(node => node.timeline?.[0]?.data?.trialphase === 'orientation_hint');
+    window.__orientationDone = false;
+    // Run only the orientation step, held in portrait.
+    jsPsych.run([orientationStep]).then(() => { window.__orientationDone = true; });
+    return {
+      lotteryConfigs,
+      taskDefault: TaskRegistry.pavlovian_lottery.defaultConfig.preferredOrientation ?? null,
+    };
   });
+
+  const message = page.getByText('The game will start when it is turned.');
+  await expect(message).toBeAttached();
+  await expect(page.locator('body')).toHaveAttribute('data-preferred-orientation', 'landscape');
+  await expect(page.locator('#rotate-overlay .rotate-msg-landscape')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__orientationDone)).toBe(false);   // no way past it
+
+  await page.setViewportSize({ width: 1180, height: 820 });                  // turn the tablet
+  await expect.poll(() => page.evaluate(() => window.__orientationDone)).toBe(true);
+
+  // Skipping the step in the wrong orientation (demo navigation) must not leave its
+  // listener behind to end a later trial when the device is turned.
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const timeline = await createTaskTimeline('pavlovian_lottery', { preferredOrientation: 'landscape' });
+    const orientationStep = timeline.find(node => node.timeline?.[0]?.data?.trialphase === 'orientation_hint');
+    window.__laterTrialDone = false;
+    jsPsych.run([
+      orientationStep,
+      { type: jsPsychHtmlKeyboardResponse, choices: 'NO_KEYS', stimulus: '<p id="later-trial">Later trial</p>' },
+    ]).then(() => { window.__laterTrialDone = true; });
+  });
+  await expect(message).toBeAttached();
+  await page.evaluate(() => jsPsych.finishTrial());                          // skip it
+  await expect(page.locator('#later-trial')).toBeAttached();
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__laterTrialDone)).toBe(false);
+
+  // Already in landscape: the message is skipped.
+  const skippedWhenCorrect = await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    const timeline = await createTaskTimeline('pavlovian_lottery', { preferredOrientation: 'landscape' });
+    const orientationStep = timeline.find(node => node.timeline?.[0]?.data?.trialphase === 'orientation_hint');
+    return !orientationStep.conditional_function();
+  });
+  await context.close();
+
+  expect(skippedWhenCorrect).toBe(true);
+  for (const config of setup.lotteryConfigs) {
+    expect(config).toEqual({ preferredOrientation: 'landscape' });
+  }
+  // Phone modules keep the lottery ungated: its result screen overflows a landscape phone.
+  expect(setup.taskDefault).toBeNull();
 });

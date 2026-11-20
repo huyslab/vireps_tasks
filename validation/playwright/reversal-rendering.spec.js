@@ -34,7 +34,8 @@ test('reversal preloads stimuli before showing the orientation hint', async ({ p
   const firstTwoTrials = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');
     const timeline = await createTaskTimeline('reversal', { sequence: 'wk0' });
-    return timeline.slice(0, 2).map((trial) => ({
+    // The orientation step is a conditional node wrapping a single trial.
+    return timeline.slice(0, 2).map((node) => node.timeline?.[0] ?? node).map((trial) => ({
       type: trial.type.info.name,
       trialphase: trial.data?.trialphase,
     }));
@@ -42,6 +43,6 @@ test('reversal preloads stimuli before showing the orientation hint', async ({ p
 
   expect(firstTwoTrials).toEqual([
     { type: 'preload', trialphase: 'reversal_preload' },
-    { type: 'html-button-response', trialphase: 'orientation_hint' },
+    { type: 'html-keyboard-response', trialphase: 'orientation_hint' },
   ]);
 });

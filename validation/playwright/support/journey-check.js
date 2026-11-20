@@ -21,17 +21,6 @@ async function tapOrClick(locator, hasTouch) {
 }
 
 /**
- * Clicks through the touch-only orientation hint before task-specific instructions begin.
- * api/utils.js createTaskTimeline inserts this "Got it" trial after stimulus preloading;
- * desktop/non-touch skips it entirely.
- */
-async function passOrientationHint(page, hasTouch) {
-  if (hasTouch) {
-    await page.getByRole('button', { name: 'Got it' }).click();
-  }
-}
-
-/**
  * Drives a real (non-simulate) run of the vigour task far enough to deterministically
  * capture two moments simulate mode can't reliably land on: the static rules/instructions
  * text, and an actual coin-reward feedback moment.
@@ -42,7 +31,6 @@ async function passOrientationHint(page, hasTouch) {
  * why the real trial needs the `:not(:has(#instruction-container))` qualifier).
  */
 async function vigourJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
 
   // Interactive instructions demo: "Continue" only unlocks after DEMO_UNLOCK_TAPS taps.
   const demoPiggy = page.locator('#piggy-container');
@@ -82,7 +70,6 @@ async function vigourJourney(page, testInfo, hasTouch) {
  * same way the app itself does (task.js reversalInstructions / plugin-reversal.js).
  */
 async function reversalJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
 
   // Static rules pages (jsPsychInstructions) - wording differs by touch vs keyboard, both real.
   await expect(page.locator('#jspsych-instructions-next'), 'rules instructions page should appear').toBeVisible({
@@ -170,7 +157,6 @@ async function lastCardChoosingTrial(page) {
  * as that side, with the input modality captured.
  */
 async function wmJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
   await captureShot(page, testInfo, 'WM', 'instructions');
   await passCardChoosingInstructions(page, hasTouch);
 
@@ -202,7 +188,6 @@ async function wmJourney(page, testInfo, hasTouch) {
  * trials). Taps the left card and checks the tap selected that side.
  */
 async function postPILTtestJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
   await passCardChoosingInstructions(page, hasTouch);
 
   await expect(page.locator('#cardChoosingOptionBox'), 'test trial should appear').toBeVisible({ timeout: 15000 });
@@ -235,7 +220,6 @@ async function postPILTtestJourney(page, testInfo, hasTouch) {
  * wrong-answer review screen and the retry loop_function read.
  */
 async function piltJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
 
   // Walk whatever instruction/practice screens come before the quiz. The sequence differs by
   // modality (button vs press-both ready screens) and includes real card trials, so this
@@ -315,7 +299,6 @@ async function piltJourney(page, testInfo, hasTouch) {
  * response and shrinks when the window elapses, and that both are recorded.
  */
 async function goNoGoJourney(page, testInfo, hasTouch) {
-  await passOrientationHint(page, hasTouch);
 
   const face = page.locator('#gng-stimulus');
   for (let i = 0; i < 120 && !(await face.isVisible().catch(() => false)); i++) {

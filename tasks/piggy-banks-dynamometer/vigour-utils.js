@@ -1,8 +1,18 @@
 import { saveDataREDCap, updateBonusState, updateState, showTemporaryWarning, kickOut, fullscreen_prompt } from '@utils/index.js';
-import { setForceCallback, createPressDetector, disconnectDynamometer } from '@utils/dynamometer.js';
+import { listenForSqueezes, releaseGrip } from '@utils/dynamometer.js';
+import { renderDebugForceGraph, createDebugForceGraphUpdater } from './debug-graph.js';
 import { shakePiggy, updatePiggyTails } from '@tasks/piggy-banks/utils.js';
 
-const VIGOUR_TRIALS = [{ "magnitude": 1, "ratio": 1, "trialDuration": 6825 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6956 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7228 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7221 }, { "magnitude": 5, "ratio": 10, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7386 }, { "magnitude": 1, "ratio": 5, "trialDuration": 7009 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6666 }, { "magnitude": 1, "ratio": 1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6501 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7236 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7490 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6902 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6888 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6891 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6535 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6652 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6890 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7452 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6954 }, { "magnitude": 2, "ratio": 1, "trialDuration": 6827 }, { "magnitude": 5, "ratio": 1, "trialDuration": 6679 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7199 }, { "magnitude": 2, "ratio": 10, "trialDuration": 7207 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7145 }, { "magnitude": 2, "ratio": 5, "trialDuration": 7465 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6870 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6726 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6688 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6506 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7044 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7293 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7182 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6862 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6985 }];
+const FULL_VIGOUR_TRIALS = [{ "magnitude": 1, "ratio": 1, "trialDuration": 6825 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6956 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7228 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7221 }, { "magnitude": 5, "ratio": 10, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7386 }, { "magnitude": 1, "ratio": 5, "trialDuration": 7009 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6666 }, { "magnitude": 1, "ratio": 1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6501 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7236 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7490 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6902 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6888 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6891 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6535 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6652 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6890 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7452 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6954 }, { "magnitude": 2, "ratio": 1, "trialDuration": 6827 }, { "magnitude": 5, "ratio": 1, "trialDuration": 6679 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7199 }, { "magnitude": 2, "ratio": 10, "trialDuration": 7207 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7145 }, { "magnitude": 2, "ratio": 5, "trialDuration": 7465 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6870 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6726 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6688 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6506 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7044 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7293 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7182 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6862 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6985 }];
+
+// Grip trials run 2 s shorter than the tap game's, about 4.5-5.5 s each.
+const TRIAL_SHORTENING_MS = 2000;
+
+// Three passes through all nine magnitude × ratio conditions (27 trials).
+const VIGOUR_TRIALS = FULL_VIGOUR_TRIALS.slice(0, 27).map(trial => ({
+    ...trial,
+    trialDuration: trial.trialDuration - TRIAL_SHORTENING_MS
+}));
 
 const magnitudes = [...new Set(VIGOUR_TRIALS.map(t => t.magnitude))].sort((a, b) => a - b);
 const ratios     = [...new Set(VIGOUR_TRIALS.map(t => t.ratio))].sort((a, b) => b - a);
@@ -15,71 +25,6 @@ const VIGOUR_PRELOAD_IMAGES = [
     "1p-num.png", "2p-num.png", "5p-num.png", "10p-num.png", "piggy-bank.png",
     "ooc_2p.png", "piggy-tail2.png", "saturate-icon.png", "tail-icon.png"
 ].map(s => "./assets/images/piggy-banks/" + s);
-
-const DEBUG_FORCE_GRAPH_WINDOW_MS = 5000;
-const DEBUG_FORCE_GRAPH_TOP_Y = 6;
-const DEBUG_FORCE_GRAPH_BOTTOM_Y = 94;
-
-function isDebugParticipant() {
-    return (window.participantID ?? '').includes('debug');
-}
-
-function forceGraphY(forceN, graphMaximumN) {
-    const usableHeight = DEBUG_FORCE_GRAPH_BOTTOM_Y - DEBUG_FORCE_GRAPH_TOP_Y;
-    const proportion = Math.min(Math.max(forceN / graphMaximumN, 0), 1);
-    return DEBUG_FORCE_GRAPH_BOTTOM_Y - proportion * usableHeight;
-}
-
-function generateDebugForceGraph(settings) {
-    if (!isDebugParticipant()) return '';
-
-    const maximumForceN = Number(window.dynamometerMaxForce);
-    const targetForceN = maximumForceN * Number(settings.thresholdFraction);
-    const graphMaximumN = Math.max(maximumForceN * 1.1, targetForceN * 1.2, 1);
-    const targetY = forceGraphY(targetForceN, graphMaximumN);
-
-    return `
-        <div id="dynamometer-debug-graph" data-target-force-n="${targetForceN}">
-            <div class="dynamometer-debug-readout">
-                <span>Current: <strong id="dynamometer-debug-current">0.0 N</strong></span>
-                <span>Target: <strong>${targetForceN.toFixed(1)} N</strong></span>
-            </div>
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none"
-                 role="img" aria-label="Live grip strength; dashed line shows the target">
-                <line class="dynamometer-debug-target"
-                      x1="0" y1="${targetY}" x2="100" y2="${targetY}"></line>
-                <polyline id="dynamometer-debug-trace" points=""></polyline>
-            </svg>
-        </div>
-    `;
-}
-
-function createDebugForceGraphUpdater(settings) {
-    const graph = document.getElementById('dynamometer-debug-graph');
-    const trace = document.getElementById('dynamometer-debug-trace');
-    const current = document.getElementById('dynamometer-debug-current');
-    if (!graph || !trace || !current) return () => {};
-
-    const maximumForceN = Number(window.dynamometerMaxForce);
-    const targetForceN = maximumForceN * Number(settings.thresholdFraction);
-    const graphMaximumN = Math.max(maximumForceN * 1.1, targetForceN * 1.2, 1);
-    const samples = [];
-
-    return forceN => {
-        const now = performance.now();
-        const safeForceN = Number.isFinite(Number(forceN)) ? Math.max(0, Number(forceN)) : 0;
-        samples.push({ time: now, force: safeForceN });
-
-        const windowStart = now - DEBUG_FORCE_GRAPH_WINDOW_MS;
-        while (samples.length > 1 && samples[0].time < windowStart) samples.shift();
-
-        trace.setAttribute('points', samples.map(sample => {
-            const x = 100 - ((now - sample.time) / DEBUG_FORCE_GRAPH_WINDOW_MS) * 100;
-            return `${Math.max(0, x).toFixed(2)},${forceGraphY(sample.force, graphMaximumN).toFixed(2)}`;
-        }).join(' '));
-        current.textContent = `${safeForceN.toFixed(1)} N`;
-    };
-}
 
 function dropCoin(magnitude, persist = false) {
     const id = persist ? 'persist-coin-container' : 'coin-container';
@@ -142,7 +87,7 @@ function generateTrialStimulus(magnitude, ratio, settings) {
                 <div id="piggy-container">
                     <img id="piggy-bank" src="./assets/images/piggy-banks/piggy-bank.png" alt="Piggy Bank" style="${piggy_style}">
                 </div>
-                ${generateDebugForceGraph(settings)}
+                ${renderDebugForceGraph()}
             </div>
         </div>
     `;
@@ -155,7 +100,7 @@ let dynResizeTimer     = null;
 let dynResizeObserver  = null;
 
 function piggyBankTrial(settings) {
-    let detector = null;
+    let stopListening = () => {};
 
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -181,10 +126,7 @@ function piggyBankTrial(settings) {
             trial_presses:  () => trialState.trialPresses,
             trial_reward:   () => trialState.trialReward,
             total_presses:  () => taskTotalPresses,
-            total_reward:   () => taskTotalReward,
-            max_force_n:          () => window.dynamometerMaxForce,
-            threshold_fraction:   settings.thresholdFraction,
-            hold_duration_ms:     settings.holdDurationMs
+            total_reward:   () => taskTotalReward
         },
         on_start: function (trial) {
             if (window.simulating) trial.trial_duration = 500;
@@ -279,24 +221,12 @@ function piggyBankTrial(settings) {
                     jsPsych.pluginAPI.setTimeout(handlePress, 120 * (i + 1));
                 }
             } else {
-                // window.dynamometerMaxForce is guaranteed valid by the calibration
-                // gate in vigour-timeline.js; no 80 N fallback needed here.
-                detector = createPressDetector(window.dynamometerMaxForce, {
-                    thresholdFraction: settings.thresholdFraction,
-                    holdDurationMs:    settings.holdDurationMs,
-                    onPress: handlePress
-                });
-                const updateDebugGraph = createDebugForceGraphUpdater(settings);
-                setForceCallback(forceN => {
-                    detector.update(forceN);
-                    updateDebugGraph(forceN);
-                });
+                stopListening = listenForSqueezes(handlePress, { onForce: createDebugForceGraphUpdater() });
             }
         },
         on_finish: function (data) {
-            detector?.reset();
-            detector = null;
-            setForceCallback(() => {}); // idle stream between trials
+            stopListening(); // idle stream between trials
+            stopListening = () => {};
             jsPsych.pluginAPI.cancelAllKeyboardResponses();
             dynTrialCounter++;
             data.trial_number = dynTrialCounter;
@@ -351,12 +281,9 @@ function createDynVigourCoreTimeline(settings) {
 
     timeline.at(-1)['on_timeline_finish'] = () => {
         removePersistentCoinContainer();
-        // Disconnect and release the Bluetooth device so it does not continue
-        // streaming and draining its battery after the task ends.
-        if (settings.disconnectOnFinish !== false && window.dynamometerSensor) {
-            disconnectDynamometer(window.dynamometerSensor).catch(() => {});
-            window.dynamometerSensor = null;
-        }
+        // Release the Bluetooth device so it does not keep streaming and
+        // draining its battery after the task ends.
+        releaseGrip(settings);
     };
 
     return timeline;
@@ -368,7 +295,5 @@ export {
     observeResizing,
     dropCoin,
     removePersistentCoinContainer,
-    VIGOUR_PRELOAD_IMAGES,
-    generateDebugForceGraph,
-    createDebugForceGraphUpdater
+    VIGOUR_PRELOAD_IMAGES
 };

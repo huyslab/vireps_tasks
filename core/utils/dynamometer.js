@@ -310,78 +310,124 @@ export async function disconnectDynamometer(device) {
     await device.close();
 }
 
+// Fast squeezing rarely gets back to rest, so the force trace looks like a wave
+// riding above zero. A squeeze counts as over once force has dipped this fraction
+// of its height below its peak, and the next one as started once force has risen
+// the same fraction of the previous squeeze's height above the dip between them.
+// Both changes must also be at least SQUEEZE_MIN_CHANGE_N, so sensor noise and
+// small wobbles at the top or bottom of a squeeze are not counted.
+export const SQUEEZE_PROMINENCE_FRACTION = 0.25;
+export const SQUEEZE_MIN_CHANGE_N = 1.0;
+// Force within this of the trough counts as the grip being let go.
+export const SQUEEZE_REST_N = 0.5;
+
 /**
- * Press detector state machine.
+ * Detects discrete squeezes in the force trace. Every grip task counts squeezes
+ * with this one rule: the quick-squeeze speed test, the maximum-strength test,
+ * and the grip vigour and PIT games (through listenForSqueezes).
  *
- * A press fires onPress() when force is held at or above
- * (maxForce × thresholdFraction) continuously for holdDurationMs.
- * Force must then drop below the threshold before the next press starts,
- * so a single sustained squeeze counts only once.
+ * The lowest force since the last squeeze is the trough. A squeeze starts once
+ * force rises SQUEEZE_MIN_CHANGE_N above it (or SQUEEZE_PROMINENCE_FRACTION of
+ * the previous squeeze's height, if larger, while the grip has only dipped
+ * between squeezes; once it is let go back to rest, a light squeeze after a hard
+ * one counts again). There is no minimum strength, and a
+ * grip that rests slightly above zero (sensor drift, a hand resting on it) still
+ * works. A squeeze already held when tracking starts only sets a high trough,
+ * so it is not counted unless force then rises clearly above it.
  *
- * Call detector.update(forceN) on every force reading.
- * Call detector.reset() to clear state between trials.
+ * - `fullRelease: false` (default, quick squeezes): a squeeze ends at the dip
+ *   after its peak - once force falls SQUEEZE_PROMINENCE_FRACTION of the
+ *   squeeze's height below the peak (at least SQUEEZE_MIN_CHANGE_N) - or when
+ *   the grip is let go. The bottom of that dip is the next squeeze's trough.
+ * - `fullRelease: true` (maximum strength): a squeeze ends only once force is
+ *   back within SQUEEZE_REST_N of the trough, i.e. the grip was let go.
  *
- * @param {number} maxForce - Calibrated maximum force in Newtons
- * @param {Object} opts
- * @param {number} [opts.thresholdFraction=0.75]
- * @param {number} [opts.holdDurationMs=40]
- * @param {Function} opts.onPress - Called each time a press completes
- * @returns {{ update(forceN: number): void, reset(): void }}
+ * `triggerN` is the force the trace must next cross: above it to start a
+ * squeeze, or below it to end the current one (null before the first reading).
  */
-export function createPressDetector(maxForce, { thresholdFraction = 0.75, holdDurationMs = 40, onPress } = {}) {
-    const threshold = maxForce * thresholdFraction;
-    const parsedHoldDuration = Number(holdDurationMs);
-    const requiredHoldMs = Number.isFinite(parsedHoldDuration)
-        ? Math.max(0, parsedHoldDuration)
-        : 40;
-    let state = 'IDLE'; // IDLE | PRESSING | COOLDOWN
-    let holdTimer = null;
+export function createSqueezeTracker({ onStart = () => {}, onRelease = () => {}, fullRelease = false } = {}) {
+    let trough = Infinity;
+    let restLevel = Infinity;  // lowest force seen: the grip at rest
+    let startTrough = 0;
+    let lastHeight = 0;
+    let squeezing = false;
+    let peak = 0;
+    let count = 0;
 
-    function cancelHold() {
-        if (holdTimer !== null) {
-            clearTimeout(holdTimer);
-            holdTimer = null;
-        }
-    }
-
-    function completePress() {
-        if (state !== 'PRESSING') return;
-        state = 'COOLDOWN';
-        holdTimer = null;
-        if (onPress) onPress();
-    }
+    const prominence = height => Math.max(SQUEEZE_MIN_CHANGE_N, SQUEEZE_PROMINENCE_FRACTION * height);
+    const startLevel = () => trough + (fullRelease ? SQUEEZE_MIN_CHANGE_N : prominence(lastHeight));
+    const endLevel = () => fullRelease
+        ? startTrough + SQUEEZE_REST_N
+        : Math.max(startTrough + SQUEEZE_REST_N, peak - prominence(peak - startTrough));
 
     return {
         update(forceN) {
-            const above = forceN >= threshold;
-
-            if (state === 'IDLE') {
-                if (above) {
-                    state = 'PRESSING';
-                    if (requiredHoldMs === 0) {
-                        completePress();
-                    } else {
-                        // Go Direct can batch several measurements into one Bluetooth
-                        // notification. Using arrival timestamps therefore makes a
-                        // millisecond hold depend on the next packet. A real timer makes
-                        // the configured duration independent of notification batching.
-                        holdTimer = setTimeout(completePress, requiredHoldMs);
-                    }
+            const force = Math.max(0, Number(forceN) || 0);
+            restLevel = Math.min(restLevel, force);
+            // Back at rest: the previous squeeze's height no longer sets the bar.
+            const atRest = force <= restLevel + SQUEEZE_REST_N;
+            if (!squeezing) {
+                trough = Math.min(trough, force);
+                if (atRest) lastHeight = 0;
+                if (force > startLevel()) {
+                    squeezing = true;
+                    startTrough = trough;
+                    peak = force;
+                    count += 1;
+                    onStart(force);
                 }
-            } else if (state === 'PRESSING') {
-                if (!above) {
-                    cancelHold();
-                    state = 'IDLE';
-                }
-            } else if (state === 'COOLDOWN') {
-                if (!above) {
-                    state = 'IDLE';
-                }
+                return;
+            }
+            peak = Math.max(peak, force);
+            if (force <= endLevel()) {
+                squeezing = false;
+                lastHeight = atRest ? 0 : peak - startTrough;
+                trough = force;
+                onRelease(peak);
             }
         },
-        reset() {
-            cancelHold();
-            state = 'IDLE';
+        get squeezing() { return squeezing; },
+        get count() { return count; },
+        get triggerN() {
+            if (squeezing) return endLevel();
+            return Number.isFinite(trough) ? startLevel() : null;
         }
     };
+}
+
+/**
+ * Routes the live force stream into a squeeze tracker for the grip games: one
+ * press per squeeze, counted the moment the squeeze starts. `onForce(forceN,
+ * tracker)` sees every reading after the tracker has, e.g. to draw the debug graph.
+ *
+ * @param {Function} onSqueeze - Called once at the start of each squeeze
+ * @param {Object} [opts]
+ * @param {Function} [opts.onForce]
+ * @returns {Function} stop - Detaches from the force stream
+ */
+export function listenForSqueezes(onSqueeze, { onForce } = {}) {
+    const tracker = createSqueezeTracker({ onStart: () => onSqueeze() });
+    setForceCallback(forceN => {
+        tracker.update(forceN);
+        if (onForce) onForce(forceN, tracker);
+    });
+    return () => setForceCallback(() => {});
+}
+
+/**
+ * Disconnects the shared grip handle unless the task was told to keep it
+ * (`disconnectOnFinish: false`) for the grip task that follows.
+ */
+export function releaseGrip(settings = {}) {
+    if (settings.disconnectOnFinish === false || !window.dynamometerSensor) return;
+    const sensor = window.dynamometerSensor;
+    window.dynamometerSensor = null;
+    disconnectDynamometer(sensor).catch(() => {});
+}
+
+/** Shared onDemoSkip clean-up for grip tasks. */
+export function cleanUpGripTask(settings = {}) {
+    cancelPendingDynamometerConnection();
+    setForceCallback(() => {});
+    releaseGrip(settings);
 }

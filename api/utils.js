@@ -95,9 +95,16 @@ export async function createTaskTimeline(taskName, config = {}) {
             : `<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg" style="width:116px;height:70px;display:block;margin:0 auto 20px;"><g transform="matrix(0,1,-1,0,100,0)">${shapes}</g></svg>`;
         const orientationLabel = orientation === 'portrait' ? 'portrait (upright)' : 'landscape (on its side)';
 
-        // Shown before the gate activates so users know how to hold their device
+        const preferredOrientationQuery = window.matchMedia(`(orientation: ${orientation})`);
+        let continueOnceTurned = () => {};
+
+        // Shown only when the device is held the wrong way, and it cannot be dismissed:
+        // it moves on by itself once the device is turned, so the task never starts in
+        // the wrong orientation. It also raises the rotate overlay (entry HTML), which
+        // covers this message on pages that have one.
         const orientationHintTrial = {
-            type: jsPsychHtmlButtonResponse,
+            type: jsPsychHtmlKeyboardResponse,
+            choices: 'NO_KEYS',
             stimulus: function() {
                 // The gate applies to every touch device, tablets included, so the required
                 // orientation is stated the same way on all of them - only the noun differs.
@@ -105,12 +112,24 @@ export async function createTaskTimeline(taskName, config = {}) {
                 const deviceNoun = isPhone ? 'phone' : 'tablet';
                 return `<div style="text-align:center;max-width:min(500px,92vw);margin:0 auto;">
                     ${phoneIcon}
-                    <p>For this game, please hold your ${deviceNoun} in <strong>${orientationLabel}</strong> mode.</p>
+                    <p>For this game, please turn your ${deviceNoun} to <strong>${orientationLabel}</strong>.</p>
+                    <p>The game will start when it is turned.</p>
                 </div>`;
             },
-            choices: ['Got it'],
             data: { trialphase: 'orientation_hint' },
-            simulation_options: { data: { response: 0 } }
+            on_load: function() {
+                document.body.setAttribute('data-preferred-orientation', orientation);
+                continueOnceTurned = () => {
+                    if (preferredOrientationQuery.matches) jsPsych.finishTrial();
+                };
+                preferredOrientationQuery.addEventListener('change', continueOnceTurned);
+                continueOnceTurned();
+            },
+            // Also runs when the step is skipped (demo navigation) in the wrong
+            // orientation, so a later rotation cannot end some other trial.
+            on_finish: function() {
+                preferredOrientationQuery.removeEventListener('change', continueOnceTurned);
+            }
         };
 
         const taskTimeline = Array.isArray(timeline) ? timeline : [timeline];
@@ -119,7 +138,7 @@ export async function createTaskTimeline(taskName, config = {}) {
 
         return [
             ...(preloadTrial ? [preloadTrial] : []),
-            orientationHintTrial,
+            { timeline: [orientationHintTrial], conditional_function: () => !preferredOrientationQuery.matches },
             {
                 timeline: gatedTimeline,
                 on_timeline_start: () => { document.body.setAttribute('data-preferred-orientation', orientation); },

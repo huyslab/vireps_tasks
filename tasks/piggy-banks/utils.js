@@ -22,11 +22,14 @@ function animatePiggy(keyframes, options) {
  * Triggers a quick shake animation on the piggy bank when user presses a key
  */
 function shakePiggy() {
+  // One quick, clearly visible jolt per press: a large sideways kick that snaps
+  // back, rather than a long wobble, so fast presses still read as separate shakes.
   animatePiggy([
-    'translateX(-2%)',
-    'translateX(2%)',
+    'translateX(0)',
+    'translateX(-8%) rotate(-3deg)',
+    'translateX(6%) rotate(2deg)',
     'translateX(0)'
-  ], { duration: 100, easing: 'linear' });
+  ], { duration: 90, easing: 'ease-out' });
 }
 
 /**

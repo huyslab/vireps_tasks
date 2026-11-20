@@ -1,9 +1,9 @@
 import { updatePersistentCoinContainer, observeResizing, dropCoin } from './vigour-utils.js';
 import { shakePiggy } from '@tasks/piggy-banks/utils.js';
 import { updateState } from '@utils/index.js';
-import { setForceCallback, createPressDetector } from '@utils/dynamometer.js';
+import { listenForSqueezes } from '@utils/dynamometer.js';
 
-let instructionDetector  = null;
+let stopInstructionListening = () => {};
 let instructionResizeObs = null;
 
 // ── Interactive demo trial ────────────────────────────────────────────────────
@@ -71,13 +71,8 @@ function makeInstructionPage(settings) {
             }
 
             function startDetector() {
-                instructionDetector?.reset();
-                instructionDetector = createPressDetector(window.dynamometerMaxForce, {
-                    thresholdFraction: settings.thresholdFraction,
-                    holdDurationMs:    settings.holdDurationMs,
-                    onPress: handlePress
-                });
-                setForceCallback(f => instructionDetector.update(f));
+                stopInstructionListening();
+                stopInstructionListening = listenForSqueezes(handlePress);
             }
 
             function restart() {
@@ -107,9 +102,8 @@ function makeInstructionPage(settings) {
             }
         },
         on_finish: function () {
-            instructionDetector?.reset();
-            setForceCallback(() => {});
-            instructionDetector = null;
+            stopInstructionListening();
+            stopInstructionListening = () => {};
             if (instructionResizeObs) {
                 instructionResizeObs.disconnect();
                 instructionResizeObs = null;
@@ -172,7 +166,7 @@ const ruleInstruction = {
 // ── Start confirmation ────────────────────────────────────────────────────────
 
 function makeStartConfirmation(settings) {
-    let detector = null;
+    let stopListening = () => {};
 
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -181,7 +175,7 @@ function makeStartConfirmation(settings) {
             <div class="experiment-wrapper">
                 <div id="instruction-container">
                     <div id="instruction-text">
-                        <p>You will now play the piggy bank game without a break for about <strong>four minutes</strong>.</p>
+                        <p>You will now play the piggy bank game without a break for about <strong>two minutes</strong>.</p>
                         <p>When you're ready, <span class="highlight-txt">squeeze the grip</span> to begin.</p>
                     </div>
                 </div>
@@ -202,17 +196,11 @@ function makeStartConfirmation(settings) {
             const finishOnce = (response) => {
                 if (confirmed) return;
                 confirmed = true;
-                detector?.reset();
-                setForceCallback(() => {});
+                stopListening();
                 jsPsych.finishTrial({ response });
             };
 
-            detector = createPressDetector(window.dynamometerMaxForce, {
-                thresholdFraction: settings.thresholdFraction,
-                holdDurationMs:    settings.holdDurationMs,
-                onPress: () => finishOnce('b')
-            });
-            setForceCallback(f => detector.update(f));
+            stopListening = listenForSqueezes(() => finishOnce('b'));
 
             document.getElementById('reread-button').addEventListener('click', () => finishOnce('r'));
 
@@ -221,9 +209,8 @@ function makeStartConfirmation(settings) {
             }
         },
         on_finish: function (data) {
-            detector?.reset();
-            detector = null;
-            setForceCallback(() => {});
+            stopListening();
+            stopListening = () => {};
             const seed = jsPsych.randomization.setSeed();
             data.rng_seed = seed;
         }
