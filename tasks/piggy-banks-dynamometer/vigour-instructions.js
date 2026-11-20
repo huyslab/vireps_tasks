@@ -175,7 +175,7 @@ function makeStartConfirmation(settings) {
             <div class="experiment-wrapper">
                 <div id="instruction-container">
                     <div id="instruction-text">
-                        <p>You will now play the piggy bank game without a break for about <strong>three minutes</strong>.</p>
+                        <p>You will now play the piggy bank game without a break for about <strong>two minutes</strong>.</p>
                         <p>When you're ready, <span class="highlight-txt">squeeze the grip</span> to begin.</p>
                     </div>
                 </div>

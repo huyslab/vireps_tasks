@@ -26,7 +26,8 @@ test('vigour preloads stimuli before showing the orientation hint', async ({ pag
   const firstTwoTrials = await page.evaluate(async () => {
     const { createTaskTimeline } = await import('/api/index.js');
     const timeline = await createTaskTimeline('vigour');
-    return timeline.slice(0, 2).map((trial) => ({
+    // The orientation step is a conditional node wrapping a single trial.
+    return timeline.slice(0, 2).map((node) => node.timeline?.[0] ?? node).map((trial) => ({
       type: trial.type.info.name,
       trialphase: trial.data?.trialphase,
     }));
@@ -34,6 +35,6 @@ test('vigour preloads stimuli before showing the orientation hint', async ({ pag
 
   expect(firstTwoTrials).toEqual([
     { type: 'preload', trialphase: 'vigour_preload' },
-    { type: 'html-button-response', trialphase: 'orientation_hint' },
+    { type: 'html-keyboard-response', trialphase: 'orientation_hint' },
   ]);
 });

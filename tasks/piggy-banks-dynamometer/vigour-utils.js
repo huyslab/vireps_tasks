@@ -5,8 +5,14 @@ import { shakePiggy, updatePiggyTails } from '@tasks/piggy-banks/utils.js';
 
 const FULL_VIGOUR_TRIALS = [{ "magnitude": 1, "ratio": 1, "trialDuration": 6825 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6956 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7228 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7221 }, { "magnitude": 5, "ratio": 10, "trialDuration": 7261 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7386 }, { "magnitude": 1, "ratio": 5, "trialDuration": 7009 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7376 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6666 }, { "magnitude": 1, "ratio": 1, "trialDuration": 6962 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6501 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7236 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7490 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6902 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6888 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6891 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6535 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6652 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6890 }, { "magnitude": 5, "ratio": 5, "trialDuration": 7452 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6954 }, { "magnitude": 2, "ratio": 1, "trialDuration": 6827 }, { "magnitude": 5, "ratio": 1, "trialDuration": 6679 }, { "magnitude": 1, "ratio": 10, "trialDuration": 7199 }, { "magnitude": 2, "ratio": 10, "trialDuration": 7207 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7145 }, { "magnitude": 2, "ratio": 5, "trialDuration": 7465 }, { "magnitude": 1, "ratio": 5, "trialDuration": 6870 }, { "magnitude": 5, "ratio": 5, "trialDuration": 6726 }, { "magnitude": 2, "ratio": 10, "trialDuration": 6688 }, { "magnitude": 2, "ratio": 5, "trialDuration": 6506 }, { "magnitude": 5, "ratio": 1, "trialDuration": 7044 }, { "magnitude": 2, "ratio": 1, "trialDuration": 7293 }, { "magnitude": 1, "ratio": 1, "trialDuration": 7182 }, { "magnitude": 1, "ratio": 10, "trialDuration": 6862 }, { "magnitude": 5, "ratio": 10, "trialDuration": 6985 }];
 
+// Grip trials run 2 s shorter than the tap game's, about 4.5-5.5 s each.
+const TRIAL_SHORTENING_MS = 2000;
+
 // Three passes through all nine magnitude × ratio conditions (27 trials).
-const VIGOUR_TRIALS = FULL_VIGOUR_TRIALS.slice(0, 27);
+const VIGOUR_TRIALS = FULL_VIGOUR_TRIALS.slice(0, 27).map(trial => ({
+    ...trial,
+    trialDuration: trial.trialDuration - TRIAL_SHORTENING_MS
+}));
 
 const magnitudes = [...new Set(VIGOUR_TRIALS.map(t => t.magnitude))].sort((a, b) => a - b);
 const ratios     = [...new Set(VIGOUR_TRIALS.map(t => t.ratio))].sort((a, b) => b - a);
