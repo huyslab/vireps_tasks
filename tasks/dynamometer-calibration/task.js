@@ -37,15 +37,28 @@ export function cleanUpDynamometerCalibrationDemo(settings = {}) {
 
 function makeInstructions(settings) {
     const seconds = positiveNumber(settings.speedCalibrationDurationMs, DEFAULT_DURATION_MS) / 1000;
+    const data = { trialphase: 'dynamometer_speed_calibration_instructions' };
     return {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: `
-            <div id="instruction-container"><div id="instruction-text">
-                <p>We will check how fast you can squeeze and fully release the grip.</p>
-                <p>Make <strong>quick squeezes</strong> rather than hard or sustained squeezes. Squeeze once to start, then squeeze and let go as quickly as you can for <strong>${seconds} seconds</strong>.</p>
-            </div></div>`,
-        choices: ['Start'],
-        data: { trialphase: 'dynamometer_speed_calibration_instructions' }
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            stimulus: `
+                <div id="instruction-container"><div id="instruction-text">
+                    <p>First, a quick warm-up.</p>
+                    <p>How fast can you squeeze the grip?</p>
+                </div></div>`,
+            choices: ['Next'],
+            data
+        }, {
+            type: jsPsychHtmlButtonResponse,
+            stimulus: `
+                <div id="instruction-container"><div id="instruction-text">
+                    <p>Squeeze and let go, again and again, as fast as you can.</p>
+                    <p>Short, quick squeezes. You do not need to squeeze hard.</p>
+                    <p>Keep going for <strong>${seconds} seconds</strong>.</p>
+                </div></div>`,
+            choices: ['Start'],
+            data
+        }]
     };
 }
 
@@ -60,7 +73,7 @@ function makeRateTrial(settings) {
         choices: 'NO_KEYS',
         stimulus: `
             <div id="instruction-container"><div id="instruction-text" class="grip-speed-live">
-                <h3 id="grip-speed-countdown">Squeeze once to start.<br>Then squeeze and fully release as fast as you can!</h3>
+                <h3 id="grip-speed-countdown">Squeeze once to start.<br>Then squeeze and let go, as fast as you can!</h3>
                 <div id="grip-speed-counter" role="status" aria-live="polite">Squeezes: 0</div>
                 <div id="grip-speed-rate">Speed: 0.00 squeezes/sec</div>
                 <div id="grip-speed-indicator" aria-hidden="true"><div class="grip-speed-indicator-core"></div></div>
@@ -177,11 +190,12 @@ function makeRetryPrompt() {
             stimulus: () => signalLost
                 ? `<div id="instruction-container"><div id="instruction-text">
                     <h2>Grip not detected</h2>
-                    <p>The grip stopped sending a signal. Please ask the experimenter to check the grip and connect it again.</p>
+                    <p>The grip stopped sending a signal. Please ask the study team to check the grip and connect it again.</p>
                 </div></div>`
                 : `<div id="instruction-container"><div id="instruction-text">
-                    <h2>Let's try that again</h2>
-                    <p>We need at least three quick squeezes to set up the game. Squeeze and fully let go as quickly as you can.</p>
+                    <h2>Let's try once more.</h2>
+                    <p>Squeeze and let go, again and again.</p>
+                    <p>Go as fast as you can.</p>
                 </div></div>`,
             choices: ['Continue'],
             data: { trialphase: 'dynamometer_calibration_retry' }
@@ -198,8 +212,8 @@ function makeFeedback(settings) {
                 const row = jsPsych.data.get().filter({ trialphase: 'dynamometer_speed_calibration' }).last(1).values()[0];
                 return `<div id="instruction-container"><div id="instruction-text">
                     <h2><span class="highlight-txt">Well done!</span></h2>
-                    <p>Your speed was <strong>${Number(row.avg_speed_hz).toFixed(2)} squeezes per second</strong>.</p>
-                    <p>Tap <strong>Continue</strong> to go on to the piggy-bank game.</p>
+                    <p>You squeezed <strong>${Number(row.avg_speed_hz).toFixed(2)} times a second</strong>.</p>
+                    <p>Tap <strong>Continue</strong> to go on.</p>
                 </div></div>`;
             },
             choices: ['Continue'],

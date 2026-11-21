@@ -118,7 +118,7 @@ test('squeezing is the primary action on the dynamometer start screen', async ({
     return instructions.timeline[2].stimulus();
   });
 
-  expect(markup).toContain('<span class="highlight-txt">squeeze the grip</span>');
+  expect(markup).toContain('<span class="highlight-txt">Squeeze the grip</span>');
   expect(markup).toContain('id="reread-button" class="jspsych-btn jspsych-btn-quiet"');
 });
 

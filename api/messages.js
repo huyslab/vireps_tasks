@@ -22,24 +22,24 @@ const formatted_warning_msg = `
 `;
 
 
-// Module 2 and its no-grip variant share their text; only the grip line differs.
+// Module 2 and its no-grip variant share their text; only the grip screen differs.
 function module2StartMessage({ withGrip }) {
     return [
         `<p><b>Welcome to Part 2.</b></p>
-        <p>In this part you will play several games. In some you collect coins. In some you tap as fast as you can.</p>
-        <p>At the end there are two short quizzes about what you learned.</p>
-        <p>After each game we will ask you a few short questions about it.</p>`,
-        [
-            `<p>Please stay with the games until the end, and do not close this page.</p>`,
-            withGrip && `<p>Part-way through, you will be asked to call the experimenter to set up the grip device.</p>`,
-            `<p>Someone from the study team is in the room. Ask them any time you need help.</p>`
-        ].filter(Boolean).join('\n')
-    ];
+        <p>You will play several games.</p>
+        <p>In some, you collect coins. In some, you tap as fast as you can.</p>`,
+        `<p>At the end, there are two short quizzes on what you learned.</p>`,
+        `<p>After each game, we will ask you a few short questions.</p>`,
+        withGrip && `<p>Part way through, you will use a hand grip.</p>
+        <p>The study team will set it up for you.</p>`,
+        `<p>Need help? Ask the study team.</p>
+        <p>They are in the room.</p>`
+    ].filter(Boolean);
 }
 
 const module2EndMessage = {
     message: `<p><b>That is the end of Part 2. Thank you.</b></p>
-        <p>Please tell the person running the study that you have finished.</p>`,
+        <p>Please tell the study team you have finished.</p>`,
     on_start: endExperiment
 };
 
@@ -47,16 +47,21 @@ export const messages = {
     module_1: {
         start_message: [
             `<p><b>Welcome to Part 1.</b></p>
-            <p>In this part you will play two games. First the squirrel game, then the people game.</p>
-            <p>After each game we will ask you a few short questions about it.</p>`,
-            `<p>Try to answer quickly. We want your first idea, not your best guess after a long think.</p>
-            <p>You will get things wrong while you are learning. That is meant to happen.</p>
-            <p>Someone from the study team is in the room. Ask them any time you need help.</p>`
+            <p>You will play two games.</p>
+            <p>First a squirrel game. Then a people game.</p>`,
+            `<p>After each game, we will ask you a few short questions.</p>`,
+            `<p>Try to answer quickly.</p>
+            <p>Go with your first idea. Do not think for too long.</p>`,
+            `<p>You will make mistakes while you learn.</p>
+            <p>That is fine. It is part of the game.</p>`,
+            `<p>Need help? Ask the study team.</p>
+            <p>They are in the room.</p>`
         ],
         end_message: {
             message: `<p><b>That is the end of Part 1. Well done.</b></p>
-                <p>Please tell the person running the study that you have finished.</p>
-                <p>They will tell you when Part 2 starts. It might be after a break today, or on another day.</p>`,
+                <p>Please tell the study team you have finished.</p>
+                <p>They will tell you when Part 2 starts.</p>
+                <p>It might be later today, or on another day.</p>`,
             on_start: endExperiment
         }
     },
@@ -75,7 +80,8 @@ export const messages = {
             // page killed by Android, refreshed or closed during that pause would
             // leave nothing containing them in the IndexedDB outbox.
             on_start: () => { saveDataREDCap().catch(() => {}); },
-            message: `<p><b>Please call the experimenter.</b></p>`,
+            message: `<p><b>Please call the study team.</b></p>
+                <p>They will set up the hand grip.</p>`,
             button_label_next: 'Continue',
             allow_backward: false
         },
@@ -103,7 +109,7 @@ export const messages = {
         ],
         end_message: {
             message: `<p><b>That is the end of the questions. Thank you.</b></p>
-                <p>Please tell the person running the study that you have finished.</p>`,
+                <p>Please tell the study team you have finished.</p>`,
             on_start: endExperiment
         }
     },

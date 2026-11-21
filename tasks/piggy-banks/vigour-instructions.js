@@ -137,19 +137,20 @@ const ruleInstruction = {
   type: jsPsychInstructions,
   data: {trialphase: 'vigour_instructions'},
   show_clickable_nav: true,
-  pages: [`
-  <div id="instruction-text">
-    <p><strong>Now you will play this game for a few minutes and collect coins.</strong></p>
-    
-    <p>You will see piggy banks that look different from each other:</p>
-    <ul>
-        <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: you need to shake this piggy faster to get a coin.</li>
-        <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
-    </ul>
-    </div>
-    `,
+  pages: [
     `<div id="instruction-text">
-    <p>These are the coins you can win.</p>
+    <p>Now you will play this game for a few minutes.</p>
+    <p>The piggy banks look different from each other.</p>
+    </div>`,
+    // Stronger colour = lower ratio = fewer presses per coin (see updatePiggyTails).
+    `<div id="instruction-text">
+    <p><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Stronger colour:</span> you need to ${pressVerb()} fewer times to get a coin.</p>
+    </div>`,
+    `<div id="instruction-text">
+    <p><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Longer tail:</span> the coins are worth more.</p>
+    </div>`,
+    `<div id="instruction-text">
+    <p>You can win these coins:</p>
     <div class="instruct-coin-container">
         <div class="instruct-coin">
             <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny">
@@ -164,10 +165,9 @@ const ruleInstruction = {
             <p>5 Pence</p>
         </div>
     </div>
-
-    <p>Your goal is to collect as many coins as you can.</p>
-    </div>
-      `]
+    <p>Collect as many as you can.</p>
+    </div>`
+  ]
 };
 
 /**
@@ -181,8 +181,8 @@ const startConfirmation = {
   <div class="experiment-wrapper">
     <div id="instruction-container">
       <div id="instruction-text">
-        <p>Now you will play the piggy-bank game for about <strong>four minutes</strong>, with no break.</p>
-        <p>When you're ready, <span class="highlight-txt">${pressVerb()} the piggy bank</span> to begin.</p>
+        <p>The game takes about <strong>four minutes</strong>. There are no breaks.</p>
+        <p>Ready? <span class="highlight-txt">${pressVerb(true)} the piggy bank</span> to start.</p>
       </div>
     </div>
     <div id="experiment-container">
@@ -285,7 +285,7 @@ function generateInstructStimulus() {
 
       <!-- Lower Information (Buttons) -->
       <div id="bottom-container" style="visibility: hidden">
-        <p id="button-instruction" style="margin: 24px">Press <span style="font-weight: bold;">Restart</span> to try again, or <span style="font-weight: bold;">Continue</span> to proceed.</p>
+        <p id="button-instruction" style="margin: 24px">${pressVerb(true)} <span style="font-weight: bold;">Restart</span> to try again, or <span style="font-weight: bold;">Continue</span> to go on.</p>
         <div id="button-container">
           <button id="restart-button" class="jspsych-btn">Restart</button>
           <button id="continue-button" class="jspsych-btn">Continue</button>
@@ -301,9 +301,9 @@ function generateInstructStimulus() {
  */
 function updateInstructionText(shakeCount) {
   const messages = [
-    `<p>Welcome to the piggy bank game!</p><p>${pressVerb(true)} the piggy bank to shake it!</p>`,
-    `<p>${pressVerb(true)} the piggy bank to shake it!</p><p>You can ${pressVerb()} it again to keep on shaking...</p>`,
-    `<p>Well done, you just got a coin out of the piggy bank!</p><p><span class="highlight-txt">You can always ${pressVerb()} again for more coins.</span> Try getting some more!</p>`
+    `<p><b>The piggy bank game</b></p><p>${pressVerb(true)} the piggy bank to shake it.</p>`,
+    `<p>${pressVerb(true)} again and again to keep it shaking.</p>`,
+    `<p><b>Well done! You got a coin.</b></p><p><span class="highlight-txt">Keep ${pressVerb() === 'tap' ? 'tapping' : 'clicking'} to get more coins.</span></p>`
   ];
   let messageIndex = 0;
   if (shakeCount < 1) {

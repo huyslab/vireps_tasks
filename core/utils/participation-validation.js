@@ -1,4 +1,4 @@
-import { isTouchDevice } from './touch.js';
+import { isTouchDevice, pressVerb } from './touch.js';
 import { saveDataREDCap } from './data-handling.js';
 
 /**
@@ -83,8 +83,8 @@ const fullscreen_prompt = {
     css_classes: ['instructions'],
     timeline: [
       {
-        message: `<p>This study only runs in full screen mode.</p>
-            <p>Press the button below to return to full screen mode and continue.</p>`
+        message: `<p>This game only works in full screen.</p>
+            <p>${pressVerb(true)} the button below to go back to full screen.</p>`
       }
     ],
     conditional_function: check_fullscreen,
@@ -129,10 +129,10 @@ function preKickOutWarning(settings) {
                 // session. kickOut() only ever shows this screen and the
                 // speed-accuracy one. Saying we would stop someone's participation
                 // was simply untrue.
-                stimulus: `<p>You are taking a long time to answer.</p>
-                    <p>Please try to answer a bit faster.</p>
+                stimulus: `<p><strong>You are taking a long time to answer.</strong></p>
+                    <p>Please try to go a bit faster.</p>
                     <p>Keep this game open. Do not use other tabs or windows.</p>
-                    <p>Tap the button below to carry on.</p>
+                    <p>${pressVerb(true)} the button below to go on.</p>
                 `,
                 on_start: function(trial) {
                     // Save data
@@ -171,9 +171,10 @@ function kickOutWarning(settings)  {
         css_classes: ['instructions'],
         timeline: [
             {
-            stimulus: `<p>You are taking a little long to choose.</p>
-            <p>We want your quick answers. Try to go a bit faster, even if it feels less careful.</p>
-            <p>Tap the button below to carry on.</p>
+            stimulus: `<p><strong>You are taking a little long to choose.</strong></p>
+            <p>Try to go a bit faster.</p>
+            <p>Go with your first idea, even if you are not sure.</p>
+            <p>${pressVerb(true)} the button below to go on.</p>
             `
             }
         ],
@@ -443,9 +444,10 @@ function createPressBothTrial(stimulus, trialphase){
  */
 function createReadyTrial(stimulus, trialphase, options = {}) {
     const {
-        keyboardPrompt = `<p>When you're ready, place your fingers on the <strong>left and right arrow keys</strong> as shown. Press both at the same time to begin.</p>
+        keyboardPrompt = `<p>Ready? Put your fingers on the <strong>left and right arrow keys</strong>, as shown.</p>
+            <p>Press both at once to start.</p>
             <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'></img>`,
-        touchPrompt = `<p>When you're ready, tap the button below to begin.</p>`,
+        touchPrompt = `<p>Ready? Tap the button below to start.</p>`,
         buttonLabel = "I'm ready"
     } = options;
 

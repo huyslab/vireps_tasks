@@ -172,12 +172,19 @@ function reversalInstructions(settings) {
     var _revReadyCleanup = null;
     var touchCapable = isTouchDevice();
 
-    var sessionPrefix = settings.session !== "screening" ? "<p>Let's start with the first game!</p>" : "";
     var duration = settings.n_trials == 50 ? "three" : "five";
 
-    var pageRules = `<p>One squirrel has better coins in its bag. The other has coins worth less.</p>
-                <p>Every so often they swap bags without telling you.</p>
-                <p>Work out which squirrel has the better coins right now. Keep picking that one.</p>`;
+    var introPage = `<p><b>The squirrel game</b></p>
+                <p>You will meet two squirrels.</p>
+                <p>Each squirrel has a bag of coins.</p>`;
+
+    var rulePages = [
+        `<p>One squirrel has better coins.</p>
+        <p>The other has coins worth less.</p>`,
+        `<p>Sometimes the squirrels swap bags.</p>
+        <p>They do not tell you when.</p>`,
+        `<p>Your job is to work out which squirrel has the better bag.</p>`
+    ];
 
     var squirrelHtml =
         `<div class="reversal-stimuli">
@@ -195,18 +202,14 @@ function reversalInstructions(settings) {
     var instructionTrial = {
         type: jsPsychInstructions,
         css_classes: ['instructions'],
-        pages: touchCapable ? [
-            `${sessionPrefix}
-            <p>You will meet two squirrels. Each one has a bag of coins to share.</p>
-            <p>Tap on either the left or right squirrel to choose one.</p>
-            <p>The squirrel you pick gives you a coin. Your coins go into your safe.</p>`,
-            pageRules
-        ] : [
-            `${sessionPrefix}
-            <p>You will meet two squirrels. Each one has a bag of coins to share.</p>
-            <p>Use the arrow keys to choose either the left or right squirrel.</p>
-            <p>The squirrel you pick gives you a coin. Your coins go into your safe.</p>`,
-            pageRules
+        pages: [
+            introPage,
+            touchCapable
+                ? `<p><strong>Tap a squirrel</strong> to pick it.</p>
+                <p>It gives you a coin.</p>`
+                : `<p>Use the <strong>left and right arrow keys</strong> to pick a squirrel.</p>
+                <p>It gives you a coin.</p>`,
+            ...rulePages
         ],
         show_clickable_nav: true,
         data: {trialphase: "reversal_instruction"},
@@ -228,10 +231,10 @@ function reversalInstructions(settings) {
             <div id="rev-tap-right" class="rev-tap-zone rev-tap-right"></div>
             </div>
             <p style="text-align:center;margin-top:1.2em;max-width:600px;margin-left:auto;margin-right:auto;">
-                You will now play the squirrel game for about ${duration} minutes without breaks.
+                The game takes about ${duration} minutes. There are no breaks.
             </p>
             <p style="text-align:center;max-width:600px;margin-left:auto;margin-right:auto;">
-                When you're ready, <strong>tap either squirrel</strong> to begin.
+                Ready? <strong>Tap a squirrel</strong> to start.
             </p>`,
         data: { trialphase: "reversal_instruction" },
         on_load: function () {
@@ -290,8 +293,9 @@ function reversalInstructions(settings) {
 
     // --- Keyboard ready screen: press both arrow keys simultaneously (original behaviour) ---
     var keyboardReadyTrial = createPressBothTrial(
-        `<p>You will now play the squirrel game for about ${duration} minutes without breaks.</p>
-        <p>When you're ready, place your fingers on the <strong>left and right arrow keys</strong> as shown. Press both at the same time to begin.</p>
+        `<p>The game takes about ${duration} minutes. There are no breaks.</p>
+        <p>Ready? Put your fingers on the <strong>left and right arrow keys</strong>, as shown.</p>
+        <p>Press both at once to start.</p>
         <img src='./assets/images/2_finger_keys.jpg' style='width:250px;'>`,
         "reversal_instruction"
     );

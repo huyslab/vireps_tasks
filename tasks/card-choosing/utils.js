@@ -487,16 +487,10 @@ function interBlockStimulus(settings){
     // Add text and tallies for early stop
     if (window.skipThisBlock && (settings.session ? settings.session !== "screening" : true)){
         
-        txt += `<p>You've found the better ${n_groups > 1 ? "cards" : "card"}.</p><p>You will skip the remaining turns and `;
-        
-        txt += valence >= 0 ? `collect the remaining coins hidden under ` : 
-            `lose only the remaining coins hidden under `;
-
-        txt +=  n_groups > 1 ? "these cards." : "this card."
-        
-        if (valence != 0){
-             txt += `<p>Altogether, these coins were ${valence == 1 ? "added to your safe" : "broken in your safe"} on this round:</p>`;
-        }
+        const these = n_groups > 1 ? "these cards" : "this card";
+        txt += `<p>You found the better ${n_groups > 1 ? "cards" : "card"}!</p>
+            <p>We will skip the rest of the turns.</p>
+            <p>${valence >= 0 ? `You get the coins left under ${these}.` : `You only lose the coins left under ${these}.`}</p>`;
        
         
         // Add rest to outcomes
@@ -515,12 +509,12 @@ function interBlockStimulus(settings){
     }, 0);
 
 
-    txt += `<p>Altogether on this round, you've ${earnings >= 0 ? "collected" : "lost"} coins worth £${Math.abs(earnings).toFixed(2)}.</p>`;
+    txt += `<p>This round, you ${earnings >= 0 ? "collected" : "lost"} <b>£${Math.abs(earnings).toFixed(2)}</b>.</p>`;
         
     // Add continuation instructions based on input modality and number of stimuli
     if (isValidNumber(block)){
         if (touchCapable) {
-            txt += `<p>Tap the button below to continue.</p>`
+            txt += `<p>Tap the button below to go on.</p>`
         } else {
             txt += n_stimuli === 2 ? `<p>Press the right arrow to continue.</p>` :
              `<p>Place your fingers on the left, right, and up arrow keys, and press either one to continue.</p>`

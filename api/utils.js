@@ -93,7 +93,7 @@ export async function createTaskTimeline(taskName, config = {}) {
         const phoneIcon = orientation === 'portrait'
             ? `<svg viewBox="0 0 60 100" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:116px;display:block;margin:0 auto 20px;">${shapes}</svg>`
             : `<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg" style="width:116px;height:70px;display:block;margin:0 auto 20px;"><g transform="matrix(0,1,-1,0,100,0)">${shapes}</g></svg>`;
-        const orientationLabel = orientation === 'portrait' ? 'portrait (upright)' : 'landscape (on its side)';
+        const orientationLabel = orientation === 'portrait' ? 'upright' : 'on its side';
 
         const preferredOrientationQuery = window.matchMedia(`(orientation: ${orientation})`);
         let continueOnceTurned = () => {};
@@ -112,8 +112,8 @@ export async function createTaskTimeline(taskName, config = {}) {
                 const deviceNoun = isPhone ? 'phone' : 'tablet';
                 return `<div style="text-align:center;max-width:min(500px,92vw);margin:0 auto;">
                     ${phoneIcon}
-                    <p>For this game, please turn your ${deviceNoun} to <strong>${orientationLabel}</strong>.</p>
-                    <p>The game will start when it is turned.</p>
+                    <p>For this game, please turn your ${deviceNoun} <strong>${orientationLabel}</strong>.</p>
+                    <p>The game starts once it is turned.</p>
                 </div>`;
             },
             data: { trialphase: 'orientation_hint' },

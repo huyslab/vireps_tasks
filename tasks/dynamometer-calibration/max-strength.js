@@ -17,7 +17,7 @@ function makeStrengthTrial(index) {
             type: jsPsychHtmlKeyboardResponse,
             choices: 'NO_KEYS',
             stimulus: `<div id="instruction-container"><div id="instruction-text" class="calibration-stage">
-                <p>Squeeze as hard as you can, then fully let go.</p>
+                <p>Squeeze as hard as you can. Then let go fully.</p>
                 <p id="cal-squeeze-counter">${index} / ${N_SQUEEZES}</p>
             </div></div>`,
             data: {
@@ -114,11 +114,12 @@ function makeRetryPrompt() {
             type: jsPsychHtmlButtonResponse,
             stimulus: () => signalLost
                 ? `<div id="instruction-container"><div id="instruction-text">
-                    <p>The grip stopped sending a signal. Please ask the experimenter to check the grip and connect it again.</p>
+                    <p>The grip stopped sending a signal. Please ask the study team to check the grip and connect it again.</p>
                 </div></div>`
                 : `<div id="instruction-container"><div id="instruction-text">
-                    <p>We did not detect a full squeeze and release in time. Let's start the ${N_SQUEEZES} squeezes again.</p>
-                    <p>Squeeze <strong>as hard as you can</strong>, then fully let go each time.</p>
+                    <p><strong>Let's try once more.</strong></p>
+                    <p>We will start the ${N_SQUEEZES} squeezes again.</p>
+                    <p>Each time, squeeze <strong>as hard as you can</strong>. Then let go fully.</p>
                 </div></div>`,
             choices: ['Continue'],
             data: { trialphase: 'dynamometer_max_strength_retry', signal_lost: () => signalLost }
@@ -136,13 +137,22 @@ export function createDynamometerMaxStrengthTimeline(settings = {}) {
             {
                 type: jsPsychHtmlButtonResponse,
                 stimulus: `<div id="instruction-container"><div id="instruction-text">
-                    <p>We will now measure your maximum grip strength.</p>
-                    <p>Squeeze the grip <strong>as hard as you can</strong>, then fully let go. Do this <strong>${N_SQUEEZES} times</strong>.</p>
+                    <p>Now let's see how strong your grip is.</p>
+                    <p><strong>This time, squeeze as hard as you can.</strong></p>
                 </div></div>`,
-                choices: ['Start'],
+                choices: ['Next'],
                 data: { trialphase: 'dynamometer_max_strength_instructions' },
                 // The connect step has already read the previous attempt's flag.
                 on_start: () => { signalLost = false; }
+            },
+            {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: `<div id="instruction-container"><div id="instruction-text">
+                    <p>Squeeze, then let go fully.</p>
+                    <p>Do this <strong>${N_SQUEEZES} times</strong>.</p>
+                </div></div>`,
+                choices: ['Start'],
+                data: { trialphase: 'dynamometer_max_strength_instructions' }
             },
             ...Array.from({ length: N_SQUEEZES }, (_, index) => makeStrengthTrial(index)),
             makeResults(settings),

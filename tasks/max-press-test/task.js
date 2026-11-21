@@ -1,5 +1,9 @@
 import { updateState, pressVerb, setupTapListener, cleanupTapListener, simulateTap } from '@utils/index.js';
 
+// Other forms of pressVerb(): adding "ed" or "ing" to "tap" would give "taped" / "taping".
+const pressedVerb = () => (pressVerb() === 'tap' ? 'tapped' : 'clicked');
+const pressingVerb = () => (pressVerb() === 'tap' ? 'tapping' : 'clicking');
+
 // Function to get each key press RT
 function getDifferences(array) {
     return array.map((currentValue, index, arr) => {
@@ -22,7 +26,7 @@ const maxPressRateTrial = (settings) => {
             return `
             <div id="instruction-container">
                 <div id="instruction-text" class="max-press-live">
-                    <h3 id="countdown">${pressVerb(true)} the circle below.<br>When you are ready, ${pressVerb()} it over and over as fast as you can!</h3>
+                    <h3 id="countdown">${pressVerb(true)} the circle to start.<br>Then keep ${pressingVerb()}, as fast as you can!</h3>
                     <div id="press-counter">Presses: 0</div>
                     <div id="speed-display">Speed: 0.00 presses/sec</div>
                     <div id="speed-track">
@@ -147,19 +151,37 @@ const maxPressRateTrial = (settings) => {
     };
 }
 
-// Instructions trial
+// Instructions: two short screens
 const maxPressInstructions = {
-    type: jsPsychHtmlButtonResponse,
-    css_classes: ["instructions"],
-    stimulus: () => `
-    <div id="instruction-container">
-        <div id="instruction-text">
-            <p>First, a quick warm-up. We want to see how fast you can ${pressVerb()}.</p>
-            <p>On the next screen you will see a circle. <span class="highlight-txt">${pressVerb(true)} it over and over, as fast as you can</span>, until the time runs out.</p>
-        </div>
-    </div>
-    `,
-    choices: ['Start']
+    timeline: [
+        {
+            type: jsPsychHtmlButtonResponse,
+            css_classes: ["instructions"],
+            stimulus: () => `
+            <div id="instruction-container">
+                <div id="instruction-text">
+                    <p><b>First, a quick warm-up.</b></p>
+                    <p>How fast can you ${pressVerb()}?</p>
+                </div>
+            </div>
+            `,
+            choices: ['Next']
+        },
+        {
+            type: jsPsychHtmlButtonResponse,
+            css_classes: ["instructions"],
+            stimulus: () => `
+            <div id="instruction-container">
+                <div id="instruction-text">
+                    <p>Next you will see a circle.</p>
+                    <p><span class="highlight-txt">${pressVerb(true)} it over and over, as fast as you can.</span></p>
+                    <p>Keep going until the time runs out.</p>
+                </div>
+            </div>
+            `,
+            choices: ['Start']
+        }
+    ]
 };
 
 const maxPressFeedback = {
@@ -170,8 +192,8 @@ const maxPressFeedback = {
         <div id="instruction-container">
             <div id="instruction-text">
                 <h2><span class="highlight-txt">Well done!</span></h2>
-                <p>Your speed was <strong>${avgSpeed.toFixed(2)} times per second</strong>.</p>
-                <p>${pressVerb(true)} <strong>Continue</strong> to go on to the first game.</p>
+                <p>You ${pressedVerb()} <strong>${avgSpeed.toFixed(2)} times a second</strong>.</p>
+                <p>${pressVerb(true)} <strong>Continue</strong> to go on.</p>
             </div>
         </div>
         `;
@@ -189,8 +211,9 @@ const maxPressRetakeMessage = (settings) => {
                 return `
             <div id="instruction-container">
                 <div id="instruction-text">
-                    <p>Your speed was <strong>${avgSpeed.toFixed(2)} times per second</strong>.</p>
-                    <p>Let's try that once more. <span class="highlight-txt">Please go as fast as you can this time.</span></p>
+                    <p>You ${pressedVerb()} <strong>${avgSpeed.toFixed(2)} times a second</strong>.</p>
+                    <p>Let's try once more.</p>
+                    <p><span class="highlight-txt">Go as fast as you can.</span></p>
                     <p>${pressVerb(true)} <strong>Continue</strong> to try again.</p>
                 </div>
             </div>

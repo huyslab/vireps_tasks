@@ -28,7 +28,7 @@ function makeInstructionPage(settings) {
                     </div>
                     <div id="bottom-container" style="visibility: hidden">
                         <p id="button-instruction" style="margin: 24px">
-                            Press <strong>Restart</strong> to try again, or <strong>Continue</strong> to go on.
+                            Tap <strong>Restart</strong> to try again, or <strong>Continue</strong> to go on.
                         </p>
                         <div id="button-container">
                             <button id="restart-button" class="jspsych-btn">Restart</button>
@@ -117,14 +117,14 @@ function updateDemoText(squeezeCount) {
     const el = document.getElementById('instruction-text');
     if (!el) return;
     if (squeezeCount < 1) {
-        el.innerHTML = `<p>Welcome to the piggy bank game!</p>
-            <p><strong>Squeeze the grip</strong> to shake the piggy bank.</p>`;
+        el.innerHTML = `<p><strong>The piggy bank game</strong></p>
+            <p><strong>Squeeze the grip</strong> to shake the piggy bank.</p>
+            <p>Short, quick squeezes. You do not need to squeeze hard.</p>`;
     } else if (squeezeCount < 5) {
-        el.innerHTML = `<p>Squeeze the grip to shake the piggy bank.</p>
-            <p>Squeeze again and again to collect coins!</p>`;
+        el.innerHTML = `<p>Squeeze again and again, quickly, to keep it shaking.</p>`;
     } else {
-        el.innerHTML = `<p>Well done — you just got a coin!</p>
-            <p><span class="highlight-txt">Keep squeezing to get more coins.</span></p>`;
+        el.innerHTML = `<p><strong>Well done! You got a coin.</strong></p>
+            <p><span class="highlight-txt">Keep squeezing quickly to get more coins.</span></p>`;
     }
 }
 
@@ -136,17 +136,20 @@ const ruleInstruction = {
     show_clickable_nav: true,
     pages: [
         `<div id="instruction-text">
-            <p><strong>You will now play a few minutes of this game, collecting coins!</strong></p>
-            <p>Throughout the game you will see different piggy banks:</p>
-            <ul>
-                <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform:translateY(0.2em)">
-                    <span class="highlight-txt">Bright, strong colours</span>: you need to squeeze more times to get a coin.</li>
-                <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform:translateY(0.2em)">
-                    <span class="highlight-txt">Long tail</span>: this piggy gives coins worth more.</li>
-            </ul>
+            <p>Now you will play this game for a few minutes.</p>
+            <p>The piggy banks look different from each other.</p>
+        </div>`,
+        // Stronger colour = lower ratio = fewer squeezes per coin (see updatePiggyTails).
+        `<div id="instruction-text">
+            <p><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform:translateY(0.2em)">
+                <span class="highlight-txt">Stronger colour:</span> you need to squeeze fewer times to get a coin.</p>
         </div>`,
         `<div id="instruction-text">
-            <p>Types of coins you can win:</p>
+            <p><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform:translateY(0.2em)">
+                <span class="highlight-txt">Longer tail:</span> the coins are worth more.</p>
+        </div>`,
+        `<div id="instruction-text">
+            <p>You can win these coins:</p>
             <div class="instruct-coin-container">
                 <div class="instruct-coin">
                     <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny"><p>1 Penny</p>
@@ -158,7 +161,7 @@ const ruleInstruction = {
                     <img src="./assets/images/piggy-banks/5p-num.png" alt="5 Pence"><p>5 Pence</p>
                 </div>
             </div>
-            <p><span class="highlight-txt">Your goal</span>: collect as many coins as you can.</p>
+            <p>Collect as many as you can.</p>
         </div>`
     ]
 };
@@ -175,8 +178,9 @@ function makeStartConfirmation(settings) {
             <div class="experiment-wrapper">
                 <div id="instruction-container">
                     <div id="instruction-text">
-                        <p>You will now play the piggy bank game without a break for about <strong>two minutes</strong>.</p>
-                        <p>When you're ready, <span class="highlight-txt">squeeze the grip</span> to begin.</p>
+                        <p>The game takes about <strong>two minutes</strong>. There are no breaks.</p>
+                        <p>Remember: quick squeezes, not hard ones.</p>
+                        <p>Ready? <span class="highlight-txt">Squeeze the grip</span> to start.</p>
                     </div>
                 </div>
                 <div id="experiment-container">

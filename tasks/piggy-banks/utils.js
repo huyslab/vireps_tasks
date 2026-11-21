@@ -45,7 +45,7 @@ function updatePiggyTails(magnitude, ratio, settings) {
   // Calculate visual parameters based on current trial values
   const magnitude_index = settings.magnitudes.indexOf(magnitude);
   const ratio_index = settings.ratios.indexOf(ratio);
-  // Calculate saturation based on ratio - higher ratios get more saturated colors
+  // Saturation by ratio: settings.ratios is sorted largest first, so lower ratios (fewer presses per coin) get stronger colours
   const ratio_factor = ratio_index / (settings.ratios.length - 1);
 
   // Render tails fresh on every (re)layout. Clearing INSIDE the handler keeps this
