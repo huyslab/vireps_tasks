@@ -150,7 +150,7 @@ test('experimenter launcher offers two sessions and the four participant modules
 
 test('launcher sends participant, session number, and module to the experiment page', async ({ page }) => {
   await page.goto('/index.html');
-  await page.locator('#participantId').fill('participant_42');
+  await page.locator('#participantId').fill('lct46y');
   await page.locator('#sessionNumber').selectOption('2');
   await page.locator('#module').selectOption('module_2');
 
@@ -158,7 +158,7 @@ test('launcher sends participant, session number, and module to the experiment p
   await expect.poll(() => page.url()).toContain('/experiment.html?');
 
   const destination = new URL(page.url());
-  expect(destination.searchParams.get('participant_id')).toBe('participant_42');
+  expect(destination.searchParams.get('participant_id')).toBe('LCT46Y');
   expect(destination.searchParams.get('session_number')).toBe('2');
   expect(destination.searchParams.get('module')).toBe('module_2');
 });
@@ -169,7 +169,7 @@ test('the experiment page accepts the dynamometer PIT launcher route', async ({ 
   });
 
   await page.goto(
-    '/experiment.html?participant_id=route_check&session_number=1&module=dynamometer_pit'
+    '/experiment.html?participant_id=LCT46Y&session_number=1&module=dynamometer_pit'
   );
 
   await expect(page.locator('#display_element')).not.toBeEmpty();
@@ -182,7 +182,7 @@ test('the experiment page accepts the module 2 without dynamometer route', async
   });
 
   await page.goto(
-    '/experiment.html?participant_id=route_check&session_number=1&module=module_2_without_dynamometer'
+    '/experiment.html?participant_id=LCT46Y&session_number=1&module=module_2_without_dynamometer'
   );
 
   await expect(page.locator('#display_element')).not.toBeEmpty();
