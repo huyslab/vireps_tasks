@@ -27,7 +27,8 @@ function module2StartMessage({ withGrip }) {
     return [
         `<p><b>Welcome to Part 2.</b></p>
         <p>You will play several games.</p>
-        <p>In some, you collect coins. In some, you tap as fast as you can.</p>`,
+        <p>In some, you collect coins. In some, you tap as fast as you can.</p>
+        <p>Your goal is to collect as much game money as possible.</p>`,
         `<p>At the end, there are two short quizzes on what you learned.</p>`,
         `<p>After each game, we will ask you a few short questions.</p>`,
         withGrip && `<p>Part way through, you will use a hand grip.</p>
@@ -48,7 +49,8 @@ export const messages = {
         start_message: [
             `<p><b>Welcome to Part 1.</b></p>
             <p>You will play two games.</p>
-            <p>First a squirrel game. Then a people game.</p>`,
+            <p>First a squirrel game. Then a people game.</p>
+            <p>Your goal is to collect as much game money as possible.</p>`,
             `<p>After each game, we will ask you a few short questions.</p>`,
             `<p>Try to answer quickly.</p>
             <p>Go with your first idea. Do not think for too long.</p>`,
