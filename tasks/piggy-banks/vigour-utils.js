@@ -152,7 +152,7 @@ function updatePersistentCoinContainer() {
  */
 function generateTrialStimulus(magnitude, ratio) {
   const ratio_index = ratios.indexOf(ratio);
-  // Calculate saturation based on ratio - higher ratios = more saturated colors
+  // Saturation by ratio: ratios are sorted largest first, so lower ratios (fewer presses per coin) get stronger colours
   const ratio_factor = ratio_index / (ratios.length - 1);
   const piggy_style = `filter: saturate(${50 * (400 / 50) ** ratio_factor}%) brightness(${115 * (90 / 115) ** ratio_factor}%);`;
   return `

@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test';
  * The pause is the one screen in the module where the participant is invited to stop
  * paying attention, which is exactly when a session is most likely to be interrupted.
  */
-test('the pre-calibration experimenter pause persists the ratings that preceded it', async ({ page }) => {
+test('the pre-calibration study-team pause persists the ratings that preceded it', async ({ page }) => {
   // The outbox suppresses storage entirely on localhost (isDevHost), so without this
   // the queue would stay empty whether or not the break saves, and the test would
   // pass for the wrong reason.
@@ -65,7 +65,7 @@ test('the pre-calibration experimenter pause persists the ratings that preceded 
   });
 
   expect(result.error).toBeUndefined();
-  expect(result.message).toContain('Please call the experimenter');
+  expect(result.message).toContain('Please call the study team');
   expect(
     result.after,
     'entering a break should leave a snapshot in the outbox'

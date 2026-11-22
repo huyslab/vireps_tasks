@@ -45,8 +45,7 @@ async function vigourJourney(page, testInfo, hasTouch) {
     timeout: 15000,
   });
   await captureShot(page, testInfo, 'vigour', 'instructions');
-  await page.locator('#jspsych-instructions-next').click(); // page 2 of 2
-  await page.locator('#jspsych-instructions-next').click(); // -> startConfirmation
+  await clickThroughInstructionPages(page); // -> startConfirmation
 
   // "Tap the piggy bank to begin" confirmation screen.
   await expect(demoPiggy, 'start-confirmation piggy bank should appear').toBeVisible({ timeout: 15000 });
@@ -65,6 +64,18 @@ async function vigourJourney(page, testInfo, hasTouch) {
 }
 
 /**
+ * Presses "Next" until the current jsPsychInstructions trial ends, however many pages
+ * it has, so a wording change that splits or merges pages does not break the walk.
+ */
+async function clickThroughInstructionPages(page) {
+  const next = page.locator('#jspsych-instructions-next');
+  for (let pages = 0; pages < 20 && await next.isVisible().catch(() => false); pages++) {
+    await next.click();
+    await page.waitForTimeout(50);
+  }
+}
+
+/**
  * Drives a real (non-simulate) run of the reversal task through to the static instructions
  * page and one real trial's coin-reveal feedback, branching on touch vs keyboard input the
  * same way the app itself does (task.js reversalInstructions / plugin-reversal.js).
@@ -76,8 +87,7 @@ async function reversalJourney(page, testInfo, hasTouch) {
     timeout: 15000,
   });
   await captureShot(page, testInfo, 'reversal', 'instructions');
-  await page.locator('#jspsych-instructions-next').click(); // page 2 of 2
-  await page.locator('#jspsych-instructions-next').click(); // -> ready screen
+  await clickThroughInstructionPages(page); // -> ready screen
 
   // Ready screen: tap either squirrel (touch) or press both arrow keys at once (keyboard).
   if (hasTouch) {

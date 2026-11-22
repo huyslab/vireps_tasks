@@ -69,9 +69,6 @@ function outcomeLabels(settings) {
     small: points ? '1 point' : '1p',
     /** Inline coin image, or nothing at all in points mode. */
     icon: (key, alt) => (points ? '' : coinInline(COIN_IMAGES[key], alt)),
-    /** The two ways a better choice can still go badly. */
-    minorWin: points ? 'only 1 point' : 'only a penny',
-    majorLoss: points ? 'lose 10 points' : 'break a £1 coin',
     /** What a bad outcome looks like, for the comprehension check. */
     lossCue: points ? 'A minus number means I have lost points.' : 'A broken coin means I have lost money.',
     /** What is at stake, as a noun phrase - "money" reads oddly next to points.
@@ -272,38 +269,42 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     data: { trialphase: 'go_no_go_instruction' },
     on_start: () => updateState('go_no_go_instructions_start'),
     pages: [
-      `<p><b>THE PEOPLE GAME</b></p>
-       <p>In this game you will see pictures of people, one at a time.</p>
-       <p>For each person, you decide whether to tap or not.</p>`,
+      `<p><b>The people game</b></p>
+       <p>You will see pictures of people, one at a time.</p>
+       <p>For each person, choose: tap or not.</p>`,
 
-      `<p>Each picture stays on screen for a moment.</p>
+      `<p>Each picture shows for a moment.</p>
        <p><b>To tap:</b> ${actionText()}.</p>
-       <p><b>To not tap:</b> just wait, and the picture will go away on its own.</p>
-       <p>Choose fast. You only get a moment.</p>`,
+       <p><b>Not to tap:</b> just wait. The picture goes away by itself.</p>
+       <p>Choose fast.</p>`,
 
       // No colour on these words. The rim light that used to carry the win/lose
       // mapping is off (signal_valence: false), so colouring them would teach a
       // code the participant never meets. Which kind of person this is has to be
-      // learnt from the outcomes instead, which the last line says outright.
+      // learnt from the outcomes instead, which the screens below say outright.
       `<p>With some people, ${L.stakeWin}.</p>
        <p>Get it right and you win <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
-       <p>Get it wrong and you win only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>
-       <p>With others, ${L.stakeLose}.</p>
+       <p>Get it wrong and you win only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>`,
+
+      `<p>With other people, ${L.stakeLose}.</p>
        <p>Get it right and you lose only <b>${L.small}</b>. ${L.icon('brokenPenny', 'broken 1 penny coin')}</p>
-       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>
-       <p>You cannot tell which is which by looking. You find out from what happens.</p>`,
+       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>`,
 
       `<p>The same people come back again and again.</p>
-       <p>Some are best tapped. Others are best left alone. You cannot tell by looking - you have to find out by trying.</p>
-       <p>Watch what happens each time, and try to remember what works for each person.</p>`,
+       <p>For some, tapping is best. For others, waiting is best.</p>`,
+
+      `<p>You cannot tell any of this by looking.</p>
+       <p>You find out by trying and watching what happens.</p>`,
+
+      `<p>Try to remember what works for each person.</p>`,
+
+      `<p>The screen turns <b>green</b> when you get it right.</p>
+       <p>It turns <b>red</b> when you get it wrong.</p>`,
 
       // Feedback is only 80% valid, so a participant will make the better choice and
-      // still see the worse coin. Phrased after PILT's "even the best cards may
-      // sometimes give only a penny": it names the exception in terms of the coins
-      // themselves, rather than telling anyone what to do about it.
-      `<p>The screen turns <b>green</b> when you get it right, and <b>red</b> when you get it wrong.</p>
-       <p>Even when you make the better choice, you may sometimes get ${L.minorWin}, or occasionally ${L.majorLoss}.</p>
-       <p>First, let's try a few.</p>`,
+      // still see the worse outcome. This names that exception without telling anyone
+      // what to do about it, and without implying a win person can cost money.
+      `<p>Even the better choice sometimes gives the worse result.</p>`,
     ],
   };
 
@@ -315,9 +316,6 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'go',
       outcome_correct: 10,
       outcome_incorrect: 1,
-      intro: `<p><b>Let's try tapping.</b> (1 of 4)</p>
-              <p>Tap this person's picture and see what happens.</p>
-              <p>When you get it right, you win <b>${L.big}</b>.</p>`,
     },
     {
       id: 'wait_win',
@@ -326,9 +324,6 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'nogo',
       outcome_correct: 10,
       outcome_incorrect: 1,
-      intro: `<p><b>Now let's try waiting.</b> (2 of 4)</p>
-              <p>This time, do not tap. Just wait.</p>
-              <p>When you get it right, you win <b>${L.big}</b>.</p>`,
     },
     {
       id: 'press_lose_less',
@@ -337,9 +332,6 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'go',
       outcome_correct: -1,
       outcome_incorrect: -10,
-      intro: `<p><b>Sometimes ${L.points ? 'there are points to lose' : 'there is money to lose'}.</b> (3 of 4)</p>
-              <p>Here, tapping is the better choice.</p>
-              <p>Get it right and you lose only <b>${L.small}</b>. Get it wrong and you lose <b>${L.big}</b>.</p>`,
     },
     {
       id: 'wait_lose_less',
@@ -348,11 +340,19 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       correct_response: 'nogo',
       outcome_correct: -1,
       outcome_incorrect: -10,
-      intro: `<p><b>One more.</b> (4 of 4)</p>
-              <p>Here, waiting is the better choice.</p>
-              <p>Get it right and you lose only <b>${L.small}</b>. Get it wrong and you lose <b>${L.big}</b>.</p>`,
     },
   ];
+
+  // All four practice intros use one template, so they stay exactly parallel.
+  const practiceIntro = (stage, index) => {
+    const win = stage.valence === 'win';
+    const action = stage.correct_response === 'go' ? 'tapping' : 'waiting';
+    return `<p><b>Practice ${index + 1} of ${stages.length}</b></p>
+       <p>With this person, ${win ? L.stakeWin : L.stakeLose}.</p>
+       <p>Here, <b>${action}</b> is the better choice.</p>
+       <p>Get it right and you ${win ? `win <b>${L.big}</b>` : `lose only <b>${L.small}</b>`}.</p>
+       <p>Get it wrong and you ${win ? `win only <b>${L.small}</b>` : `lose <b>${L.big}</b>`}.</p>`;
+  };
 
   const trainingBlocks = [];
   stages.forEach((stage, index) => {
@@ -361,7 +361,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       css_classes: ['instructions'],
       show_clickable_nav: true,
       data: { trialphase: 'go_no_go_instruction' },
-      pages: [stage.intro],
+      pages: [practiceIntro(stage, index)],
     });
 
     trainingBlocks.push(buildPracticeLoop(settings, trainingFaces[index % trainingFaces.length], stage));
@@ -375,7 +375,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     pages: [
       `<p><b>Now all four together.</b></p>
        <p>You will see the same four people, mixed up.</p>
-       <p>Each one works the same way as it did just now.</p>`,
+       <p>Each one works the same as before.</p>`,
     ],
   });
   trainingBlocks.push(buildFinalPracticeLoop(settings, trainingFaces, stages));
@@ -401,9 +401,9 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     show_clickable_nav: true,
     data: { trialphase: 'go_no_go_instruction' },
     pages: [
-      `<p>Nicely done.</p>
-       <p>Before you start, a few quick questions.</p>
-       <p>You need all of them right to go on.</p>`,
+      `<p>Well done.</p>
+       <p>Now a few quick questions.</p>
+       <p>Get them all right to go on.</p>`,
     ],
   };
 

@@ -62,7 +62,7 @@ export const PITPreloadImages = (settings) => {
 function generatePITstimulus(coin, ratio, settings) {
   const trialRatios = ratiosFor(settings);
   const ratio_index = trialRatios.indexOf(ratio);
-  // Calculate saturation based on ratio - higher ratios = more saturated colors
+  // Saturation by ratio: ratios are sorted largest first, so lower ratios (fewer presses per coin) get stronger colours
   const ratio_factor = ratio_index / (unique_ratios.length - 1);
   const piggy_style = `filter: saturate(${50 * (400 / 50) ** ratio_factor}%) brightness(${115 * (90/115) ** ratio_factor}%);`;
   const cloud_style = `filter: brightness(0.8) contrast(1.2);`;

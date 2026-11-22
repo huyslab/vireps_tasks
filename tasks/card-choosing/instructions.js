@@ -70,12 +70,14 @@ function preparePILTInstructions(settings) {
             pages: () => {
 
             let pages = [
-            `<p><b>THE CARD CHOOSING GAME</b></p>
-                <p>In this game you turn over cards to find the coins behind them.</p>
-                <p>Some cards are luckier than others.</p>
-                <p>Try to collect as many coins as you can${window.task == "screening" ? "" : ", and try not to lose them"}.</p>`,
-            `<p>Each turn you see two cards. You have <b>${secondsWord(settings.default_response_deadline)} seconds</b> to turn one over.</p>
-                <p>Behind it is the coin you collect: £1, 50p or 1p.</p>
+            `<p><b>The card game</b></p>
+                <p>You turn over cards to find the coins behind them.</p>
+                <p>Some cards are luckier than others.</p>`,
+            `<p>Try to collect as many coins as you can.</p>${window.task == "screening" ? "" : `
+                <p>And try not to lose them.</p>`}`,
+            `<p>Each turn, you see two cards.</p>
+                <p>You have <b>${secondsWord(settings.default_response_deadline)} seconds</b> to turn one over.</p>`,
+            `<p>Behind it is a coin for you: £1, 50p or 1p.</p>
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1pound.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
@@ -84,14 +86,16 @@ function preparePILTInstructions(settings) {
 
         // Add broken coin instructions for non-screening sessions
         if (settings.session !== "screening"){
-            pages.push(`<p>Sometimes you will turn over a broken coin, like these.</p>\
+            pages.push(`<p>Sometimes you turn over a broken coin.</p>
                 <div style='display: grid;'><table class='rlm-coin-table'><tr>
                 <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td>
                 <td><img src='./assets/images/card-choosing/outcomes/1pennybroken.png' style='width:${small_coin_size}px; height:${small_coin_size}px;'></td></tr></table></div>
-                <p>A broken coin means you lose that much.</p>`);
-            pages.push(`<p>Sometimes you cannot help losing coins. When that happens, try to lose as little as you can.</p>
-                <p>You start with <b>£100</b> of game money, so you will not run out.</p>`)
+                <p>A broken coin means losing that money.</p>`);
+            pages.push(`<p>Sometimes you cannot avoid losing coins.</p>
+                <p>Then try to lose as little as you can.</p>`);
+            pages.push(`<p>You start with <b>£100</b> of game money.</p>
+                <p>So you will not run out.</p>`);
         }
 
         return pages
@@ -151,16 +155,19 @@ function preparePILTInstructions(settings) {
         css_classes: ['instructions'],
         pages: [
             `${settings.session === "screening" ? "<p>You found a one pound coin!</p>" : ""}
-            <p>Some cards are better than others. You can learn which ones by trying them.</p>
-            <p>But even the best cards give just a penny sometimes${window.task == "screening" ? "" : ". Now and then they break a £1 coin"}.</p>`
+            <p>Some cards are better than others.</p>
+            <p>You find out which by trying them.</p>`,
+            // Blocks mix win and loss cards, so "break a £1 coin" is accurate here.
+            `<p>But even the best cards sometimes give just a penny.</p>${window.task == "screening" ? "" : `
+            <p>Now and then, they break a £1 coin.</p>`}`
         ],
         show_clickable_nav: true,
         data: {trialphase: "pilt_instruction"}
     },
     createReadyTrial(
-        `<p>Let's have a go at collecting coins.</p>
-            <p>On the next screen, pick cards and collect as much as you can.</p>
-            <p>One of the picture cards has mostly £1 coins behind it, while the other has mostly ${settings.session === "screening" ? "50 pence coins" : "broken £1 coins"} behind it.</p>
+        `<p>Let's practise. Pick cards and collect as much as you can.</p>
+            <p>One card has mostly <b>£1 coins</b> behind it.</p>
+            <p>The other has mostly <b>${settings.session === "screening" ? "50p coins" : "broken £1 coins"}</b>.</p>
         `,
         "pilt_instruction"
     )
@@ -220,9 +227,9 @@ function preparePILTInstructions(settings) {
     inst.push({
                 type: jsPsychInstructions,
                 css_classes: ['instructions'],
-                pages: [`<p>Before you start, here are a few questions about what you just read.</p>
-                        <p>You need all of them right to begin.</p>
-                        <p>If you get one wrong, you can read the rules again and try once more.</p>`],
+                pages: [`<p>Now a few quick questions about the rules.</p>
+                        <p>Get them all right to start.</p>
+                        <p>${settings.session === "screening" ? "If you get one wrong, you can read the rules again." : "If you get one wrong, we will explain it."}</p>`],
                 show_clickable_nav: true,
                 data: {trialphase: "pilt_instruction"}
             });
@@ -230,12 +237,12 @@ function preparePILTInstructions(settings) {
     // Create instruction comprehension quiz questions
     let quiz_questions = [
         {
-            prompt: `Some cards are better than others, but even the best cards might only give a penny${settings.session !== "screening" ? " or break a £1 coin" : ''}.`,
+            prompt: `Even the best cards might only give a penny${settings.session !== "screening" ? ", or break a £1 coin" : ''}.`,
             options: ["True", "False"],
             required: true
         },
         {
-            prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
+            prompt: `My goal is to collect as many coins as I can${settings.session !== "screening" ? ", and not lose them" : ''}.`,
             options: ["True", "False"],
             required: true
         },
@@ -244,7 +251,7 @@ function preparePILTInstructions(settings) {
     // Add broken coin question for non-screening sessions
     if (settings.session !== "screening"){
         quiz_questions.splice(1, 0, {
-            prompt: "If I find a broken coin, that means I lose that amount.",
+            prompt: "A broken coin means I lose that money.",
             options: ["True", "False"],
             required: true
         });
@@ -255,25 +262,25 @@ function preparePILTInstructions(settings) {
     // the review screen and loop_function below already read.
     let quiz = createInstructionQuiz(quiz_questions, {
         trialphase: "instruction_quiz",
-        preamble: `<div class=instructions><p>For each statement, say if it is true or false:</p></div>`
+        preamble: `<div class=instructions><p>Is each sentence true or false?</p></div>`
     });
 
     // Explanation for wrong answers
     let piltQuizExplanation = [
         {
-            prompt: `Some cards are better than others, but even the best cards might only give a penny${settings.session !== "screening" ? " or break a £1 coin" : ''}.`,
-            explanation: "The cards do not always pay out the same way. You learn which are better by trying them."
+            prompt: `Even the best cards might only give a penny${settings.session !== "screening" ? ", or break a £1 coin" : ''}.`,
+            explanation: "Cards do not always give the same coin. You learn which are better by trying them."
         },
         {
-            prompt: `My goal is to collect as many game coins as I can${settings.session !== "screening" ? " and avoid losing them" : ''}.`,
-            explanation: "Your goal is to collect as much money as possible. This means learning to choose cards that give you the most money, and avoiding cards that break valuable coins."
+            prompt: `My goal is to collect as many coins as I can${settings.session !== "screening" ? ", and not lose them" : ''}.`,
+            explanation: "Pick the cards that give the most money. Avoid the cards that break big coins."
         }
     ];
 
     if (settings.session !== "screening"){
         piltQuizExplanation.splice(1, 0,{
-            prompt: "If I find a broken coin, that means I lose that amount.",
-            explanation: "If you find a broken coin, you lose that amount of game coins. This means that if you find a broken £1 coin, you lose £1 in the game."
+            prompt: "A broken coin means I lose that money.",
+            explanation: "A broken coin means you lose what that coin is worth: £1, 50p or 1p."
         });
     }
     
@@ -295,12 +302,12 @@ function preparePILTInstructions(settings) {
                         return piltQuizExplanation.filter((item, index) => {
                             return Object.values(data)[index] !== "True";
                         }).map(item => `
-                            <p>You got this one wrong.</p>
+                            <p>Not quite.</p>
                             <h3 style="color: darkred; width: 700px; text-align: left;">${item.prompt}</h3>
                             <br>
-                            <p style="max-width: 700px; text-align: left;"><strong>Right answer:</strong> True</p>
-                            <p style="max-width: 700px; text-align: left;"><strong>Why:</strong> ${item.explanation}</p>
-                            ${settings.session === "screening" ? "<p>Read the rules again and try once more.</p>" : "<p>Press next to try again.</p>"}
+                            <p style="max-width: 700px; text-align: left;">This is <strong>true</strong>.</p>
+                            <p style="max-width: 700px; text-align: left;">${item.explanation}</p>
+                            ${settings.session === "screening" ? "<p>Read the rules again and try once more.</p>" : `<p>${touchCapable ? "Tap" : "Click"} <strong>Next</strong> to try again.</p>`}
                         `);
                     }
                 }
@@ -347,9 +354,9 @@ function preparePILTInstructions(settings) {
         [
             inst_loop,
             createReadyTrial(
-                `<p>Great. Now let's play for real.</p>
-                <p>You will play ${settings.session === "screening" ? "one more round" : "<b>15 rounds</b>"} of the card game. It takes about ${settings.session === "screening" ? "two minutes" : "<b>10 to 15 minutes</b>"}.</p>
-                ${settings.session !== "screening" ? "<p>You can take a short break between rounds if you need one.</p>" : ""}`,
+                `<p><b>Great. Now let's play for real.</b></p>
+                <p>${settings.session === "screening" ? "There is one more round. It takes about two minutes." : "There are <b>15 rounds</b>. They take about <b>10 to 15 minutes</b>."}</p>
+                ${settings.session !== "screening" ? "<p>You can take a short break between rounds.</p>" : ""}`,
                 "pilt_instruction"
             )
         ]
@@ -379,9 +386,11 @@ const testInstructions = (task) => {
         type: jsPsychInstructions,
         css_classes: ['instructions'],
         pages: [
-            `<p>Now you will play one more round of the card game.</p>
-            <p>This time you will not see the coins you win. You still collect them, and they still go in your safe.</p>
-            <p>Each turn you pick between two cards you have seen before. Pick the one you think gives more.</p>
+            `<p><b>One more round of the card game.</b></p>
+            <p>This time, you will not see the coins you win.</p>
+            <p>But you still collect them.</p>`,
+            `<p>Each turn, pick between two cards you have seen before.</p>
+            <p>Pick the one you think gives more.</p>
             <p>This round takes about three minutes.</p>`
         ],
         show_clickable_nav: true,

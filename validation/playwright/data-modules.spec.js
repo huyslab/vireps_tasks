@@ -62,11 +62,10 @@ test('module 2 without a dynamometer is exactly module 2 minus its grip steps', 
   expect(result.sameConfig).toBe(true);
   expect(result.sameEnd).toBe(true);
   expect(result.gripMessages).toEqual(['start_message', 'end_message']);
-  // The start text matches apart from the line about setting up the grip.
-  const dropGripLine = text => text.replace(/\n?<p>Part-way through[^<]*<\/p>/, '');
-  expect(result.startWithout).toEqual(result.startWith.map(dropGripLine));
-  expect(result.startWith[1]).toContain('grip device');
-  expect(result.startWithout[1]).not.toContain('grip');
+  // The start screens match apart from the one about the hand grip.
+  const gripScreens = result.startWith.filter(screen => screen.includes('hand grip'));
+  expect(gripScreens).toHaveLength(1);
+  expect(result.startWithout).toEqual(result.startWith.filter(screen => !gripScreens.includes(screen)));
 });
 
 test('questionnaire module presents every questionnaire in the configured order', async ({ page }) => {
@@ -352,7 +351,7 @@ test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery
     };
   });
 
-  const message = page.getByText('The game will start when it is turned.');
+  const message = page.getByText('The game starts once it is turned.');
   await expect(message).toBeAttached();
   await expect(page.locator('body')).toHaveAttribute('data-preferred-orientation', 'landscape');
   await expect(page.locator('#rotate-overlay .rotate-msg-landscape')).toBeVisible();

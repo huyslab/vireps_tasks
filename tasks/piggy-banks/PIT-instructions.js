@@ -11,23 +11,27 @@ function usesDynamometer(settings) {
  * @returns {Object} jsPsych instructions trial object
  */
 function PITMainInstructions(settings) { 
+  // Stronger colour = lower ratio = fewer presses per coin (see updatePiggyTails).
   const effortInstruction = usesDynamometer(settings)
-    ? 'you need to squeeze the grip more times to get a coin.'
-    : 'you need to shake this piggy faster to get a coin.';
+    ? 'you need to squeeze fewer times to get a coin.'
+    : `you need to ${pressVerb()} fewer times to get a coin.`;
   return {
     type: jsPsychInstructions,
     data: { trialphase: 'vigour_instructions' },
     show_clickable_nav: true,
     pages: [`
     <div id="instruction-text">
-      <p><strong>Now you will play the same game again for a few minutes. The rules are the same:</strong></p>
-
-      <ul>
-          <li><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Bright, strong colours</span>: ${effortInstruction}</li>
-          <li><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Long tail</span>: this piggy gives coins that are worth more.</li>
-      </ul>
-
-      <p>These are the coins you can win:</p>
+      <p>Now you will play the same game again, for a few minutes.</p>
+      <p>The rules are the same.</p>
+    </div>`,
+    `<div id="instruction-text">
+      <p><img src="./assets/images/piggy-banks/saturate-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Stronger colour:</span> ${effortInstruction}</p>
+    </div>`,
+    `<div id="instruction-text">
+      <p><img src="./assets/images/piggy-banks/tail-icon.png" style="height:1.3em; transform: translateY(0.2em)"> <span class="highlight-txt">Longer tail:</span> the coins are worth more.</p>
+    </div>`,
+    `<div id="instruction-text">
+      <p>You can win these coins:</p>
       <div class="instruct-coin-container">
           <div class="instruct-coin">
               <img src="./assets/images/piggy-banks/1p-num.png" alt="1 Penny">
@@ -42,17 +46,17 @@ function PITMainInstructions(settings) {
               <p>5 Pence</p>
           </div>
       </div>
-      </div>
-      `,
+    </div>`,
       `<div id="instruction-text">
-        <p><strong>This time you play in a cloudy place.</strong></p>
+        <p><strong>This time, you play in a cloudy place.</strong></p>
         <img src="./assets/images/piggy-banks/occluding_clouds.png" style="height:12em">
-        <p><span class="highlight-txt">You still get coins in the same way.<br>But the clouds hide them, so you will not see them while you play.</span></p>
+        <p>You get coins the same way as before.</p>
+        <p><span class="highlight-txt">But the clouds hide them. You will not see them while you play.</span></p>
       </div>`,
       `
       <div id="instruction-text">
-        <p><span class="highlight-txt">In the cloudy place the background changes from time to time.</span></p>
-        <p>These are the backgrounds you will see. Each one either gives you <strong>one</strong> coin or takes <strong>one</strong> coin away.</p>
+        <p><span class="highlight-txt">In the cloudy place, the background changes from time to time.</span></p>
+        <p>These are the backgrounds.</p>
 
             <div class="pav-stimuli-container">
                   <div class="pit-pav-row">
@@ -64,11 +68,13 @@ function PITMainInstructions(settings) {
                         <img src=${"./assets/images/pavlovian-stims/" + settings.session + "/PIT6.png"} class="pit-pav-icon">
                   </div>
             </div>
+        <p>Each time you see a background, you get <strong>one</strong> coin, or lose <strong>one</strong> coin.</p>
       </div>
       `, `
       <div id="instruction-text">
             <p><strong>Here is what each background does.</strong></p>
-            <p>The ones on the left give you a coin. The ones on the right take a coin away.</p>
+            <p>The ones on the left give you £1, 50p or 1p.</p>
+            <p>The ones on the right take away 1p, 50p or £1.</p>
 
             <div class="pav-stimuli-container">
                   <div class="pit-pav-row">
@@ -113,8 +119,9 @@ function makeStartPITConfirmation(settings) {
   <div class="experiment-wrapper">
     <div id="instruction-container">
       <div id="instruction-text">
-        <p>You will now play the piggy-bank game in the clouds for about <strong>eight minutes</strong>.</p>
-        <p>When you're ready, <span class="highlight-txt">${dynamometer ? 'squeeze the grip' : `${pressVerb()} the piggy bank`}</span> to begin.</p>
+        <p>The game takes about <strong>eight minutes</strong>. There are no breaks.</p>
+        ${dynamometer ? '<p>Remember: quick squeezes, not hard ones.</p>' : ''}
+        <p>Ready? <span class="highlight-txt">${dynamometer ? 'Squeeze the grip' : `${pressVerb(true)} the piggy bank`}</span> to start.</p>
       </div>
     </div>
     <div id="experiment-container">

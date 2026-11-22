@@ -170,7 +170,7 @@ test('no participant-facing screen uses staff or study jargon', async ({ page })
   });
 
   // "Module 1" and "experimenter" are what staff say; participants are told "Part 1"
-  // and "the person running the study".
+  // and "the study team".
   expect(found, 'participant-facing text should not use these').toEqual([]);
 });
 

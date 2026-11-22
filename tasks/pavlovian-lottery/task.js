@@ -142,12 +142,12 @@ export function createPavlovianLotteryTimeline(settings) {
       // Welcome and task overview
       `
         <h2>The lucky lottery</h2>
-        <p>Each go, the pictures spin. They stop on one picture.</p>
-        <p>Find out which pictures win you coins, and which ones break a coin.</p>
+        <p>Each go, the pictures spin.</p>
+        <p>They stop on one picture.</p>
       `,
       // Visual guide showing all possible coin outcomes
       `
-        <p>Each spin stops on one picture. The picture either gives you a coin - £1, 50p or 1p - or breaks one.</p>
+        <p>A picture can give you a coin: £1, 50p or 1p.</p>
         <div style='display: grid;'>
             <table class='rlm-coin-table'>
                 <tr>
@@ -155,6 +155,11 @@ export function createPavlovianLotteryTimeline(settings) {
                     <td><img src='./assets/images/card-choosing/outcomes/50pence.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
                     <td><img src='./assets/images/card-choosing/outcomes/1penny.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
                 </tr>
+            </table>
+        </div>
+        <p>Or it can break a coin.</p>
+        <div style='display: grid;'>
+            <table class='rlm-coin-table'>
                 <tr>
                     <td><img src='./assets/images/card-choosing/outcomes/1poundbroken.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
                     <td><img src='./assets/images/card-choosing/outcomes/50pencebroken.png' style='width:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px; height:${PREPILT_CONFIG.CONSTANTS.SMALL_COIN_SIZE}px;'></td>
@@ -162,7 +167,12 @@ export function createPavlovianLotteryTimeline(settings) {
                 </tr>
             </table>
         </div>
-        <p>Try to collect as many coins as you can. Broken coins take some away.</p>
+        <p>A broken coin means losing that money.</p>
+      `,
+      // What to do: the participant only watches, so this is about learning, not collecting.
+      `
+        <p>Watch closely.</p>
+        <p>Try to learn which pictures give coins, and which break them.</p>
       `
     ],
     show_clickable_nav: true,
@@ -173,8 +183,8 @@ export function createPavlovianLotteryTimeline(settings) {
     type: jsPsychHtmlButtonResponse,
     css_classes: ['instructions'],
     stimulus: () => `
-    <p>There are ${parseInt(PREPILT_CONFIG.sequence.length)} spins in total.</p>
-    <p class="highlight-txt">${pressVerb(true)} the button below to start your first spin.</p>
+    <p>There are ${parseInt(PREPILT_CONFIG.sequence.length)} spins.</p>
+    <p><span class="highlight-txt">${pressVerb(true)} Start</span> for your first spin.</p>
     `,
     choices: ['Start'],
     simulation_options: { data: { response: 0 } },
