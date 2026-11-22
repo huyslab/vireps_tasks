@@ -11,6 +11,15 @@ declare a preferred device orientation. See [Input modality and devices](#input-
 
 ## Available Tasks
 
+The study launcher requires the six-character participant code supplied by VIREPS
+registration. Enter the same code for both sessions; lowercase is accepted.
+The reserved IDs `debugdemo`, `demo` and `debug` also work in any capitalization. A check
+character rejects typing errors before a study module starts. Confirm the person
+against the study record too: a valid code does not prove that it belongs to them.
+The code is stored as `participant_id` in task data and as `task_code` in clinical
+REDCap project 9123. Its numeric `uin` remains an internal record key. See
+[`docs/participant-codes.md`](docs/participant-codes.md) for the fixed mapping and checks.
+
 Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 `createTaskTimeline()` and the launcher take.
 

@@ -141,13 +141,15 @@
 
         <form id="startForm">
             <div class="form-group">
-                <label for="participantId">Participant ID:</label>
+                <label for="participantId">Participant code:</label>
                 <input 
                     type="text" 
                     id="participantId" 
                     name="participantId" 
-                    placeholder="Enter participant ID"
-                    maxlength="236"
+                    placeholder="Six-character code from registration email"
+                    maxlength="9"
+                    autocapitalize="characters"
+                    spellcheck="false"
                     required
                     autocomplete="off"
                 >
@@ -184,12 +186,12 @@
     </div>
 
     <script type="module">
-        import { participantIdValidationError } from './core/utils/participant-id.js';
+        import { normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
 
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            const participantId = document.getElementById('participantId').value.trim();
+            const participantId = normalizeParticipantCode(document.getElementById('participantId').value);
             const sessionNumber = document.getElementById('sessionNumber').value;
             const moduleName = document.getElementById('module').value;
             const errorMessage = document.getElementById('errorMessage');
@@ -197,7 +199,7 @@
             // Hide error message
             errorMessage.style.display = 'none';
 
-            const participantError = participantIdValidationError(participantId);
+            const participantError = participantCodeValidationError(participantId);
             if (participantError) {
                 errorMessage.textContent = participantError;
                 errorMessage.style.display = 'block';

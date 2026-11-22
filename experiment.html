@@ -305,6 +305,7 @@
             onStorageFailure,
             participantIdValidationError
         } from '@utils/index.js';
+        import { isDebugParticipantId, normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
 
         // Registered before anything else can save. A snapshot that cannot be written is the
         // one failure the outbox cannot recover from on its own, and nothing downstream
@@ -334,12 +335,18 @@
         // The setup page launches a complete study module. The task parameter remains
         // supported for task-specific examples and automated rendering checks.
         window.participantID = parameters.get('participant_id') || '';
+        if (isDebugParticipantId(window.participantID)) {
+            window.participantID = normalizeParticipantCode(window.participantID);
+        }
         window.simulating = window.participantID.includes("simulate") || false;
         const isDemoParticipant = window.participantID.toLowerCase().includes('demo');
         const moduleName = parameters.get('module') || '';
         const taskName = parameters.get('task') || '';
         const sessionNumber = parameters.get('session_number') || '';
         const sessionConfig = SESSION_CONFIG[sessionNumber];
+        if (moduleName && !isDemoParticipant && !window.simulating) {
+            window.participantID = normalizeParticipantCode(window.participantID);
+        }
         window.module = moduleName || taskName;
         window.session = sessionConfig?.session || 'wk0';
         window.sessionNumber = sessionNumber ? Number(sessionNumber) : null;
@@ -502,6 +509,15 @@
             if (participantError) {
                 showExperimentError(new Error(participantError));
                 return;
+            }
+            // Task-only examples and explicit demo/simulation URLs keep their test IDs.
+            // Real study-module launches must use the code assigned by registration.
+            if (moduleName && !isDemoParticipant && !window.simulating) {
+                const codeError = participantCodeValidationError(window.participantID);
+                if (codeError) {
+                    showExperimentError(new Error(codeError));
+                    return;
+                }
             }
 
             // Device status first, because it decides whether this session collects at

@@ -3,10 +3,10 @@ import { expect, test } from '@playwright/test';
 const MAX_PARTICIPANT_ID_LENGTH = 236;
 const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 
-test('the launcher rejects participant IDs that cannot fit in a REDCap record ID', async ({ page }) => {
+test('the launcher rejects participant codes with the wrong length', async ({ page }) => {
   await page.goto('/index.html');
   const input = page.locator('#participantId');
-  await expect(input).toHaveAttribute('maxlength', String(MAX_PARTICIPANT_ID_LENGTH));
+  await expect(input).toHaveAttribute('maxlength', '9');
 
   await input.evaluate((element, value) => {
     element.value = value;
@@ -18,7 +18,7 @@ test('the launcher rejects participant IDs that cannot fit in a REDCap record ID
   });
 
   await expect(page.locator('#errorMessage')).toBeVisible();
-  await expect(page.locator('#errorMessage')).toContainText('236 characters or fewer');
+  await expect(page.locator('#errorMessage')).toContainText('six-character participant code');
   await expect(page).toHaveURL(/\/index\.html$/);
 });
 
@@ -84,4 +84,22 @@ test('a snapshot that cannot be stored raises a visible notice for staff', async
 
   await expect(banner).toBeVisible();
   await expect(banner).toContainText('not being saved');
+});
+
+for (const id of ['DeBuGdEmO', 'DEMO', 'DeBuG']) {
+  test(`launcher retains the reserved ID ${id}`, async ({ page }) => {
+    await page.goto('/index.html');
+    await page.locator('#participantId').fill(id);
+    await page.locator('#sessionNumber').selectOption('1');
+    await page.locator('#module').selectOption('questionnaires');
+    await page.locator('#startButton').click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('participant_id')).toBe(id.toLowerCase());
+    await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toHaveCount(0);
+  });
+}
+
+test('a direct module launch rejects a mistyped participant code', async ({ page }) => {
+  await page.goto('/experiment.html?participant_id=LKV3VY&session_number=1&module=questionnaires');
+  await expect(page.getByRole('heading', { name: 'Error Loading Experiment' })).toBeVisible();
+  await expect(page.locator('#display_element')).toContainText('does not pass its typing check');
 });
