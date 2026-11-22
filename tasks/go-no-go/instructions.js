@@ -261,6 +261,7 @@ function checkQuizFailed() {
 
 export function prepareGoNoGoInstructions(settings, trainingFaces) {
   const L = outcomeLabels(settings);
+  const frameSample = (valence) => `<span class="gng-frame-sample gng-domain-${valence}" aria-hidden="true"></span>`;
 
   const mainInstructions = {
     type: jsPsychInstructions,
@@ -278,10 +279,12 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
        <p><b>Not to tap:</b> just wait. The picture goes away by itself.</p>
        <p>Choose fast.</p>`,
 
-      // No colour on these words. The rim light that used to carry the win/lose
-      // mapping is off (signal_valence: false), so colouring them would teach a
-      // code the participant never meets. Which kind of person this is has to be
-      // learnt from the outcomes instead, which the screens below say outright.
+      ...(settings.signal_valence ? [
+        `<p>Look at the frame around the screen.</p>
+         <p>${frameSample('win')} A solid blue frame means you can win ${L.points ? 'points' : 'money'}.</p>
+         <p>${frameSample('avoid_loss')} A double amber frame means you will lose ${L.points ? 'points' : 'money'}.</p>`,
+      ] : []),
+
       `<p>With some people, ${L.stakeWin}.</p>
        <p>The better choice often wins <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
        <p>The other choice often wins only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>`,
@@ -298,8 +301,8 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       `<p>The same people come back again and again.</p>
        <p>For some, tapping is best. For others, waiting is best.</p>`,
 
-      `<p>You cannot tell any of this by looking.</p>
-       <p>You find out by trying and watching what happens.</p>`,
+      `<p>How do you find the best choice?</p>
+       <p>Try both and watch what happens.</p>`,
 
       `<p>Try to remember what works for each person.</p>`,
 
@@ -355,7 +358,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     const win = stage.valence === 'win';
     const action = stage.correct_response === 'go' ? 'tapping' : 'waiting';
     return `<p><b>Practice ${index + 1} of ${stages.length}</b></p>
-       <p>With this person, ${win ? L.stakeWin : L.stakeLose}.</p>
+       <p>${settings.signal_valence ? frameSample(stage.valence) : ''}With this person, ${win ? L.stakeWin : L.stakeLose}.</p>
        <p>Here, <b>${action}</b> is the better choice.</p>
        <p>Get it right and you ${win ? `win <b>${L.big}</b>` : `lose only <b>${L.small}</b>`}.</p>
        <p>Get it wrong and you ${win ? `win only <b>${L.small}</b>` : `lose <b>${L.big}</b>`}.</p>`;
@@ -396,6 +399,16 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       prompt: L.lossCue,
       correct: 'True',
     },
+    ...(settings.signal_valence ? [
+      {
+        prompt: `A solid blue frame means I can win ${L.points ? 'points' : 'money'}.`,
+        correct: 'True',
+      },
+      {
+        prompt: `A double amber frame means I will lose ${L.points ? 'points' : 'money'}.`,
+        correct: 'True',
+      },
+    ] : []),
     {
       prompt: `The same people come back, so I can learn what works for each one.`,
       correct: 'True',

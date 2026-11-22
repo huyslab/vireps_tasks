@@ -2,13 +2,12 @@
  * Orthogonalised go/no-go trial with valenced-face cues.
  *
  * Trial structure:
- *   1. The face appears mid-screen at full size, lit by a coloured rim light -
- *      blue where there is money to win, amber where there is money to lose.
- *      This is RobotFactory's scanner light in another form: it names the
- *      outcome domain before any choice is made. There is no onset animation,
+ *   1. The face appears mid-screen at full size. A screen frame signals the
+ *      outcome domain: solid blue for points to win, double amber for points
+ *      to lose. There is no onset animation,
  *      unlike RobotFactory's 1500 ms scanner sequence; the response window opens
  *      immediately, so RT is measured from cue onset rather than from a delayed
- *      listener start, and the light is up for the whole of it.
+ *      listener start, and the frame is visible for the whole response window.
  *   2. Response window (default 1800 ms). A tap on the face, or the spacebar,
  *      counts as GO. Letting the window elapse is NO-GO.
  *   3. The face resizes to signal what the participant did: it GROWS on a go
@@ -17,7 +16,7 @@
  *      taken, not whether it was right.
  *   4. A distinct sound plays and the outcome flies out of the face to land on
  *      the chest: £1 for +10, broken £1 for -10, 1p for +1, broken 1p for -1,
- *      or the signed number in points mode. The rim light stays lit throughout.
+ *      or the signed number in points mode. The frame stays up through feedback.
  *
  * Correctness is NOT separately signalled in the study defaults. The outcome
  * and sound report the stochastic payout, which can be worse even for the
@@ -36,11 +35,6 @@
  * outcome. Placing it on the chest (not the lower face, which would cover the
  * expression) removes the saccade, the fly-out motion draws the eye to it, and
  * the sound carries the outcome even if the coin is missed entirely.
- *
- * The rim light is why the face stimuli are transparent PNGs rather than CFD's
- * white-background JPEGs: it is a drop-shadow filter, which follows the alpha
- * channel, so on an opaque frame it would outline the rectangle rather than the
- * person.
  *
  * Go trials end their response phase as soon as the response arrives, so trial
  * length varies with RT - the same as RobotFactory. If fixed-length trials are
@@ -62,9 +56,8 @@ var jsPsychGoNoGo = (function (jspsych) {
     parameters: {
       /** Path to the face image serving as this trial's cue */
       stimulus: { type: jspsych.ParameterType.IMAGE, default: undefined },
-      /** 'win' or 'avoid_loss' - which outcome domain this trial is in. Drives
-       *  the rim light only; the outcomes themselves come from the two
-       *  outcome_* parameters. Anything else leaves the face unlit. */
+      /** 'win' or 'avoid_loss' sets the screen frame. The payout itself comes
+       *  from the two outcome_* parameters. Any other domain shows no frame. */
       valence: { type: jspsych.ParameterType.STRING, default: null },
       /** Whether to show the domain at cue onset at all. Turning this off
        *  restores the unsignalled design, where valence has to be learnt from
@@ -154,7 +147,7 @@ var jsPsychGoNoGo = (function (jspsych) {
       correct: { type: jspsych.ParameterType.BOOL },
       /** Points delivered on this trial */
       outcome: { type: jspsych.ParameterType.INT },
-      /** Whether the domain was shown by the rim light on this trial */
+      /** Whether the domain was shown by the screen frame on this trial */
       valence_signalled: { type: jspsych.ParameterType.BOOL },
       /** Input modality of the go response (touch, mouse, pen, keyboard, null) */
       pointer_type: { type: jspsych.ParameterType.STRING },
@@ -186,12 +179,8 @@ var jsPsychGoNoGo = (function (jspsych) {
       const gateVisible = () => !!rotateOverlay && getComputedStyle(rotateOverlay).display !== 'none';
       let wrongOrientation = gateVisible();
 
-      // The rim light is applied from the first paint, not faded in: unlike
-      // RobotFactory there is no pre-response animation to fade it during, and
-      // the response window opens at once, so any ramp would eat into the time
-      // the participant has to use it.
-      const glowClass = { win: 'gng-glow-win', avoid_loss: 'gng-glow-avoid-loss' }[trial.valence];
-      const signalled = trial.signal_valence && !!glowClass;
+      // Frame and face appear together. The frame stays fixed as the face moves.
+      const signalled = trial.signal_valence && (trial.valence === 'win' || trial.valence === 'avoid_loss');
 
       // Points and coins share one element, one position and one fly-out, so
       // only the content differs between the two modes.
@@ -202,11 +191,10 @@ var jsPsychGoNoGo = (function (jspsych) {
 
       display_element.innerHTML = `
         ${trial.feedback_tint ? '<div class="gng-tint" id="gng-tint"></div>' : ''}
+        ${signalled ? `<div class="gng-frame gng-domain-${trial.valence}" data-valence="${trial.valence}" aria-hidden="true"></div>` : ''}
         <div class="gng-wrapper">
           <div class="gng-stimulus-slot">
-            <div class="gng-glow${signalled ? ' ' + glowClass : ''}">
-              <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
-            </div>
+            <img id="gng-stimulus" class="gng-stimulus" src="${trial.stimulus}" alt="">
             ${outcomeMarkup}
           </div>
         </div>`;
@@ -214,6 +202,7 @@ var jsPsychGoNoGo = (function (jspsych) {
       const stimulus = display_element.querySelector('#gng-stimulus');
       const coin = display_element.querySelector('#gng-coin');
       const tint = display_element.querySelector('#gng-tint');
+      const frame = display_element.querySelector('.gng-frame');
 
       let responded = false;
       let cleaned = false;
@@ -404,6 +393,7 @@ var jsPsychGoNoGo = (function (jspsych) {
             // Fade the wash back out before the blank gap, so the ITI is neutral
             // and the next cue does not arrive on a coloured screen.
             if (tint) tint.classList.remove('gng-tint-correct', 'gng-tint-incorrect');
+            if (frame) frame.hidden = true;
             coin.classList.remove('gng-coin-visible');
             stimulus.style.visibility = 'hidden';
             this.jsPsych.pluginAPI.setTimeout(endTrial, simulating ? 20 : trial.iti);

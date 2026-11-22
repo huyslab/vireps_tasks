@@ -192,7 +192,7 @@
                 // combinations can be compared on a real tablet without editing
                 // code. Anything not given falls back to the registry default.
                 //   ?outcome_display=coins    optional legacy coin images (default: points)
-                //   ?signal_valence=0         no rim light at cue onset
+                //   ?signal_valence=0         hide the valence frame
                 //   ?feedback_tint=1          legacy correctness wash (default: off)
                 //   ?play_sounds=0            silent
                 const flag = (name) => (params.has(name) ? params.get(name) !== '0' : undefined);

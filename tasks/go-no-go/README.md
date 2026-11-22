@@ -22,10 +22,9 @@ running the selection script first, the task will fail to load its images.
 
 ## The trial
 
-1. A face appears mid-screen at full size, **no onset animation**. The study
-   currently shows no valence cue; its design is being reviewed. RobotFactory
-   runs a 1500 ms scanner animation before opening its listener; here the
-   response window opens at cue onset, so RT is measured from onset.
+1. A face appears mid-screen at full size, **no onset animation**. A solid blue
+   frame signals points to win and a double amber frame signals points to lose.
+   The response window opens when the face and frame appear.
 2. **1800 ms** to respond. A tap on the face (touch) or the spacebar (desktop) is
    GO; letting the window elapse is NO-GO.
 3. The face **grows** on a go response (1.4×) and **shrinks** on a no-go (0.65×),
@@ -47,41 +46,16 @@ intended 1600 ms.
 
 ### Signalling the outcome domain
 
-The rim light is RobotFactory's scanner light in another form. Sam's is a CSS
-trapezoid over the robot in `mix-blend-mode: soft-light`, faded in over the last
-10% of his intro animation; ours is a `drop-shadow` on the transparent cue, up
-from the first paint.
+The screen frame serves the same role as RobotFactory's scanner light.
+It separates the cue from the photo and uses both colour and line pattern.
+The mapping is fixed for everyone and is taught in the instructions and
+practice. The frame stays visible through feedback and clears with the face
+before the blank interval.
 
 **Study defaults:** `outcome_display: 'points'`, `feedback_tint: false`, and
-`signal_valence: false`. The task and practice show signed points without a
-separate signal of the optimal action. Valence signalling remains off pending
-UI review; this change does not select a new valence cue.
-
-The optional rim light is enabled by `signal_valence: true`. The plugin's own
-default is true, whereas the study registry explicitly sets it to false.
-Instructions for a signalled study must teach its colour mapping before use.
-The legacy correctness wash remains opt-in for comparison only: unlike the
-stochastic score, it reveals the optimal action, so it changes the information
-available to participants.
-
-**The optional light hugs the silhouette; it does not wash over the face.** The cues are
-  angry and happy faces, and the colour is perfectly correlated with reward
-  valence, so tinting the skin could shift how the expression reads — and that
-  shift would be indistinguishable from a valence × affect interaction. Lighting
-  the outline leaves every face pixel untouched.
-
-Its current mapping is blue for win, amber for avoid-loss, **fixed for everyone**
-rather than counterbalanced. Signalling the domain provides advance information
-about outcome valence, as in Zorowitz's study02; without it, participants must
-learn the domain as well as the action.
-
-Implementation note: the light is a filter on a `.gng-glow` wrapper, not on the
-image. The image is masked at the bottom, masking is applied *after* filtering
-and clips to the border box, so a drop-shadow on the image itself would be cut
-off wherever it spread past the frame. The same mask also has to fade
-*gradually* — the glow traces whatever edge the mask leaves, and an abrupt one
-drew a lit horizontal bar under the shoulders, outlining the very cut-out edge
-the mask exists to hide.
+`signal_valence: true`. The example accepts `signal_valence=0` to try the
+task without the frame. The legacy correctness wash remains opt-in for
+comparison and reveals the optimal action even on misleading outcome trials.
 
 ### Why the feedback looks the way it does
 
@@ -108,9 +82,6 @@ Each element earns its place, and several were added after testing on a tablet:
   size, with the same fly-out, and adapts the instructions and the comprehension
   check to match (£1 → 10 points, 1p → 1 point, "a broken coin" → "a minus
   number").
-- **Transparent stimuli** are what make the rim light work: `drop-shadow` follows
-  the alpha channel, so on CFD's white-background frames it would outline the
-  rectangle rather than the person.
 
 ## Sequence
 

@@ -183,9 +183,7 @@ export async function createGoNoGoTimeline(settings) {
           correct_response: jsPsych.timelineVariable('correct_response'),
           outcome_correct: jsPsych.timelineVariable('outcome_correct'),
           outcome_incorrect: jsPsych.timelineVariable('outcome_incorrect'),
-          // Lights the cue by outcome domain, RobotFactory's scanner light in
-          // another form. Signalling it makes the task action learning only;
-          // set signal_valence false to put valence back into the problem.
+          // The frame signals the domain independently of the face and action.
           valence: jsPsych.timelineVariable('valence'),
           signal_valence: settings.signal_valence,
           response_window: settings.response_window,
