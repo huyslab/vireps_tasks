@@ -73,14 +73,14 @@ const trialData = (page) =>
  *
  * This used to rely on the registry defaults, which do not signal - so it asserted a
  * rim light that was never drawn and a wash that was always drawn, and had been
- * failing on both counts. Its sibling below covers the unsignalled configuration the
- * study actually runs; between them both configurations are pinned, and neither
+ * failing on both counts. The default study now uses unsignalled points without a
+ * correctness wash. The explicit legacy configurations are pinned separately and neither
  * depends on which one happens to be the default.
  */
 test('the signalled configuration puts colour on the domain, with no wash', async ({ page }) => {
   test.setTimeout(90000);
   await page.goto(
-    '/examples/go-no-go.html?participant_id=demo&skip_instructions=1&signal_valence=1&feedback_tint=0'
+    '/examples/go-no-go.html?participant_id=demo&skip_instructions=1&signal_valence=1&feedback_tint=0&outcome_display=coins'
   );
 
   const seen = await walkTrials(page, 8);
@@ -106,13 +106,14 @@ test('the signalled configuration puts colour on the domain, with no wash', asyn
   expect(seen.every((s) => s.outcomeSrc), 'coins mode shows a coin image').toBe(true);
 });
 
-test('points mode shows the recorded value, and no coin image', async ({ page }) => {
+test('study defaults show stochastic points without a correctness signal', async ({ page }) => {
   test.setTimeout(60000);
   await page.goto(
-    '/examples/go-no-go.html?participant_id=demo&skip_instructions=1&outcome_display=points'
+    '/examples/go-no-go.html?participant_id=demo&skip_instructions=1'
   );
 
-  const seen = await walkTrials(page, 4);
+  // Includes trial 5, where sham feedback gives +1 for the optimal Go action.
+  const seen = await walkTrials(page, 5);
   const data = (await trialData(page)).slice(0, seen.length);
 
   expect(
@@ -120,6 +121,11 @@ test('points mode shows the recorded value, and no coin image', async ({ page })
     'the number on screen is the outcome that was scored, signed'
   ).toEqual(data.map((d) => `${d.outcome > 0 ? '+' : ''}${d.outcome}`));
   expect(seen.every((s) => !s.outcomeSrc), 'no coin image in points mode').toBe(true);
+  expect(seen.every((s) => !s.hasTint && s.tintClass === null), 'no correctness wash').toBe(true);
+  expect(seen.every((s) => s.glow === null), 'valence signalling awaits a design decision').toBe(true);
+  const sham = data.find((d) => d.sham && d.correct);
+  expect(sham, 'an optimal action with misleading outcome was exercised').toBeTruthy();
+  expect(sham.outcome).toBe(1);
   // Sam's scheme: £1 -> 10, 1p -> 1, and the same negated.
   expect(
     data.every((d) => [10, 1, -1, -10].includes(d.outcome)),
@@ -127,7 +133,7 @@ test('points mode shows the recorded value, and no coin image', async ({ page })
   ).toBe(true);
 });
 
-test('the unsignalled configuration puts colour back on correctness', async ({ page }) => {
+test('the legacy correctness wash requires explicit opt-in', async ({ page }) => {
   test.setTimeout(60000);
   await page.goto(
     '/examples/go-no-go.html?participant_id=demo&skip_instructions=1&signal_valence=0&feedback_tint=1'
@@ -147,4 +153,21 @@ test('the unsignalled configuration puts colour back on correctness', async ({ p
     seen.map((s) => s.tintClass),
     'the wash reports correctness instead'
   ).toEqual(data.map((d) => (d.correct ? 'gng-tint-correct' : 'gng-tint-incorrect')));
+});
+
+test('default instructions and practice teach points without correctness colours', async ({ page }) => {
+  await page.goto('/examples/go-no-go.html?participant_id=demo');
+  await expect(page.locator('#jspsych-instructions-next')).toBeVisible({ timeout: 20000 });
+  const copy = await page.evaluate(async () => {
+    const { TaskRegistry } = await import('/api/task-registry.js');
+    const { prepareGoNoGoInstructions } = await import('/tasks/go-no-go/instructions.js');
+    const timeline = prepareGoNoGoInstructions(TaskRegistry.go_no_go.defaultConfig, ['a', 'b', 'c', 'd']);
+    return timeline.filter((t) => Array.isArray(t.pages)).flatMap((t) => t.pages).join('\n');
+  });
+  expect(copy).toContain('+10');
+  expect(copy).toContain('−10');
+  expect(copy).toContain('A plus number');
+  expect(copy).toContain('A minus number');
+  expect(copy).not.toMatch(/£|penny|coin|green|red<\/b>/i);
+  expect(copy).toContain('Practice 4 of 4');
 });

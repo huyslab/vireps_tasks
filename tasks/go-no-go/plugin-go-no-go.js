@@ -19,15 +19,10 @@
  *      the chest: £1 for +10, broken £1 for -10, 1p for +1, broken 1p for -1,
  *      or the signed number in points mode. The rim light stays lit throughout.
  *
- * Correctness is deliberately NOT signalled by colour in the default
- * configuration. An earlier version washed the whole screen green or red at
- * feedback, which would have left hue meaning one thing at cue onset and a
- * different thing 300 ms later. The outcome already distinguishes all four cases
- * on its own - £1 and 1p only occur in the win domain, the broken coins only in
- * the loss domain, and in points mode the sign says it outright - and each has
- * its own sound, so dropping the wash costs no information. It remains available
- * via feedback_tint, which is worth having for the signal_valence: false
- * configuration, where nothing else is competing for colour.
+ * Correctness is NOT separately signalled in the study defaults. The outcome
+ * and sound report the stochastic payout, which can be worse even for the
+ * optimal action. The legacy feedback_tint option reveals the optimal action
+ * directly and is disabled in the study registry.
  *
  * Three presentation choices are configuration rather than fixed, because they
  * trade against each other and the right combination is an empirical question:
@@ -85,22 +80,20 @@ var jsPsychGoNoGo = (function (jspsych) {
       response_window: { type: jspsych.ParameterType.INT, default: 1800 },
       /** Duration of the grow/shrink animation */
       resize_duration: { type: jspsych.ParameterType.INT, default: 300 },
-      /** How long the coin and background tint stay on screen */
+      /** How long the outcome stays on screen */
       feedback_duration: { type: jspsych.ParameterType.INT, default: 1600 },
       /** Blank gap after feedback */
       iti: { type: jspsych.ParameterType.INT, default: 400 },
       /** Wash the whole screen green (correct) or red (incorrect) at feedback.
        *  Off by default: hue marks the outcome domain at cue onset instead, and
        *  the same dimension should not mean two things in one trial. */
-      // Plugin default only. The study registry turns this ON and signal_valence
-      // OFF (api/task-registry.js), so the participant experience is the reverse of
-      // this line - see tasks/go-no-go/README.md.
+      // Off in the study registry too: correctness is not a separate signal.
       feedback_tint: { type: jspsych.ParameterType.BOOL, default: false },
       /** Whether the outcome sound plays. Off makes the task silent. */
       play_sounds: { type: jspsych.ParameterType.BOOL, default: true },
       /** 'coins' shows the £1 / 1p / broken-coin images; 'points' shows the
        *  signed value instead, as RobotFactory does (+10, +1, -1, -10). */
-      outcome_display: { type: jspsych.ParameterType.STRING, default: 'coins' },
+      outcome_display: { type: jspsych.ParameterType.STRING, default: 'points' },
       /** Scale factors for the approach / withdrawal animations */
       grow_scale: { type: jspsych.ParameterType.FLOAT, default: 1.4 },
       shrink_scale: { type: jspsych.ParameterType.FLOAT, default: 0.65 },

@@ -14,7 +14,8 @@ defineTaskRenderingTest('go_no_go', {
     expect(box.width * 1.4, 'grown face should still fit horizontally').toBeLessThanOrEqual(viewport.width);
     expect(box.height * 1.4, 'grown face should still fit vertically').toBeLessThanOrEqual(viewport.height);
 
-    expect(await page.locator('#gng-coin').count(), 'coin element should exist').toBe(1);
+    expect(await page.locator('#gng-coin.gng-points').count(), 'default outcome is signed points').toBe(1);
+    expect(await page.locator('#gng-tint').count(), 'no separate correctness signal').toBe(0);
 
     // The rim-light wrapper is always rendered, but carries a domain class only when
     // signal_valence is on. The study runs unsignalled - valence is part of what the

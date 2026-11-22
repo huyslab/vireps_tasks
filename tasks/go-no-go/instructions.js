@@ -283,12 +283,17 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
       // code the participant never meets. Which kind of person this is has to be
       // learnt from the outcomes instead, which the screens below say outright.
       `<p>With some people, ${L.stakeWin}.</p>
-       <p>Get it right and you win <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
-       <p>Get it wrong and you win only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>`,
+       <p>The better choice often wins <b>${L.big}</b>. ${L.icon('pound', '1 pound coin')}</p>
+       <p>The other choice often wins only <b>${L.small}</b>. ${L.icon('penny', '1 penny coin')}</p>`,
 
       `<p>With other people, ${L.stakeLose}.</p>
-       <p>Get it right and you lose only <b>${L.small}</b>. ${L.icon('brokenPenny', 'broken 1 penny coin')}</p>
-       <p>Get it wrong and you lose <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>`,
+       <p>The better choice often loses only <b>${L.small}</b>. ${L.icon('brokenPenny', 'broken 1 penny coin')}</p>
+       <p>The other choice often loses <b>${L.big}</b>. ${L.icon('brokenPound', 'broken 1 pound coin')}</p>`,
+
+      ...(L.points ? [
+        `<p>A plus number means you win points: <b>+10</b> or <b>+1</b>.</p>
+         <p>A minus number means you lose points: <b>−1</b> or <b>−10</b>.</p>`,
+      ] : []),
 
       `<p>The same people come back again and again.</p>
        <p>For some, tapping is best. For others, waiting is best.</p>`,
@@ -298,8 +303,10 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
       `<p>Try to remember what works for each person.</p>`,
 
-      `<p>The screen turns <b>green</b> when you get it right.</p>
-       <p>It turns <b>red</b> when you get it wrong.</p>`,
+      ...(settings.feedback_tint ? [
+        `<p>The screen turns <b>green</b> when you get it right.</p>
+         <p>It turns <b>red</b> when you get it wrong.</p>`,
+      ] : []),
 
       // Feedback is only 80% valid, so a participant will make the better choice and
       // still see the worse outcome. This names that exception without telling anyone
@@ -312,7 +319,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     {
       id: 'press_win',
       valence: 'win',
-      label: 'press for £1',
+      label: `press for ${L.big}`,
       correct_response: 'go',
       outcome_correct: 10,
       outcome_incorrect: 1,
@@ -320,7 +327,7 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     {
       id: 'wait_win',
       valence: 'win',
-      label: 'wait for £1',
+      label: `wait for ${L.big}`,
       correct_response: 'nogo',
       outcome_correct: 10,
       outcome_incorrect: 1,

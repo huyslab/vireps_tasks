@@ -161,17 +161,10 @@
   z-index: 1;
 }
 
-/* --- Feedback background tint (off by plugin default, ON in the study) ------
-   The original correctness signal: a low-alpha green/red wash over the whole
-   viewport, behind the face and coin. It is retired in the default
-   configuration because hue now marks the outcome DOMAIN at cue onset, and one
-   dimension cannot carry two meanings in the same trial without being learnt
-   twice. Kept, and switchable via feedback_tint, for the unsignalled
-   configuration (signal_valence: false), where nothing competes for colour.
-
-   Low alpha is deliberate: this only confirms what the coin and sound already
-   say, and a saturated full-screen flash 240 times would be punishing. It
-   transitions rather than animates so it eases in and back out. */
+/* --- Legacy correctness tint (off in both plugin and study defaults) --------
+   Explicit opt-in only. This wash reveals the optimal action even when the
+   stochastic score is misleading; it is extra information, not a second
+   rendering of the score. */
 .gng-tint {
   position: fixed;
   inset: 0;
@@ -201,13 +194,9 @@
    this trial is in - money to win, or money to lose - and it is up from cue
    onset, so it is available for the whole decision rather than flashed once.
 
-   Hue carries EXACTLY ONE meaning in this task. It used to mark correctness
-   (a green/red wash over the whole screen at feedback); using it for domain as
-   well would have made the same dimension mean two different things at two
-   moments of the same trial. The wash is off by PLUGIN default - the study
-   registry turns it on and signalling off - and where it is off, correctness is
-   carried by the coin, its fly-out and the outcome sound - which already stated it
-   unambiguously, since the four coins distinguish both correctness and domain.
+   The study currently leaves this cue off pending valence UI review. The
+   correctness wash is also off. Signed points and outcome sounds convey the
+   stochastic payout; they do not reveal whether an action was optimal.
 
    The light hugs the silhouette rather than washing over the face. Our cues are
    angry and happy faces and the colour is perfectly correlated with reward

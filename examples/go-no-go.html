@@ -191,9 +191,9 @@
                 // The four presentation settings are exposed on the URL so the
                 // combinations can be compared on a real tablet without editing
                 // code. Anything not given falls back to the registry default.
-                //   ?outcome_display=points   values instead of coin images
+                //   ?outcome_display=coins    optional legacy coin images (default: points)
                 //   ?signal_valence=0         no rim light at cue onset
-                //   ?feedback_tint=1          green/red wash at feedback
+                //   ?feedback_tint=1          legacy correctness wash (default: off)
                 //   ?play_sounds=0            silent
                 const flag = (name) => (params.has(name) ? params.get(name) !== '0' : undefined);
                 const overrides = {
