@@ -2,6 +2,19 @@ import { expect, test } from '@playwright/test';
 
 const REDCAP_ENDPOINT = 'https://7vv2kgkas9.execute-api.eu-north-1.amazonaws.com/Prod/redcap';
 
+test('native form submission never includes the clinician email when the launch script fails', async ({ page }) => {
+  await page.route('**/core/utils/participant-code.js', (route) => route.abort());
+  await page.goto('/index.html');
+  await page.locator('#participantId').fill('debug');
+  await page.locator('#sessionNumber').selectOption('1');
+  await page.locator('#module').selectOption('questionnaires');
+  await page.locator('#clinicianEmail').fill('clinician@example.test');
+  await page.locator('#startButton').click();
+  await expect(page).toHaveURL(/index\.html\?participantId=/);
+  expect(new URL(page.url()).searchParams.has('clinicianEmail')).toBe(false);
+  expect(decodeURIComponent(page.url())).not.toContain('clinician@example.test');
+});
+
 test('the launcher carries a clinician email without including it in URLs or trial data', async ({ page }) => {
   await page.addInitScript(() => {
     window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
@@ -64,16 +77,17 @@ test('invalid clinician emails block launch and a blank address remains optional
   expect(new URL(page.url()).searchParams.has('receipt')).toBe(false);
 });
 
-test('start and checkpoints register the recipient; only completion marks the queued snapshot final', async ({ page }) => {
-  await page.addInitScript(() => {
+test('only completion marks the snapshot final and reopening the launcher retries its upload', async ({ page, context }) => {
+  await context.addInitScript(() => {
     window.__forceOnlineRedcapForTesting = true;
     window.__redcapRetryDelayMsForTesting = 60000;
     window.__redcapDeviceSignerForTesting = async () => ({});
   });
   let failing = true;
-  const uploads = [];
-  await page.route(REDCAP_ENDPOINT, async (route) => {
-    uploads.push(route.request().postDataJSON()[0]);
+  const successfulUploads = [];
+  await context.route(REDCAP_ENDPOINT, async (route) => {
+    const record = route.request().postDataJSON()[0];
+    if (!failing) successfulUploads.push(record);
     await route.fulfill({ status: failing ? 503 : 200, contentType: 'application/json', body: '{}' });
   });
   await page.goto('/experiment.html?participant_id=invalid');
@@ -115,13 +129,29 @@ test('start and checkpoints register the recipient; only completion marks the qu
   expect(record.module_completed).toBe(true);
   expect(record.clinician_email).toBe('clinician@example.test');
 
-  // The recipient and final marker live in IndexedDB, so closing the experiment
-  // does not lose the confirmation request when a later page retries the outbox.
+  // Closing the experiment loses its in-memory state. The setup page must retry
+  // the final snapshot without starting another experiment or a test-only flush.
+  await page.close();
   failing = false;
-  await page.goto('/validation/fixtures/data-queue.html');
-  await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY);
-  await page.evaluate(() => window.__dataQueue.flushQueue());
-  await expect.poll(async () => (await queued()).length).toBe(0);
-  expect(uploads.at(-1).module_completed).toBe(true);
-  expect(uploads.at(-1).clinician_email).toBe('clinician@example.test');
+  const reopened = await context.newPage();
+  await reopened.goto('/index.html');
+  await expect.poll(() => successfulUploads.length).toBe(1);
+  expect(successfulUploads[0].module_completed).toBe(true);
+  expect(successfulUploads[0].clinician_email).toBe('clinician@example.test');
+  expect(successfulUploads[0].record_id).toBe(record.record_id);
+  await expect(reopened).toHaveURL(/index\.html$/);
+  // Inspect storage directly: importing data-queue here would initialize its sender
+  // and hide a missing launcher import.
+  await expect.poll(() => reopened.evaluate(() => new Promise((resolve, reject) => {
+    const opening = indexedDB.open('redcap_pending_queue');
+    opening.onerror = () => reject(opening.error);
+    opening.onsuccess = () => {
+      const db = opening.result;
+      const tx = db.transaction('records', 'readonly');
+      const count = tx.objectStore('records').count();
+      count.onsuccess = () => resolve(count.result);
+      tx.oncomplete = () => db.close();
+      tx.onerror = () => reject(tx.error);
+    };
+  }))).toBe(0);
 });

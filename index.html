@@ -179,7 +179,7 @@
 
             <div class="form-group">
                 <label for="clinicianEmail">Clinician email (optional):</label>
-                <input type="email" id="clinicianEmail" name="clinicianEmail"
+                <input type="email" id="clinicianEmail"
                     maxlength="254" autocomplete="off" autocapitalize="none"
                     pattern="(?!.*\.\.)(?!.*\.@)[^@.][^@]*@[^@]+\.[A-Za-z]{2,63}"
                     title="Enter a full email address, for example name@ucl.ac.uk"
@@ -200,6 +200,8 @@
     </div>
 
     <script type="module">
+        // Reopening setup must retry earlier uploads without launching a new module.
+        import './core/utils/data-queue.js';
         import { normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
         import { prepareCompletionReceipt } from './core/utils/completion-receipt.js';
 
