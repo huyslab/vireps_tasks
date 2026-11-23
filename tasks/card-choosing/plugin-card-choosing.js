@@ -680,6 +680,19 @@ jsPsychCardChoosing = (function (jspsych) {
             }
 
             const optimalSide = trial.n_stimuli === 2 ? (default_data.optimal_right == 1 ? 'right' : 'left') : trial.optimal_side
+
+            // Optional biased simulated participant (set by experiment.html from the
+            // sim_accuracy URL parameter): choose the optimal side with that probability,
+            // otherwise one of the other sides at random. Without it the choice stays random.
+            const accuracy = window.simulationAccuracy;
+            if (typeof accuracy === 'number' && optimalSide) {
+                const sides = Object.values(this.keys);
+                const others = sides.filter(side => side !== optimalSide);
+                const side = Math.random() < accuracy
+                    ? optimalSide
+                    : others[Math.floor(Math.random() * others.length)];
+                default_data.key = Object.keys(this.keys).find(k => this.keys[k] === side);
+            }
             default_data.response = this.keys[default_data.key]
             default_data.response_optimal = default_data.response === optimalSide
             default_data.chosen_stimulus = default_data[`stimulus_${default_data.response}`]

@@ -493,6 +493,17 @@ var jsPsychReversal = (function (jspsych) {
 
             // Pick a random valid key for simulation
             var sim_key = this.jsPsych.pluginAPI.getValidKey(trial.choices).toLowerCase();
+
+            // Optional biased simulated participant (set by experiment.html from the
+            // sim_accuracy URL parameter): choose the optimal side with that probability.
+            var accuracy = window.simulationAccuracy;
+            if (typeof accuracy === 'number') {
+                var optimal_side = trial.optimal_right ? 'right' : 'left';
+                var side = Math.random() < accuracy ? optimal_side : (optimal_side === 'right' ? 'left' : 'right');
+                var keys = this.keys;
+                sim_key = trial.choices.map(function (k) { return k.toLowerCase(); })
+                    .find(function (k) { return keys[k] === side; }) || sim_key;
+            }
             var response_side = this.keys[sim_key];
 
             // Define default simulated values

@@ -295,6 +295,7 @@
             createTaskTimeline,
             DEMO_MODULE_ELEMENT_TIMELINE_NAME,
             getModuleInfo,
+            getTask,
             getTaskInfo
         } from '@api/index.js';
         import {
@@ -342,6 +343,12 @@
             window.participantID = normalizeParticipantCode(window.participantID);
         }
         window.simulating = window.participantID.includes("simulate") || false;
+        // Optional biased simulated participant for analysis checks: the card-choosing,
+        // reversal and go/no-go simulators pick the correct response with this probability.
+        const simAccuracy = parseFloat(parameters.get('sim_accuracy'));
+        if (window.simulating && simAccuracy >= 0 && simAccuracy <= 1) {
+            window.simulationAccuracy = simAccuracy;
+        }
         const isDemoParticipant = window.participantID.toLowerCase().includes('demo');
         const moduleName = parameters.get('module') || '';
         const taskName = parameters.get('task') || '';
@@ -444,7 +451,15 @@
                     });
                 } else if (taskName) {
                     console.log('Task info:', getTaskInfo(taskName));
-                    timeline = await createTaskTimeline(taskName);
+                    const taskConfig = { session: window.session };
+                    if (sessionConfig) {
+                        taskConfig.stimulus_session = sessionConfig.stimulusSession;
+                        taskConfig.session_number = Number(sessionNumber);
+                        if (getTask(taskName).sequences?.[sessionConfig.session]) {
+                            taskConfig.sequence = sessionConfig.session;
+                        }
+                    }
+                    timeline = await createTaskTimeline(taskName, taskConfig);
                 } else {
                     throw new Error('No module was selected. Please launch the experiment from the setup page.');
                 }
@@ -476,6 +491,7 @@
                     }
 
                     await jsPsych.simulate(fullTimeline, "visual", simulation_options);
+                    window.__simulationDone = true;
                 } else {
                     console.log('Running experiment...');
                     await jsPsych.run(fullTimeline);
