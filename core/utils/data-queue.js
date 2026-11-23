@@ -4,6 +4,7 @@ import {
     hasDeviceIdentity,
     refreshClockCalibration
 } from './device-auth.js';
+import { ensureSingleTab } from './single-tab.js';
 
 /**
  * Durable local outbox for REDCap submissions.
@@ -12,11 +13,10 @@ import {
  * are deliberately separate jobs:
  *
  *   - submitRecord() only writes the newest snapshot to IndexedDB. It never touches the
- *     network, so no failure on the sending side can ever cost data. The one thing it does
- *     consult is whether this session may hold data at all (isCollectionSuppressed) - a
- *     governance question, not a delivery one.
- *   - flushQueue() is the only code that sends. It runs one pass at a time and deletes an
- *     entry only once the endpoint has confirmed receipt.
+ *     network, so no failure on the sending side can ever cost data. Before writing it
+ *     checks that this is the active tab and collection is allowed (isCollectionSuppressed).
+ *   - flushQueue() is the only code that sends. It runs one pass at a time in the tab
+ *     holding the shared lifetime lock, and deletes an entry only after confirmed receipt.
  *
  * Because every save is a cumulative snapshot targeting one REDCap row (the relay imports
  * with overwriteBehavior "normal"), only the newest snapshot per record is ever worth
@@ -375,6 +375,7 @@ function isCollectionSuppressed() {
  * @returns {Promise<boolean>}
  */
 async function canSend() {
+    if (!(await ensureSingleTab())) return false;
     // A suppressed session stores nothing, but a backlog from an earlier one may still be
     // here - and must stay here while the device is unapproved.
     if (isCollectionSuppressed()) {
@@ -540,6 +541,9 @@ function reportStorageFailure(record_id, error) {
  * @returns {Promise<{stored: boolean, version: number|null}>}
  */
 async function submitRecord(record_id, payload) {
+    if (!(await ensureSingleTab())) {
+        throw new Error('Another VIREPS tab is already open, or this browser cannot safely run the tasks.');
+    }
     if (isCollectionSuppressed()) {
         return { stored: false, version: null };
     }
@@ -556,8 +560,12 @@ async function submitRecord(record_id, payload) {
 
 // Retry anything left by an earlier session as soon as this page loads.
 if (typeof window !== 'undefined') {
-    requestPersistentStorage();
-    flushQueue();
+    ensureSingleTab().then((allowed) => {
+        if (allowed) {
+            requestPersistentStorage();
+            flushQueue();
+        }
+    });
 }
 
 export {

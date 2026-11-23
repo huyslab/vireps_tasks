@@ -325,29 +325,22 @@ test.describe('data-queue', () => {
     expect(requestBodies.map((body) => body[0].snapshot_version)).toEqual([1, 2]);
   });
 
-  test('snapshot versions are allocated atomically across tabs', async ({ context, page }) => {
-    await context.route(REDCAP_ENDPOINT, async (route) => {
+  test('snapshot versions are allocated atomically for concurrent saves', async ({ page }) => {
+    await page.route(REDCAP_ENDPOINT, async (route) => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mocked failure"}' });
     });
 
-    const secondPage = await context.newPage();
-    await Promise.all([
-      page.goto('/validation/fixtures/data-queue.html'),
-      secondPage.goto('/validation/fixtures/data-queue.html')
-    ]);
-    await Promise.all([
-      page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true),
-      secondPage.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true)
-    ]);
+    await page.goto('/validation/fixtures/data-queue.html');
+    await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
 
-    const recordId = uniqueRecordId('cross-tab-version');
+    const recordId = uniqueRecordId('concurrent-version');
     await Promise.all([
       page.evaluate(
-        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'first' }])),
+        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, snapshot: 'first' }])),
         { id: recordId }
       ),
-      secondPage.evaluate(
-        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, tab: 'second' }])),
+      page.evaluate(
+        ({ id }) => window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, snapshot: 'second' }])),
         { id: recordId }
       )
     ]);

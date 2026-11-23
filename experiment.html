@@ -307,6 +307,7 @@
         } from '@utils/index.js';
         import { isDebugParticipantId, normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
         import { readCompletionReceipt } from './core/utils/completion-receipt.js';
+        import { ensureSingleTab } from './core/utils/single-tab.js';
 
         // Registered before anything else can save. A snapshot that cannot be written is the
         // one failure the outbox cannot recover from on its own, and nothing downstream
@@ -507,6 +508,7 @@
         // __redcapDemoMode is what stops the session's data from being stored at all, so it
         // is set before any task can run.
         async function startSession() {
+            if (!(await ensureSingleTab())) return;
             const participantError = participantIdValidationError(window.participantID);
             if (participantError) {
                 showExperimentError(new Error(participantError));

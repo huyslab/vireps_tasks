@@ -54,6 +54,17 @@ the address with a non-5xx error, the relay imports the snapshot again without i
 task data is saved and only that module's alerts are lost. Enrolled-device
 checks and demo/development suppression apply to these snapshots as usual.
 
+`single-tab.js` holds an exclusive Web Lock for the lifetime of the active task-site page.
+Other tabs display a blocking notice, cannot start a module, and cannot enqueue or send
+snapshots. The queue checks ownership before both storing and sending, so reopening setup
+beside an active experiment cannot create a second outbox sender. Closing the owner releases
+the lock; a blocked tab must reload using **Try again** to become active. There is no timed
+takeover of a backgrounded experiment. Browsers without Web Locks are blocked, rather than
+silently allowing concurrent tabs. This coordinates pages in one browser profile and origin;
+it cannot prevent a person opening another browser or profile.
+Finish active modules and close older task-site tabs before deploying the browser update;
+pages loaded before this change do not participate in the lock.
+
 `endExperiment` adds the relay-only boolean `module_completed: true`. The relay imports
 metadata, uploads the `data` file, and only after both succeed imports the
 `task_data_complete` field with value `2` (Complete), including when no email was requested.

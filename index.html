@@ -204,9 +204,13 @@
         import './core/utils/data-queue.js';
         import { normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
         import { prepareCompletionReceipt } from './core/utils/completion-receipt.js';
+        import { ensureSingleTab } from './core/utils/single-tab.js';
+
+        const activeTab = await ensureSingleTab();
 
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            if (!activeTab) return;
 
             const participantId = normalizeParticipantCode(document.getElementById('participantId').value);
             const sessionNumber = document.getElementById('sessionNumber').value;
