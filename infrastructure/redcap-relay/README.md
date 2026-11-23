@@ -30,9 +30,94 @@ The target REDCap project must contain:
 - `module`
 - `snapshot_version` — text field with integer validation
 - `data` — File field containing the raw jsPsych JSON
+- `clinician_email` — optional clinician recipient, text field with email validation
 
-Add `snapshot_version` before deploying this handler. REDCap can reject a record import when
-the payload contains a field that is absent from the project data dictionary.
+The existing Task Data instrument has REDCap's automatic `task_data_complete` field:
+`0` = Incomplete, `1` = Unverified, `2` = Complete. This was verified in the
+[VIREPS task data Codebook, project 9209](https://redcap.slms.ucl.ac.uk/redcap_v17.5.9/Design/data_dictionary_codebook.php?pid=9209)
+on 23 November 2026. No extra completion field or stack parameter is needed.
+
+Add `snapshot_version` and `clinician_email` before deploying this handler. REDCap can reject
+a record import when the payload contains a field absent from the project data dictionary.
+
+## Clinician alerts
+
+Each launched module/sitting has its own REDCap record. `index.html` accepts an optional
+clinician email and passes it through tab-scoped session storage using a random launch
+token. The address is never placed in the URL or added to individual jsPsych trial rows.
+It is included in queued REDCap metadata, including the initial snapshot queued by
+`enterExperiment`, so REDCap can register a warning while the module is still running.
+Another launch without an email does not inherit the previous recipient. Enrolled-device
+checks and demo/development suppression apply to these snapshots as usual.
+
+`endExperiment` adds the relay-only boolean `module_completed: true`. The relay imports
+metadata, uploads the `data` file, and only after both succeed imports the
+`task_data_complete` field with value `2` (Complete), including when no email was requested.
+The browser cannot set this field through the metadata allow-list. Checkpoints leave its
+status untouched, so they cannot reset a completed record. New module records use REDCap's
+default Incomplete status (`0`). A failed
+final upload or completion-status import returns a failure and leaves the snapshot queued
+for retry. The marker and recipient survive in IndexedDB even after the experiment page
+closes; a subsequent visit to the task site can retry them.
+
+Before deploying the browser feature:
+
+1. Add `clinician_email` to the Task Data instrument, with email validation. Its existing
+   `task_data_complete` variable is used for completion. Do not add a custom completion flag.
+2. Configure the two Alerts below in the target REDCap project, using a project-approved
+   From address. Both use **conditional logic during data import/data entry**, rather than
+   a form-save or survey-completion trigger. Set **Email To** to the `clinician_email`
+   field and configure each Alert to send **once per record**, with no repeats or expiry.
+3. Deploy the relay, then deploy the browser application. Existing saves without a
+   recipient remain compatible.
+4. Validate with a designated test recipient and an approved test device before study use.
+   Automated local tests mock REDCap; they do not configure Alerts or send email.
+
+| Alert | Trigger logic | Schedule |
+| --- | --- | --- |
+| Module data saved | `[clinician_email] <> '' and [task_data_complete] = '2'` | Immediately, once per record |
+| Completion/upload unconfirmed | `[clinician_email] <> '' and [task_data_complete] <> '2'` | 60 minutes after triggering, once per record; enable **Ensure logic is still true before sending** |
+
+The delayed Alert must recheck its condition before sending. A completion imported during
+the hour then suppresses the warning. If upload succeeds after a warning has already been
+sent, the separate completion Alert still sends its confirmation. Once-per-record settings
+prevent retries and repeated final callbacks from sending duplicate notifications.
+
+Suggested messages (no task results or raw-data attachments):
+
+**Completion subject:** `VIREPS module data saved`
+
+```text
+The completed module's task data has been saved to REDCap.
+Participant code: [participant_id]
+Session: [session]
+Module: [module]
+Sitting started: [sitting_start_time]
+```
+
+**Warning subject:** `VIREPS module completion/upload unconfirmed`
+
+```text
+REDCap registered this module about one hour ago but has not confirmed a completed upload.
+Participant code: [participant_id]
+Session: [session]
+Module: [module]
+Sitting started: [sitting_start_time]
+
+The module may still be running, may have been interrupted, or may have finished while
+offline. Data may still be stored on the tablet. Please check the tablet, reconnect it,
+and open the task site to allow pending uploads. Do not clear its browser storage.
+```
+
+The timer begins when the first recipient-bearing metadata import reaches REDCap, not
+when an offline module begins. A tablet offline from the outset cannot be monitored until
+that initial import arrives. REDCap cannot inspect the tablet's local queue: the warning
+means completion/upload is unconfirmed, not that local data is known to exist. Legitimately
+long modules can also produce the warning. These Alerts depend on REDCap's mail delivery
+and scheduled-job processing; inspect the Notification Log when validating their timing.
+
+REDCap documents [logic-based Alerts on imported data](https://help.redcap.ualberta.ca/help-and-faq/communications-alerts/alerts)
+and [delayed sending, recipient fields, and pre-send condition checking](https://redcapucdenver.zendesk.com/hc/en-us/articles/31119566714004-Alerts-Notifications).
 
 ## Deploy
 

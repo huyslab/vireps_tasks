@@ -65,6 +65,12 @@ The target REDCap project must contain all the fields listed in the
 
 - `snapshot_version`, configured as a text field with integer validation
 - `data`, configured as a File field
+- `clinician_email`, configured as a text field with email validation, for clinician alerts
+
+For the optional clinician emails, the relay uses the Task Data instrument's existing
+`task_data_complete` variable (`2` = Complete). Configure the
+[completion and one-hour Alerts](redcap-relay/README.md#clinician-alerts) before deploying
+the browser feature. There is no new completion-status field.
 
 Obtain the project's REDCap API URL and API token. Do not commit the token or save it in
 `samconfig.toml`.

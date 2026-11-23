@@ -4,7 +4,7 @@
  */
 
 // Import communication utility for sending messages to parent window
-import { postToParent } from './data-handling.js';
+import { postToParent, saveDataREDCap } from './data-handling.js';
 import { preventParticipantTermination } from './participation-validation.js';
 import { formatDateString } from './calculations.js';
 import { startScreenWakeLock } from './wake-lock.js';
@@ -239,6 +239,11 @@ const enterExperiment = {
 
         // Capture device/viewport covariates
         logDeviceInfo();
+
+        // Register a requested receipt immediately, so REDCap can schedule the one-hour
+        // warning even if this browser later closes or loses its connection. This uses
+        // the same durable outbox as checkpoints; demo/dev saves remain suppressed.
+        if (window.clinicianEmail) saveDataREDCap().catch(() => {});
     }
 };
 

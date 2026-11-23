@@ -70,6 +70,7 @@
         }
 
         input[type="text"],
+        input[type="email"],
         select {
             width: 100%;
             padding: 12px 16px;
@@ -84,6 +85,7 @@
         }
 
         input[type="text"]:focus,
+        input[type="email"]:focus,
         select:focus {
             border-color: var(--rlm-accent);
             box-shadow: 0 0 0 var(--rlm-focus-ring) rgba(74, 111, 165, 0.18);
@@ -175,6 +177,16 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="clinicianEmail">Clinician email (optional):</label>
+                <input type="email" id="clinicianEmail" name="clinicianEmail"
+                    maxlength="254" autocomplete="off" autocapitalize="none"
+                    spellcheck="false" aria-describedby="receiptHelp">
+                <p id="receiptHelp" class="subtitle" style="font-size: 14px; margin: 8px 0 0; text-align: left;">
+                    Receive a saved-data confirmation after this module, and a warning if completion is still unconfirmed after one hour.
+                </p>
+            </div>
+
             <button type="submit" class="start-button" id="startButton">
                 Start Experiment
             </button>
@@ -187,6 +199,7 @@
 
     <script type="module">
         import { normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
+        import { prepareCompletionReceipt } from './core/utils/completion-receipt.js';
 
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -223,6 +236,16 @@
                 session_number: sessionNumber,
                 module: moduleName
             });
+            const emailInput = document.getElementById('clinicianEmail');
+            emailInput.value = emailInput.value.trim();
+            if (!emailInput.reportValidity()) return;
+            try {
+                prepareCompletionReceipt(emailInput.value, parameters);
+            } catch {
+                errorMessage.textContent = 'The confirmation email could not be set up. Enable browser storage or clear the email field to continue without an email.';
+                errorMessage.style.display = 'block';
+                return;
+            }
             window.location.href = `experiment.html?${parameters.toString()}`;
         });
 

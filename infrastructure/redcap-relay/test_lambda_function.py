@@ -19,7 +19,7 @@ class FakeResponse:
 
 
 class LambdaHandlerTest(unittest.TestCase):
-    def valid_event(self):
+    def valid_event(self, **fields):
         return {
             "requestContext": {
                 "authorizer": {"authorized_record_id": "participant_session"}
@@ -34,6 +34,7 @@ class LambdaHandlerTest(unittest.TestCase):
                         "snapshot_version": 42,
                         "data": "{\"trials\":[]}",
                         "not_a_redcap_field": "discard me",
+                        **fields,
                     }
                 ]
             )
@@ -203,6 +204,86 @@ class LambdaHandlerTest(unittest.TestCase):
             },
         )
         self.assertEqual(post.call_count, 2)
+
+
+class ClinicianAlertTest(unittest.TestCase):
+    valid_event = LambdaHandlerTest.valid_event
+    @patch("lambda_function.requests.post")
+    def test_checkpoint_registers_recipient_without_marking_complete(self, post):
+        post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(200, 1)]
+        event = self.valid_event(clinician_email="clinician@example.test", task_data_complete="2")
+        result = lambda_function.lambda_handler(event, None)
+        self.assertEqual(result["statusCode"], 200)
+        imported = json.loads(post.call_args_list[0].kwargs["data"]["data"])[0]
+        self.assertEqual(imported["clinician_email"], "clinician@example.test")
+        self.assertNotIn("task_data_complete", imported)
+        self.assertEqual(post.call_count, 2)
+
+    @patch("lambda_function.requests.post")
+    def test_completion_is_written_only_after_successful_file_upload(self, post):
+        post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(200, 1), FakeResponse(200, {"count": 1})]
+        event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+        result = lambda_function.lambda_handler(event, None)
+        self.assertEqual(result["statusCode"], 200)
+        metadata = json.loads(post.call_args_list[0].kwargs["data"]["data"])[0]
+        self.assertNotIn("module_completed", metadata)
+        self.assertNotIn("task_data_complete", metadata)
+        self.assertIn("files", post.call_args_list[1].kwargs)
+        completion = json.loads(post.call_args_list[2].kwargs["data"]["data"])
+        self.assertEqual(completion, [{"record_id": "participant_session", "task_data_complete": "2"}])
+
+    @patch("lambda_function.requests.post")
+    def test_failed_final_file_upload_never_marks_complete(self, post):
+        post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(503, {"error": "unavailable"})]
+        event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+        result = lambda_function.lambda_handler(event, None)
+        self.assertEqual(result["statusCode"], 503)
+        self.assertEqual(post.call_count, 2)
+
+    @patch("lambda_function.requests.post")
+    def test_failed_completion_import_returns_failure_for_outbox_retry(self, post):
+        event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+        for response in [FakeResponse(503, {"error": "unavailable"}), FakeResponse(200, {"error": "invalid field"}), FakeResponse(200, {"count": 0})]:
+            with self.subTest(response=response.text):
+                post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(200, 1), response]
+                result = lambda_function.lambda_handler(event, None)
+                self.assertGreaterEqual(result["statusCode"], 500)
+
+    @patch("lambda_function.requests.post")
+    def test_successful_retry_reuses_the_same_completion_record(self, post):
+        post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(200, 1), FakeResponse(200, {"count": 1})] * 2
+        event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+        for _ in range(2):
+            self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 200)
+        self.assertEqual(post.call_args_list[2].kwargs, post.call_args_list[5].kwargs)
+
+    @patch("lambda_function.requests.post")
+    def test_rejects_invalid_recipient_and_completion_marker_before_writing(self, post):
+        for email in [None, "", ["a@example.test"], "a@example.test,b@example.test", "a@example.test\nbcc:other@example.test", "no-at-sign", "a" * 250 + "@example.test"]:
+            with self.subTest(email=email):
+                event = self.valid_event(clinician_email=email)
+                self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 400)
+        for marker in ["true", 1, None, {}]:
+            event = self.valid_event(clinician_email="clinician@example.test", module_completed=marker)
+            self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 400)
+        post.assert_not_called()
+
+    @patch("lambda_function.requests.post")
+    def test_completion_status_is_updated_even_without_an_email(self, post):
+        post.side_effect = [FakeResponse(200, {"count": 1}), FakeResponse(200, 1), FakeResponse(200, {"count": 1})]
+        self.assertEqual(lambda_function.lambda_handler(self.valid_event(module_completed=True), None)["statusCode"], 200)
+        completion = json.loads(post.call_args_list[2].kwargs["data"]["data"])[0]
+        self.assertEqual(completion["task_data_complete"], "2")
+
+    @patch("lambda_function.requests.post")
+    def test_http_success_with_redcap_error_never_marks_complete(self, post):
+        event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+        for responses in [[FakeResponse(200, {"error": "metadata failed"})], [FakeResponse(200, {"count": 1}), FakeResponse(200, {"error": "file failed"})]]:
+            with self.subTest(responses=len(responses)):
+                post.reset_mock()
+                post.side_effect = responses
+                self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 502)
+                self.assertEqual(post.call_count, len(responses))
 
 
 if __name__ == "__main__":

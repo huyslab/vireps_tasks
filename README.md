@@ -20,6 +20,14 @@ The code is stored as `participant_id` in task data and as `task_code` in clinic
 REDCap project 9123. Its numeric `uin` remains an internal record key. See
 [`docs/participant-codes.md`](docs/participant-codes.md) for the fixed mapping and checks.
 
+The launcher also accepts an optional clinician email for this module. Once configured in
+REDCap, the clinician receives a confirmation after module completion and successful upload,
+or a warning if completion/upload is still unconfirmed an hour after registration reaches
+REDCap. Checkpoints never send completion confirmations. An offline tablet must reconnect
+before REDCap can register the warning; pending snapshots retry when the task site is open.
+See [clinician alerts setup](infrastructure/redcap-relay/README.md#clinician-alerts) before
+deploying the launcher with this feature.
+
 Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 `createTaskTimeline()` and the launcher take.
 

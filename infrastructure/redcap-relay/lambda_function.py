@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from os import environ
 
 import requests
@@ -24,7 +25,28 @@ def response_body(response):
 
 
 def response_succeeded(response):
-    return 200 <= response.status_code < 300
+    body = response_body(response)
+    return (
+        200 <= response.status_code < 300
+        and not (isinstance(body, dict) and "error" in body)
+        and not (isinstance(body, dict) and "count" in body and body["count"] != 1)
+    )
+
+
+def failure_status(response):
+    # REDCap may report an application error in an HTTP-success response. The browser
+    # must retain that snapshot for retry rather than treating a 200 as a receipt.
+    return response.status_code if not 200 <= response.status_code < 300 else 502
+
+
+def valid_email(value):
+    # Match the browser email input's single-address format; reject lists and controls.
+    return isinstance(value, str) and len(value) <= 254 and re.fullmatch(
+        r"[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+        r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+        r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*",
+        value,
+    ) is not None
 
 
 def upload_file_to_redcap(record, file_content):
@@ -76,6 +98,11 @@ def lambda_handler(event, context):
     if not isinstance(record.get("data"), str):
         return lambda_response(400, {"error": "Record data must be a string"})
 
+    if "clinician_email" in record and not valid_email(record["clinician_email"]):
+        return lambda_response(400, {"error": "Clinician email must be a single valid address"})
+    if "module_completed" in record and not isinstance(record["module_completed"], bool):
+        return lambda_response(400, {"error": "Module completion must be a boolean"})
+
     def select_keys(record, keys):
         return {key: record[key] for key in keys if key in record}
 
@@ -89,6 +116,7 @@ def lambda_handler(event, context):
         "session",
         "module",
         "snapshot_version",
+        "clinician_email",
     ]
     data_stripped = [select_keys(record, record_keys)]
 
@@ -109,7 +137,7 @@ def lambda_handler(event, context):
 
     if not response_succeeded(record_response):
         return lambda_response(
-            record_response.status_code,
+            failure_status(record_response),
             {
                 "record_import_response": response_body(record_response),
                 "file_upload_response": None,
@@ -122,11 +150,25 @@ def lambda_handler(event, context):
     print(f"File upload status: {file_upload_response.status_code}")
     print(f"File upload response: {file_upload_response.text}")
 
-    status_code = (
-        record_response.status_code
-        if response_succeeded(file_upload_response)
-        else file_upload_response.status_code
-    )
+    # The instrument's completion field is absent from the first import's allow-list.
+    # Importing it before the file arrives could email a false confirmation. Checkpoints
+    # never set or clear it; REDCap's once-per-record Alert setting deduplicates retries.
+    if (response_succeeded(file_upload_response)
+            and record.get("module_completed") is True):
+        completion_data = {
+            **data,
+            "data": json.dumps([{"record_id": record_id, "task_data_complete": "2"}]),
+        }
+        completion_response = requests.post(redcap_url, data=completion_data)
+        if not response_succeeded(completion_response):
+            return lambda_response(failure_status(completion_response), {
+                "record_import_response": response_body(record_response),
+                "file_upload_response": file_upload_response.status_code,
+                "completion_import_response": response_body(completion_response),
+            })
+
+    status_code = (200 if response_succeeded(file_upload_response)
+                   else failure_status(file_upload_response))
     return lambda_response(
         status_code,
         {
