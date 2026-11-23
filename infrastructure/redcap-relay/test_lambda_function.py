@@ -259,7 +259,8 @@ class ClinicianAlertTest(unittest.TestCase):
 
     @patch("lambda_function.requests.post")
     def test_rejects_invalid_recipient_and_completion_marker_before_writing(self, post):
-        for email in [None, "", ["a@example.test"], "a@example.test,b@example.test", "a@example.test\nbcc:other@example.test", "no-at-sign", "a" * 250 + "@example.test"]:
+        for email in [None, "", ["a@example.test"], "a@example.test,b@example.test", "a@example.test\nbcc:other@example.test", "no-at-sign", "a" * 250 + "@example.test",
+                      "name@ucl", "x@localhost", "a..b@ucl.ac.uk", ".a@ucl.ac.uk", "a.@ucl.ac.uk", "a@ucl.ac.u", "a@ucl.ac.uk1"]:
             with self.subTest(email=email):
                 event = self.valid_event(clinician_email=email)
                 self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 400)
@@ -267,6 +268,33 @@ class ClinicianAlertTest(unittest.TestCase):
             event = self.valid_event(clinician_email="clinician@example.test", module_completed=marker)
             self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 400)
         post.assert_not_called()
+
+    def test_accepts_ordinary_addresses(self):
+        for email in ["name@ucl.ac.uk", "first.last+tag@nhs.net", "a_b-c@sub.example.co.uk"]:
+            with self.subTest(email=email):
+                self.assertTrue(lambda_function.valid_email(email))
+
+    @patch("lambda_function.requests.post")
+    def test_rejected_recipient_falls_back_to_importing_data_without_it(self, post):
+        for rejection in [FakeResponse(400, {"error": "clinician_email failed validation"}), FakeResponse(200, {"error": "unknown field"})]:
+            with self.subTest(status=rejection.status_code):
+                post.reset_mock()
+                post.side_effect = [rejection, FakeResponse(200, {"count": 1}), FakeResponse(200, 1), FakeResponse(200, {"count": 1})]
+                event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
+                self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 200)
+                retried = json.loads(post.call_args_list[1].kwargs["data"]["data"])[0]
+                self.assertNotIn("clinician_email", retried)
+                self.assertEqual(retried["record_id"], "participant_session")
+                self.assertIn("files", post.call_args_list[2].kwargs)
+                completion = json.loads(post.call_args_list[3].kwargs["data"]["data"])
+                self.assertEqual(completion, [{"record_id": "participant_session", "task_data_complete": "2"}])
+
+    @patch("lambda_function.requests.post")
+    def test_transient_failure_with_recipient_is_left_for_outbox_retry(self, post):
+        post.side_effect = [FakeResponse(503, {"error": "unavailable"})]
+        event = self.valid_event(clinician_email="clinician@example.test")
+        self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 503)
+        self.assertEqual(post.call_count, 1)
 
     @patch("lambda_function.requests.post")
     def test_completion_status_is_updated_even_without_an_email(self, post):
@@ -278,7 +306,8 @@ class ClinicianAlertTest(unittest.TestCase):
     @patch("lambda_function.requests.post")
     def test_http_success_with_redcap_error_never_marks_complete(self, post):
         event = self.valid_event(clinician_email="clinician@example.test", module_completed=True)
-        for responses in [[FakeResponse(200, {"error": "metadata failed"})], [FakeResponse(200, {"count": 1}), FakeResponse(200, {"error": "file failed"})]]:
+        # A metadata rejection is retried once without the recipient before failing.
+        for responses in [[FakeResponse(200, {"error": "metadata failed"})] * 2, [FakeResponse(200, {"count": 1}), FakeResponse(200, {"error": "file failed"})]]:
             with self.subTest(responses=len(responses)):
                 post.reset_mock()
                 post.side_effect = responses

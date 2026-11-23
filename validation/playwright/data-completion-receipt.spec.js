@@ -49,6 +49,15 @@ test('invalid clinician emails block launch and a blank address remains optional
   await page.locator('#startButton').click();
   await expect(page).toHaveURL(/index\.html$/);
   expect(await page.locator('#clinicianEmail').evaluate((input) => input.validity.typeMismatch)).toBe(true);
+  // Addresses the browser accepts but REDCap's email validation would reject.
+  for (const address of ['name@ucl', 'x@localhost', 'a..b@ucl.ac.uk', 'a.@ucl.ac.uk']) {
+    await page.locator('#clinicianEmail').fill(address);
+    await page.locator('#startButton').click();
+    await expect(page).toHaveURL(/index\.html$/);
+    expect(await page.locator('#clinicianEmail').evaluate((input) => input.validity.valid), address).toBe(false);
+  }
+  await page.locator('#clinicianEmail').fill('first.last+tag@ucl.ac.uk');
+  expect(await page.locator('#clinicianEmail').evaluate((input) => input.validity.valid)).toBe(true);
   await page.locator('#clinicianEmail').fill('');
   await page.locator('#startButton').click();
   await expect(page).toHaveURL(/experiment\.html\?/);

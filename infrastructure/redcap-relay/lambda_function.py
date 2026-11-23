@@ -39,14 +39,21 @@ def failure_status(response):
     return response.status_code if not 200 <= response.status_code < 300 else 502
 
 
+EMAIL_LOCAL_ATOM = r"[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+"
+EMAIL_DOMAIN_LABEL = r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+EMAIL_PATTERN = re.compile(
+    rf"{EMAIL_LOCAL_ATOM}(?:\.{EMAIL_LOCAL_ATOM})*@"
+    rf"(?:{EMAIL_DOMAIN_LABEL}\.)+[a-zA-Z]{{2,63}}"
+)
+
+
 def valid_email(value):
-    # Match the browser email input's single-address format; reject lists and controls.
-    return isinstance(value, str) and len(value) <= 254 and re.fullmatch(
-        r"[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@"
-        r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
-        r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*",
-        value,
-    ) is not None
+    # A single address in the format REDCap's email validation accepts: no leading,
+    # trailing or doubled dots in the local part, and a dotted domain ending in a
+    # 2-63 letter top-level domain. The browser's looser type="email" check alone
+    # would let REDCap reject the whole metadata import for addresses like name@ucl.
+    return (isinstance(value, str) and len(value) <= 254
+            and EMAIL_PATTERN.fullmatch(value) is not None)
 
 
 def upload_file_to_redcap(record, file_content):
@@ -134,6 +141,20 @@ def lambda_handler(event, context):
     record_response = requests.post(redcap_url, data=data)
     print(f"Record status: {record_response.status_code}")
     print(f"Record response: {record_response.text}")
+
+    # The recipient is optional; the task data is not. If REDCap rejects the import for
+    # a non-transient reason while an address is present (for example, a validation rule
+    # stricter than ours, or a project missing the field), import again without it rather
+    # than leaving the snapshot retrying forever. 5xx responses are left to the outbox.
+    if (not response_succeeded(record_response)
+            and record_response.status_code < 500
+            and "clinician_email" in data_stripped[0]):
+        print("Record import with clinician_email rejected; retrying without it")
+        data_stripped[0].pop("clinician_email")
+        data["data"] = json.dumps(data_stripped)
+        record_response = requests.post(redcap_url, data=data)
+        print(f"Record status (without clinician_email): {record_response.status_code}")
+        print(f"Record response (without clinician_email): {record_response.text}")
 
     if not response_succeeded(record_response):
         return lambda_response(

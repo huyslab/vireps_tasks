@@ -47,7 +47,11 @@ clinician email and passes it through tab-scoped session storage using a random 
 token. The address is never placed in the URL or added to individual jsPsych trial rows.
 It is included in queued REDCap metadata, including the initial snapshot queued by
 `enterExperiment`, so REDCap can register a warning while the module is still running.
-Another launch without an email does not inherit the previous recipient. Enrolled-device
+Another launch without an email does not inherit the previous recipient. The launcher and
+relay accept only addresses REDCap's email validation accepts (a dotted domain ending in a
+letters-only top-level domain, no doubled dots). If REDCap still rejects an import carrying
+the address with a non-5xx error, the relay imports the snapshot again without it, so the
+task data is saved and only that module's alerts are lost. Enrolled-device
 checks and demo/development suppression apply to these snapshots as usual.
 
 `endExperiment` adds the relay-only boolean `module_completed: true`. The relay imports
