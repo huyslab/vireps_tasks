@@ -39,6 +39,9 @@ def failure_status(response):
     return response.status_code if not 200 <= response.status_code < 300 else 502
 
 
+# Failures worth retrying unchanged rather than treating as a rejection of the payload.
+TRANSIENT_STATUS_CODES = {408, 429}
+
 EMAIL_LOCAL_ATOM = r"[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+"
 EMAIL_DOMAIN_LABEL = r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
 EMAIL_PATTERN = re.compile(
@@ -145,9 +148,11 @@ def lambda_handler(event, context):
     # The recipient is optional; the task data is not. If REDCap rejects the import for
     # a non-transient reason while an address is present (for example, a validation rule
     # stricter than ours, or a project missing the field), import again without it rather
-    # than leaving the snapshot retrying forever. 5xx responses are left to the outbox.
+    # than leaving the snapshot retrying forever. Transient failures (5xx, 408 timeouts,
+    # 429 rate limits) are left to the outbox, so its retry still carries the address.
     if (not response_succeeded(record_response)
             and record_response.status_code < 500
+            and record_response.status_code not in TRANSIENT_STATUS_CODES
             and "clinician_email" in data_stripped[0]):
         print("Record import with clinician_email rejected; retrying without it")
         data_stripped[0].pop("clinician_email")

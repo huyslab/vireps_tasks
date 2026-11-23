@@ -196,3 +196,47 @@ test('reopening setup on a device the relay confirms is unapproved leaves the qu
   }));
   expect(remaining).toBe(1);
 });
+
+test('reopening setup waits for an abandoned checkpoint request before sending the final snapshot', async ({ page, context }) => {
+  // Closing the tab abandons its request, but the relay Lambda keeps running. Sending the
+  // final snapshot at once could let the late checkpoint overwrite the data file after the
+  // record is marked Complete, so the outbox must wait out the in-flight lease.
+  const LEASE_MS = 2000;
+  await context.addInitScript((lease) => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
+    window.__forceOnlineRedcapForTesting = true;
+    window.__redcapRetryDelayMsForTesting = 100;
+    window.__redcapInFlightLeaseMsForTesting = lease;
+    window.__redcapDeviceSignerForTesting = async () => ({});
+  }, LEASE_MS);
+  let abandonedAt = null;
+  const delivered = [];
+  await context.route(REDCAP_ENDPOINT, async (route) => {
+    const record = route.request().postDataJSON()[0];
+    if (abandonedAt === null) {
+      abandonedAt = Date.now();
+      return; // Never answered: stands in for a slow Lambda the browser stops waiting for.
+    }
+    delivered.push({ ...record, at: Date.now() });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+
+  const recordId = 'in_flight_record';
+  await page.goto('/validation/fixtures/data-queue.html');
+  await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+  await page.evaluate((id) => {
+    window.__dataQueue.submitRecord(id, JSON.stringify([{ record_id: id, data: 'checkpoint' }]));
+  }, recordId);
+  await expect.poll(() => abandonedAt).not.toBeNull();
+  await page.evaluate((id) => window.__dataQueue.submitRecord(
+    id, JSON.stringify([{ record_id: id, data: 'final', module_completed: true }])
+  ), recordId);
+  await page.close();
+
+  const reopened = await context.newPage();
+  await reopened.goto('/index.html');
+  await expect.poll(() => delivered.length, { timeout: LEASE_MS + 5000 }).toBe(1);
+  expect(delivered[0].data).toBe('final');
+  expect(delivered[0].module_completed).toBe(true);
+  expect(delivered[0].at - abandonedAt).toBeGreaterThanOrEqual(LEASE_MS);
+});

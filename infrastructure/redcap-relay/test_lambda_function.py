@@ -291,10 +291,15 @@ class ClinicianAlertTest(unittest.TestCase):
 
     @patch("lambda_function.requests.post")
     def test_transient_failure_with_recipient_is_left_for_outbox_retry(self, post):
-        post.side_effect = [FakeResponse(503, {"error": "unavailable"})]
-        event = self.valid_event(clinician_email="clinician@example.test")
-        self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], 503)
-        self.assertEqual(post.call_count, 1)
+        # Dropping the address on a retryable failure would let the fallback succeed and
+        # dequeue the snapshot without a recipient, losing both alerts.
+        for status in [503, 408, 429]:
+            with self.subTest(status=status):
+                post.reset_mock()
+                post.side_effect = [FakeResponse(status, {"error": "try again"})]
+                event = self.valid_event(clinician_email="clinician@example.test")
+                self.assertEqual(lambda_function.lambda_handler(event, None)["statusCode"], status)
+                self.assertEqual(post.call_count, 1)
 
     @patch("lambda_function.requests.post")
     def test_completion_status_is_updated_even_without_an_email(self, post):

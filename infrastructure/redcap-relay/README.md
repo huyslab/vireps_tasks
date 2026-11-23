@@ -64,6 +64,12 @@ loses anything since the last checkpoint. There is no timed
 takeover of a backgrounded experiment. Browsers without Web Locks are blocked, rather than
 silently allowing concurrent tabs. This coordinates pages in one browser profile and origin;
 it cannot prevent a person opening another browser or profile.
+The lock serializes senders, not relay invocations: a request the browser abandons (a
+timeout, a dropped connection, a closed tab) keeps running in the Lambda. The outbox
+therefore stamps each record in IndexedDB while a request for it is outstanding, and no page
+sends that record again for 45 seconds unless the relay has answered (any response but an
+API Gateway 504). This keeps a late checkpoint from overwriting a final snapshot already
+marked Complete. The lease must stay longer than the function's `Timeout` in `template.yaml`.
 Finish active modules and close older task-site tabs before deploying the browser update;
 pages loaded before this change do not participate in the lock.
 
