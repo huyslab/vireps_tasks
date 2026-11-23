@@ -349,7 +349,10 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
 
   const faceBox = await face.boundingBox();
   const coinBox = await page.locator('#gng-coin').boundingBox();
-  const goCoinWidth = coinBox.width;
+  // Point text has a variable width (+1 versus +10), so compare its fixed
+  // height across actions. Coin images can still be compared by width.
+  const outcomeIsPoints = await page.locator('#gng-coin').evaluate((el) => el.classList.contains('gng-points'));
+  const goOutcomeSize = outcomeIsPoints ? coinBox.height : coinBox.width;
   // Assert the coin's TOP edge, not its centre: what matters is how much of the
   // face it covers. Mouths sit around 0.72-0.75 of the frame in CFD framing, so
   // the coin hanging below 0.85 leaves the whole face clear.
@@ -399,12 +402,12 @@ async function goNoGoJourney(page, testInfo, hasTouch) {
       'no-go coin should sit lower than the go coin, relative to the face'
     ).toBeGreaterThan(goTopFraction);
   }
-  if (nogoCoin && goCoinWidth) {
-    const observed = goCoinWidth / nogoCoin.width;
+  if (nogoCoin && goOutcomeSize) {
+    const observed = goOutcomeSize / (outcomeIsPoints ? nogoCoin.height : nogoCoin.width);
     const expected = Math.sqrt(1.4 / 0.65); // grow_scale / shrink_scale
     expect(
       Math.abs(observed - expected),
-      `coin should scale by sqrt of the face scale: go/no-go width ratio ${observed.toFixed(2)}, expected ${expected.toFixed(2)}`
+      `outcome should scale by sqrt of the face scale: go/no-go size ratio ${observed.toFixed(2)}, expected ${expected.toFixed(2)}`
     ).toBeLessThan(0.15);
   }
 

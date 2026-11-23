@@ -22,19 +22,18 @@ running the selection script first, the task will fail to load its images.
 
 ## The trial
 
-1. A face appears mid-screen at full size, **no onset animation**, lit by a
-   coloured **rim light**: blue where there is money to win, amber where there is
-   money to lose. RobotFactory runs a 1500 ms scanner animation and only then
-   opens its listener; here the response window opens at cue onset, so RT is
-   measured from onset and the light is up for all of it.
+1. A face appears mid-screen at full size, **no onset animation**. A solid blue
+   frame signals points to win and a double amber frame signals points to lose.
+   The response window opens when the face and frame appear.
 2. **1800 ms** to respond. A tap on the face (touch) or the spacebar (desktop) is
    GO; letting the window elapse is NO-GO.
 3. The face **grows** on a go response (1.4×) and **shrinks** on a no-go (0.65×),
    signalling approach vs withdrawal. This tracks the action taken, not whether
    it was correct, so it fires on error trials too.
 4. Feedback, for **1600 ms**: a distinct sound plays and the outcome flies out of
-   the face to land low on the torso — £1 for +10, broken £1 for −10, 1p for +1,
-   broken 1p for −1, or the signed value in points mode. The rim light stays lit.
+   the face to land low on the torso: **+10, +1, −1 or −10 points**. There is no
+   correctness wash. Outcomes remain probabilistic: a better action can still
+   receive the worse score. The sound follows the score, not correctness.
 5. 400 ms blank ITI.
 
 Go trials end their response phase as soon as the response arrives, so trial
@@ -47,45 +46,16 @@ intended 1600 ms.
 
 ### Signalling the outcome domain
 
-The rim light is RobotFactory's scanner light in another form. Sam's is a CSS
-trapezoid over the robot in `mix-blend-mode: soft-light`, faded in over the last
-10% of his intro animation; ours is a `drop-shadow` on the transparent cue, up
-from the first paint.
+The screen frame serves the same role as RobotFactory's scanner light.
+It separates the cue from the photo and uses both colour and line pattern.
+The mapping is fixed for everyone and is taught in the instructions and
+practice. The frame stays visible through feedback and clears with the face
+before the blank interval.
 
-Two decisions are worth recording, because both were made against alternatives:
-
-- **Hue means exactly one thing.** Colour may mark the outcome domain at cue
-  onset (`signal_valence`) or correctness at feedback (`feedback_tint`), but not
-  both in the same trial, or the same dimension means two things 300 ms apart.
-
-  **What the study runs:** `signal_valence: false`, `feedback_tint: true` — no rim
-  light, and the screen washes green or red for right and wrong. Valence is part
-  of what the task measures here, so it is not given away at onset, and that
-  leaves colour free to carry correctness. This is the registry configuration
-  (`api/task-registry.js`) and what the instructions describe.
-
-  **The plugin's own defaults are the opposite** (`signal_valence: true`,
-  `feedback_tint: false`) and are what you get calling the plugin directly. The
-  signalled arrangement carries correctness on the outcome, its fly-out and the
-  sound instead — £1 and 1p occur only in the win domain, the broken coins only
-  in the loss domain — so dropping the wash costs no information there.
-- **The light hugs the silhouette; it does not wash over the face.** The cues are
-  angry and happy faces, and the colour is perfectly correlated with reward
-  valence, so tinting the skin could shift how the expression reads — and that
-  shift would be indistinguishable from a valence × affect interaction. Lighting
-  the outline leaves every face pixel untouched.
-
-Blue for win, amber for avoid-loss, **fixed for everyone** rather than
-counterbalanced. Signalling the domain makes this an action-learning task, as in
-Zorowitz's study02; `signal_valence: false` puts valence back into the problem.
-
-Implementation note: the light is a filter on a `.gng-glow` wrapper, not on the
-image. The image is masked at the bottom, masking is applied *after* filtering
-and clips to the border box, so a drop-shadow on the image itself would be cut
-off wherever it spread past the frame. The same mask also has to fade
-*gradually* — the glow traces whatever edge the mask leaves, and an abrupt one
-drew a lit horizontal bar under the shoulders, outlining the very cut-out edge
-the mask exists to hide.
+**Study defaults:** `outcome_display: 'points'`, `feedback_tint: false`, and
+`signal_valence: true`. The example accepts `signal_valence=0` to try the
+task without the frame. The legacy correctness wash remains opt-in for
+comparison and reveals the optimal action even on misleading outcome trials.
 
 ### Why the feedback looks the way it does
 
@@ -107,14 +77,11 @@ Each element earns its place, and several were added after testing on a tablet:
 - **Sound** carries the outcome even if the coin is missed. Four synthesised
   tones in `assets/sounds/go-no-go/`, ours, ~2 KB each. `play_sounds: false` runs
   the task silently.
-- **Points instead of coins.** `outcome_display: 'points'` replaces the coin
+- **Points are the default.** `outcome_display: 'points'` replaces the coin
   images with Sam's values — +10, +1, −1, −10 — in the same place, at the same
   size, with the same fly-out, and adapts the instructions and the comprehension
   check to match (£1 → 10 points, 1p → 1 point, "a broken coin" → "a minus
   number").
-- **Transparent stimuli** are what make the rim light work: `drop-shadow` follows
-  the alpha channel, so on CFD's white-background frames it would outline the
-  rectangle rather than the person.
 
 ## Sequence
 
