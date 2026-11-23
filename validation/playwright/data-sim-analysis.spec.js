@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ACCURACY, N_PARTICIPANTS, SESSION_NUMBER, TASKS, simDataFilename } from '../sim-data-config.js';
 
 /**
  * Generates simulated datasets for the analysis checks in validation/analysis/.
@@ -8,24 +9,13 @@ import path from 'node:path';
  * Each task runs through experiment.html in jsPsych's visual simulate mode with a
  * biased simulated participant (sim_accuracy: the probability of the optimal / correct
  * response), so learning curves and condition effects show up in the plots. The full
- * jsPsych data (as saved to REDCap, minus `stimulus`) is written to
- * validation/sim-data/<task>_sim<k>.json, which validation/analysis/run_sim_analysis.R
- * reads.
+ * jsPsych data (as saved to REDCap, minus `stimulus`) is written to the run directory
+ * supplied by npm run sim:data. The R analysis reads the latest complete run.
  *
  * Run with: npm run sim:data   (then npm run sim:analyse)
  */
 
-const OUT_DIR = path.join(process.cwd(), 'validation', 'sim-data');
-const N_PARTICIPANTS = Number(process.env.SIM_N || 3);
-const ACCURACY = Number(process.env.SIM_ACCURACY || 0.75);
-const SESSION_NUMBER = 1; // wk0
-
-const TASKS = [
-  { task: 'PILT', mainPhase: 'pilt' },
-  { task: 'post_PILT_test', mainPhase: 'pilt_test' },
-  { task: 'reversal', mainPhase: 'reversal' },
-  { task: 'go_no_go', mainPhase: 'go_no_go' },
-];
+const OUT_DIR = process.env.SIM_DATA_DIR;
 
 test.describe.configure({ mode: 'parallel' });
 
@@ -56,20 +46,30 @@ for (const { task, mainPhase } of TASKS) {
         .toBe(true);
 
       const trials = await page.evaluate(() => window.jsPsych.data.get().ignore('stimulus').values());
-      fs.mkdirSync(OUT_DIR, { recursive: true });
-      fs.writeFileSync(
-        path.join(OUT_DIR, `${task}_sim${k}.json`),
-        JSON.stringify({ task, participant: k, sim_accuracy: ACCURACY, session_number: SESSION_NUMBER, trials })
-      );
-
       expect(errors, `page errors:\n${errors.join('\n')}`).toEqual([]);
       const main = trials.filter((t) => t.trialphase === mainPhase);
       expect(main.length, `${task} recorded ${mainPhase} trials`).toBeGreaterThan(0);
+
+      if (task === 'post_PILT_test') {
+        expect(main.some(t => t.block === 'pavlovian'), 'Pavlovian trials ran').toBe(true);
+        const preload = trials.find(t => t.trial_type === 'preload');
+        expect(preload, 'PILT test preloaded the instrumental and Pavlovian images').toMatchObject({
+          success: true,
+          failed_images: [],
+        });
+      }
 
       if (task === 'go_no_go') {
         const responses = new Set(main.map((t) => t.response));
         expect(responses, 'simulated GNG presses on some trials').toContain('go');
         expect(responses, 'simulated GNG withholds on some trials').toContain('nogo');
+      }
+
+      if (OUT_DIR) {
+        fs.writeFileSync(
+          path.join(OUT_DIR, simDataFilename(task, k)),
+          JSON.stringify({ task, participant: k, sim_accuracy: ACCURACY, session_number: SESSION_NUMBER, trials })
+        );
       }
     });
   }

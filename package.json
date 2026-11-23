@@ -7,7 +7,7 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report",
-    "sim:data": "playwright test data-sim-analysis --project=\"data invariants\"",
+    "sim:data": "node validation/run-sim-data.js",
     "sim:analyse": "docker run --rm --platform linux/amd64 -v \"$PWD\":/work -w /work ghcr.io/huyslab/relmed:latest Rscript validation/analysis/run_sim_analysis.R",
     "sim:analyse:local": "Rscript validation/analysis/run_sim_analysis.R"
   },

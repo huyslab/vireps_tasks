@@ -568,6 +568,12 @@ Run a subset with `npx playwright test --project="iPhone 14"`,
 `--project="iPhone 14 (journey)"` or `--project="data invariants"` (see
 `playwright.config.js` for the device list).
 
+Run the simulated-data analysis with `npm run sim:data && npm run sim:analyse`.
+`SIM_N` and `SIM_ACCURACY` set the participant count and accuracy for data generation
+and default to 3 and 0.75. The analysis reads the latest complete run and writes
+`validation/analysis/output/sim_report.md`. Use `npm run sim:analyse:local` to run
+with local R instead of the RELMED Docker image.
+
 Two things worth knowing before trusting a red run:
 
 - The static server is `python3 -m http.server`. Under full parallelism it can be

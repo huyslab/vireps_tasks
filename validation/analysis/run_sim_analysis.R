@@ -3,7 +3,7 @@
 # analyses need, runs those analyses (plus new GNG / PILT-test plots), and writes
 # a Markdown report with the plots to validation/analysis/output/sim_report.md.
 #
-#   npm run sim:data      # Playwright: simulate participants -> validation/sim-data/*.json
+#   npm run sim:data      # Playwright: simulate participants and publish a complete run
 #   npm run sim:analyse   # this script
 #
 # Exits non-zero if any check fails.
@@ -43,23 +43,46 @@ flatten_trial <- function(tr) {
   })
 }
 
-files <- list.files(data_dir, pattern = "\\.json$", full.names = TRUE)
-if (!length(files)) stop("No simulated data in ", data_dir, " - run `npm run sim:data` first.")
+manifest_path <- file.path(data_dir, "latest.json")
+if (!file.exists(manifest_path)) stop("No complete simulation run - run `npm run sim:data` first.")
+manifest <- fromJSON(manifest_path, simplifyVector = FALSE)
+n_participants <- manifest$participants
+sim_accuracy <- manifest$sim_accuracy
+session <- unname(SESSION_MAP[as.character(manifest$session_number)])
+if (!isTRUE(grepl("^run-[[:alnum:]]+$", manifest$run)) ||
+    !isTRUE(is.numeric(n_participants) && is.finite(n_participants) &&
+            n_participants >= 1 && n_participants == floor(n_participants)) ||
+    !isTRUE(is.numeric(sim_accuracy) && is.finite(sim_accuracy) && sim_accuracy >= 0 && sim_accuracy <= 1) ||
+    !isTRUE(!is.na(session))) {
+  stop("Invalid simulation run manifest: ", manifest_path)
+}
 
-runs <- lapply(files, function(f) {
-  raw <- fromJSON(f, simplifyVector = FALSE)
+expected <- expand_grid(
+  task = c("PILT", "post_PILT_test", "reversal", "go_no_go"),
+  participant = seq_len(n_participants)
+)
+files <- file.path(data_dir, manifest$run, sprintf("%s_sim%d.json", expected$task, expected$participant))
+missing <- files[!file.exists(files)]
+if (length(missing)) stop("Simulation run is incomplete. Missing datasets: ", paste(basename(missing), collapse = ", "))
+
+runs <- lapply(seq_along(files), function(i) {
+  raw <- fromJSON(files[i], simplifyVector = FALSE)
+  if (!identical(raw$task, expected$task[i]) || !identical(raw$participant, expected$participant[i]) ||
+      !identical(raw$sim_accuracy, sim_accuracy) || !identical(raw$session_number, manifest$session_number) ||
+      !length(raw$trials)) {
+    stop("Dataset does not match its simulation run manifest: ", files[i])
+  }
   df <- bind_rows(lapply(raw$trials, flatten_trial)) |> type.convert(as.is = TRUE)
   df |> mutate(
     sim_task = raw$task,
     participant_id = sprintf("REL-SIM-%04d", as.integer(raw$participant)),
-    session = unname(SESSION_MAP[as.character(raw$session_number)]),
+    session = .env$session,
     .before = 1
   )
 })
 names(runs) <- basename(files)
 by_task <- split(runs, vapply(runs, function(d) d$sim_task[1], ""))
 task_df <- lapply(by_task, bind_rows)
-sim_accuracy <- unique(unlist(lapply(files, function(f) fromJSON(f)$sim_accuracy)))
 
 # ---- Checks ------------------------------------------------------------------
 
@@ -69,13 +92,20 @@ add_check <- function(task, check, ok, detail = "") {
                                           result = ifelse(isTRUE(ok), "PASS", "FAIL"),
                                           detail = detail)
 }
-check_columns <- function(task, df, cols, source) {
+check_columns <- function(task, df, cols, source, allow_missing = list()) {
   for (col in cols) {
-    present <- col %in% names(df)
-    n_na <- if (present) sum(is.na(df[[col]])) else NA
-    add_check(task, sprintf("column `%s`", col), present && n_na < nrow(df),
-              if (!present) paste("missing - needed by", source)
-              else sprintf("%s; %d/%d NA", class(df[[col]])[1], n_na, nrow(df)))
+    check <- sprintf("column `%s`", col)
+    if (!col %in% names(df)) {
+      add_check(task, check, FALSE, paste("missing - needed by", source))
+      next
+    }
+    values <- df[[col]]
+    missing <- is.na(values) | values %in% ""
+    unexpected <- if (col %in% names(allow_missing)) missing & !allow_missing[[col]] else missing
+    ids <- unique(df$participant_id[unexpected])
+    detail <- sprintf("%s; %d/%d missing", class(values)[1], sum(missing), nrow(df))
+    if (length(ids)) detail <- paste(detail, "in", paste(head(ids, 5), collapse = ", "))
+    add_check(task, check, nrow(df) > 0 && !any(unexpected), detail)
   }
 }
 check_values <- function(task, df, col, allowed) {
@@ -85,37 +115,66 @@ check_values <- function(task, df, col, allowed) {
             length(bad) == 0, if (length(bad)) paste("unexpected:", paste(bad, collapse = ", ")) else "")
 }
 
+check_accuracy <- function(task, df, correct) {
+  scores <- tibble(participant_id = df$participant_id, correct) |>
+    group_by(participant_id) |>
+    summarise(trials = n(), scored = sum(!is.na(correct)), hits = sum(correct %in% TRUE), .groups = "drop")
+  scores <- bind_rows(scores, summarise(scores, participant_id = "overall", across(where(is.numeric), sum)))
+  # Keep random runs stable while detecting large departures from the requested bias.
+  # At both endpoints the lower and upper bounds are exactly the expected count.
+  lower <- qbinom(1e-6, size = scores$trials, prob = sim_accuracy)
+  upper <- qbinom(1 - 1e-6, size = scores$trials, prob = sim_accuracy)
+  ok <- scores$trials == scores$scored & scores$hits >= lower & scores$hits <= upper
+  add_check(task, "recorded accuracy matches `sim_accuracy`",
+            nrow(scores) == n_participants + 1 && all(ok),
+            paste(sprintf("%s: %d/%d correct (%d–%d expected, %d unscored)", scores$participant_id,
+                          scores$hits, scores$trials, lower, upper, scores$trials - scores$scored), collapse = "; "))
+}
+
+check_choice_accuracy <- function(task, df) {
+  optimal_side <- ifelse(df$optimal_right == 1, "right", "left")
+  answered <- df$response %in% c("left", "right")
+  correct <- ifelse(answered, df$response == optimal_side, NA)
+  add_check(task, "`response_optimal` agrees with the chosen side", is.logical(df$response_optimal) &&
+            all(df$response_optimal[answered] == correct[answered]))
+  check_accuracy(task, df, correct)
+}
+
 # PILT ------------------------------------------------------------------------
 pilt_raw <- task_df$PILT
 pilt <- split_card_choosing(pilt_raw, "pilt")
+pilt_missed <- pilt$response %in% "noresp"
 check_columns("PILT", pilt,
   c("participant_id", "session", "trialphase", "block", "trial", "response", "rt",
     "response_optimal", "optimal_right", "feedback_left", "feedback_right",
     "stimulus_left", "stimulus_right", "chosen_stimulus", "chosen_feedback"),
-  "dashboard pilt_wm.R / PILT_modeling")
+  "dashboard pilt_wm.R / PILT_modeling", allow_missing = list(rt = pilt_missed, chosen_stimulus = pilt_missed))
 add_check("PILT", "main-task rows after split_card_choosing", nrow(pilt) > 0, sprintf("%d rows", nrow(pilt)))
-add_check("PILT", "`response_optimal` is logical", is.logical(pilt$response_optimal), class(pilt$response_optimal)[1])
 add_check("PILT", "`block` integer-valued (practice excluded)", all(pilt$block == as.integer(pilt$block)),
           paste("blocks:", paste(sort(unique(pilt$block)), collapse = " ")))
 add_check("PILT", "derived block `valence` (from feedback signs)", all(!is.na(pilt$valence)),
           paste(names(table(pilt$valence)), table(pilt$valence), sep = "=", collapse = ", "))
 check_values("PILT", pilt, "response", c("left", "right", "noresp"))
+check_choice_accuracy("PILT", pilt)
 
 # PILT test -------------------------------------------------------------------
 test_raw <- task_df$post_PILT_test
 pilt_test <- split_card_choosing(test_raw, "pilt_test")
 pit_test <- test_raw |> filter(trialphase == "pilt_test", block == "pavlovian")
 check_columns("PILT test", pilt_test,
-  c("participant_id", "session", "trialphase", "block", "trial", "response", "rt",
+  c("participant_id", "session", "trialphase", "block", "trial", "response", "rt", "optimal_right", "response_optimal",
     "stimulus_left", "stimulus_right", "EV_left", "EV_right", "same_valence",
     "same_block", "original_block_left", "original_block_right"),
-  "PILT_modeling data_prep.R / test-phase plots")
+  "PILT_modeling data_prep.R / test-phase plots", allow_missing = list(rt = pilt_test$response %in% "noresp"))
 n_test <- pilt_test |> count(participant_id, session)
 add_check("PILT test", "≤ 60 non-Pavlovian test trials per session (PILT_modeling assert)",
-          all(n_test$n <= 60), paste("n per participant:", paste(n_test$n, collapse = ", ")))
-add_check("PILT test", "Pavlovian (PIT test) block present", nrow(pit_test) > 0,
+          nrow(n_test) == n_participants && all(n_test$n <= 60),
+          paste("n per participant:", paste(n_test$n, collapse = ", ")))
+add_check("PILT test", "Pavlovian (PIT test) block present for each participant",
+          n_distinct(pit_test$participant_id) == n_participants,
           sprintf("%d rows with block == 'pavlovian'", nrow(pit_test)))
 check_values("PILT test", pilt_test, "response", c("left", "right", "noresp"))
+check_choice_accuracy("PILT test", test_raw |> filter(trialphase == "pilt_test"))
 learn_stims <- unique(basename(c(pilt$stimulus_left, pilt$stimulus_right)))
 test_stims <- unique(basename(c(pilt_test$stimulus_left, pilt_test$stimulus_right)))
 missing_stims <- setdiff(test_stims, learn_stims)
@@ -126,17 +185,17 @@ add_check("PILT test", "test stimuli all appeared in PILT learning (basename mat
 
 # Reversal ----------------------------------------------------------------------
 rev_raw <- task_df$reversal |> filter(trial_type == "reversal")
+rev_missed <- is.na(rev_raw$response)
 check_columns("Reversal", rev_raw,
   c("participant_id", "session", "trial_type", "block", "trial", "response", "rt",
     "response_optimal", "optimal_right", "feedback_left", "feedback_right", "chosen_feedback"),
-  "dashboard reversal.R")
+  "dashboard reversal.R", allow_missing = list(response = rev_missed, rt = rev_missed, response_optimal = rev_missed))
 reversal <- preprocess_reversal(rev_raw)
-add_check("Reversal", "`response_optimal` is logical", is.logical(rev_raw$response_optimal),
-          class(rev_raw$response_optimal)[1])
 starts <- rev_raw |> group_by(participant_id, block) |> summarise(first = min(trial), .groups = "drop")
 add_check("Reversal", "`trial` restarts at 1 in every block", all(starts$first == 1),
           sprintf("%d blocks checked", nrow(starts)))
 check_values("Reversal", rev_raw, "response", c("left", "right", NA))
+check_choice_accuracy("Reversal", rev_raw)
 
 # GNG -------------------------------------------------------------------------
 gng_raw <- task_df$go_no_go |> filter(trialphase == "go_no_go")
@@ -144,13 +203,14 @@ check_columns("GNG", gng_raw,
   c("participant_id", "session", "trialphase", "block", "trial", "cue", "cue_id",
     "valence", "affect", "sham", "correct_response", "condition", "response", "rt",
     "correct", "outcome", "outcome_correct", "outcome_incorrect", "face_model"),
-  "GNG analysis (P(go) by valence x action, affect, bonus)")
+  "GNG analysis (P(go) by valence x action, affect, bonus)", allow_missing = list(rt = gng_raw$response %in% "nogo"))
 gng <- prepare_gng(gng_raw)
 check_values("GNG", gng_raw, "response", c("go", "nogo"))
 check_values("GNG", gng_raw, "valence", c("win", "avoid_loss"))
 check_values("GNG", gng_raw, "correct_response", c("go", "nogo"))
 add_check("GNG", "`correct` == (response == correct_response)",
-          all(gng$correct == (gng$response == gng$correct_response)), "")
+          is.logical(gng_raw$correct) && all(gng$correct == (gng$response == gng$correct_response)), "")
+check_accuracy("GNG", gng, gng$response == gng$correct_response)
 add_check("GNG", "`outcome` matches outcome_correct / outcome_incorrect",
           all(gng$outcome == ifelse(gng$correct, gng$outcome_correct, gng$outcome_incorrect)), "")
 add_check("GNG", "go trials have rt, no-go trials have none",
@@ -160,6 +220,18 @@ add_check("GNG", "`condition` maps one-to-one onto valence x correct_response",
           nrow(cond_map) == 4 && n_distinct(cond_map$condition) == 4,
           paste(sprintf("%s=%s/%s", cond_map$condition, cond_map$valence, cond_map$correct_response),
                 collapse = ", "))
+# The study schedule has two blocks of 120 trials per participant (GNG trial1.js).
+expected_gng_trials <- expand_grid(
+  participant_id = sprintf("REL-SIM-%04d", seq_len(n_participants)), block = 1:2, trial = 1:120
+)
+recorded_gng_trials <- gng |> count(participant_id, block, trial)
+missing_gng_trials <- anti_join(expected_gng_trials, recorded_gng_trials, by = c("participant_id", "block", "trial"))
+extra_gng_trials <- anti_join(recorded_gng_trials, expected_gng_trials, by = c("participant_id", "block", "trial"))
+duplicate_gng_trials <- sum(recorded_gng_trials$n - 1)
+add_check("GNG", "each participant recorded all 120 trials in both blocks exactly once",
+          nrow(missing_gng_trials) == 0 && nrow(extra_gng_trials) == 0 && duplicate_gng_trials == 0,
+          sprintf("%d missing, %d unexpected, %d repeated", nrow(missing_gng_trials),
+                  nrow(extra_gng_trials), duplicate_gng_trials))
 cells <- gng |> count(participant_id, block, valence, correct_response, affect)
 add_check("GNG", "every participant x block has all 8 valence x action x affect cells",
           all(table(cells$participant_id, cells$block) == 8),
@@ -229,12 +301,14 @@ task_order <- c("PILT", "PILT test", "Reversal", "GNG")
 md <- c(
   "# Simulated-data analysis check",
   "",
-  sprintf("Generated %s from `validation/sim-data/` (%d files).", format(Sys.time(), "%Y-%m-%d %H:%M"), length(files)),
+  sprintf("Generated %s from `validation/sim-data/%s/` (%d files).",
+          format(Sys.time(), "%Y-%m-%d %H:%M"), manifest$run, length(files)),
   "",
   sprintf("- Simulated participants per task: %s",
           paste(sprintf("%s = %d", names(by_task), lengths(by_task)), collapse = ", ")),
   sprintf("- Simulated participant accuracy (`sim_accuracy`): %s", paste(sim_accuracy, collapse = ", ")),
-  "- Session: `wk0` (session_number 1). In real data `session` and `module_start_time` are added from the REDCap record, not the jsPsych trials.",
+  sprintf("- Session: `%s` (session_number %d). In real data `session` and `module_start_time` come from the REDCap record.",
+          session, manifest$session_number),
   "- Dashboard functions copied from huyslab/relmed_analysis_behaviour @ 94e68f1 (see `dashboard_functions.R`).",
   "",
   sprintf("**Overall: %d checks, %d failed.**", nrow(checks), n_fail),

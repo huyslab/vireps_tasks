@@ -295,6 +295,7 @@
             createTaskTimeline,
             DEMO_MODULE_ELEMENT_TIMELINE_NAME,
             getModuleInfo,
+            getTask,
             getTaskInfo
         } from '@api/index.js';
         import {
@@ -447,7 +448,15 @@
                     });
                 } else if (taskName) {
                     console.log('Task info:', getTaskInfo(taskName));
-                    timeline = await createTaskTimeline(taskName);
+                    const taskConfig = { session: window.session };
+                    if (sessionConfig) {
+                        taskConfig.stimulus_session = sessionConfig.stimulusSession;
+                        taskConfig.session_number = Number(sessionNumber);
+                        if (getTask(taskName).sequences?.[sessionConfig.session]) {
+                            taskConfig.sequence = sessionConfig.session;
+                        }
+                    }
+                    timeline = await createTaskTimeline(taskName, taskConfig);
                 } else {
                     throw new Error('No module was selected. Please launch the experiment from the setup page.');
                 }
