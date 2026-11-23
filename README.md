@@ -591,6 +591,13 @@ and default to 3 and 0.75. The analysis reads the latest complete run and writes
 `validation/analysis/output/sim_report.md`. Use `npm run sim:analyse:local` to run
 with local R instead of the RELMED Docker image.
 
+The simulations are seeded, so the same task code always produces the same data and
+report. The **Data checks** workflow (`.github/workflows/data-checks.yml`) runs the data
+invariants, the simulations and the analysis on every pull request and push to `main`,
+and commits the report to [`validation/analysis/report/`](validation/analysis/report/)
+whenever it changes. Open that folder on GitHub to see the latest report with its
+plots; a changed report means a task's recorded data changed.
+
 Two things worth knowing before trusting a red run:
 
 - The static server is `python3 -m http.server`. Under full parallelism it can be
