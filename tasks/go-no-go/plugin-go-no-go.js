@@ -462,7 +462,18 @@ var jsPsychGoNoGo = (function (jspsych) {
       // Go on roughly two thirds of simulated trials, so both the grow and shrink
       // paths get exercised by the rendering tests - unless the caller asked for
       // correct answers, as the practice loops do.
-      const goes = trial.simulate_correct ? trial.correct_response === 'go' : Math.random() < 0.67;
+      // A biased simulated participant (experiment.html's sim_accuracy URL parameter)
+      // responds correctly with that probability instead.
+      const accuracy = window.simulationAccuracy;
+      let goes;
+      if (trial.simulate_correct) {
+        goes = trial.correct_response === 'go';
+      } else if (typeof accuracy === 'number') {
+        const correctGo = trial.correct_response === 'go';
+        goes = Math.random() < accuracy ? correctGo : !correctGo;
+      } else {
+        goes = Math.random() < 0.67;
+      }
       const rt = goes ? 20 + Math.floor(Math.random() * (SIMULATED_MAX_RT - 20)) : null;
       const correct = (goes ? 'go' : 'nogo') === trial.correct_response;
 
@@ -482,6 +493,12 @@ var jsPsychGoNoGo = (function (jspsych) {
       };
 
       const data = this.jsPsych.pluginAPI.mergeSimulationData(default_data, simulation_options);
+      // A global simulation default (experiment.html sets rt: 200 for every plugin)
+      // would land the press after the shortened simulate window and turn every go
+      // into a no-go. Keep a go's rt inside the window.
+      if (goes && (data.rt === null || data.rt >= SIMULATED_MAX_RT)) {
+        data.rt = rt;
+      }
       this.jsPsych.pluginAPI.ensureSimulationDataConsistency(trial, data);
       return data;
     }

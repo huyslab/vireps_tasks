@@ -339,6 +339,12 @@
             window.participantID = normalizeParticipantCode(window.participantID);
         }
         window.simulating = window.participantID.includes("simulate") || false;
+        // Optional biased simulated participant for analysis checks: the card-choosing,
+        // reversal and go/no-go simulators pick the correct response with this probability.
+        const simAccuracy = parseFloat(parameters.get('sim_accuracy'));
+        if (window.simulating && simAccuracy >= 0 && simAccuracy <= 1) {
+            window.simulationAccuracy = simAccuracy;
+        }
         const isDemoParticipant = window.participantID.toLowerCase().includes('demo');
         const moduleName = parameters.get('module') || '';
         const taskName = parameters.get('task') || '';
@@ -473,6 +479,7 @@
                     }
 
                     await jsPsych.simulate(fullTimeline, "visual", simulation_options);
+                    window.__simulationDone = true;
                 } else {
                     console.log('Running experiment...');
                     await jsPsych.run(fullTimeline);

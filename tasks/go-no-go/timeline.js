@@ -157,6 +157,7 @@ export async function createGoNoGoTimeline(settings) {
       return {
         stimulus: FACES_PATH + face.file,
         correct_response: t.correct_response,
+        condition: t.condition,
         outcome_correct: t.outcome_correct,
         outcome_incorrect: t.outcome_incorrect,
         // Carried into the data so every trial is analysable on its own.
@@ -205,6 +206,8 @@ export async function createGoNoGoTimeline(settings) {
             affect: jsPsych.timelineVariable('affect'),
             wave: jsPsych.timelineVariable('wave'),
             sham: jsPsych.timelineVariable('sham'),
+            correct_response: jsPsych.timelineVariable('correct_response'),
+            condition: jsPsych.timelineVariable('condition'),
             // Both possible outcomes are recorded so the bonus can be computed
             // against the range that was actually available on each trial.
             outcome_correct: jsPsych.timelineVariable('outcome_correct'),
