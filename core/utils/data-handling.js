@@ -116,10 +116,17 @@ async function saveDataREDCap() {
         sitting_start_time: window.module_start_time,
         session: window.session,
         module: window.module,
+        ...(window.clinicianEmail ? { clinician_email: window.clinicianEmail } : {}),
+        // Only endExperiment arms this marker. Checkpoints, breaks, and interrupted
+        // modules must never request a completion email. Keep it on later snapshots
+        // too, so replacing an offline final snapshot cannot lose the request.
+        ...(finalSaveGeneration > 0 ? {
+            module_completed: true
+        } : {}),
         data: combined_data
     }]);
 
-    console.log("Data to be sent:", redcap_record);
+    console.log("Saving REDCap snapshot:", record_id);
 
     return submitRecord(record_id, redcap_record);
 }

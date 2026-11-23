@@ -70,6 +70,7 @@
         }
 
         input[type="text"],
+        input[type="email"],
         select {
             width: 100%;
             padding: 12px 16px;
@@ -84,6 +85,7 @@
         }
 
         input[type="text"]:focus,
+        input[type="email"]:focus,
         select:focus {
             border-color: var(--rlm-accent);
             box-shadow: 0 0 0 var(--rlm-focus-ring) rgba(74, 111, 165, 0.18);
@@ -134,7 +136,7 @@
         }
     </style>
 </head>
-<body>
+<body data-verify-device-before-upload>
     <div class="container">
         <h1 class="title">Experiment setup</h1>
         <p class="subtitle">For the experimenter to complete before handing the device to the participant.</p>
@@ -175,6 +177,18 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="clinicianEmail">Clinician email (optional):</label>
+                <input type="email" id="clinicianEmail"
+                    maxlength="254" autocomplete="off" autocapitalize="none"
+                    pattern="(?!.*\.\.)(?!.*\.@)[^@.][^@]*@[^@]+\.[A-Za-z]{2,63}"
+                    title="Enter a full email address, for example name@ucl.ac.uk"
+                    spellcheck="false" aria-describedby="receiptHelp">
+                <p id="receiptHelp" class="subtitle" style="font-size: 14px; margin: 8px 0 0; text-align: left;">
+                    Receive a saved-data confirmation after this module, and a warning if completion is still unconfirmed after one hour.
+                </p>
+            </div>
+
             <button type="submit" class="start-button" id="startButton">
                 Start Experiment
             </button>
@@ -186,10 +200,19 @@
     </div>
 
     <script type="module">
+        // Reopening setup must retry earlier uploads without launching a new module.
+        import './core/utils/data-queue.js';
         import { normalizeParticipantCode, participantCodeValidationError } from './core/utils/participant-code.js';
+        import { prepareCompletionReceipt } from './core/utils/completion-receipt.js';
+        import { ensureSingleTab } from './core/utils/single-tab.js';
 
-        document.getElementById('startForm').addEventListener('submit', function(e) {
+        // Attach the handler before waiting on the tab lock, so a tap on Start during the
+        // wait is held here instead of falling through to a native form submission.
+        const activeTab = ensureSingleTab();
+
+        document.getElementById('startForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            if (!(await activeTab)) return;
 
             const participantId = normalizeParticipantCode(document.getElementById('participantId').value);
             const sessionNumber = document.getElementById('sessionNumber').value;
@@ -223,6 +246,16 @@
                 session_number: sessionNumber,
                 module: moduleName
             });
+            const emailInput = document.getElementById('clinicianEmail');
+            emailInput.value = emailInput.value.trim();
+            if (!emailInput.reportValidity()) return;
+            try {
+                prepareCompletionReceipt(emailInput.value, parameters);
+            } catch {
+                errorMessage.textContent = 'The confirmation email could not be set up. Enable browser storage or clear the email field to continue without an email.';
+                errorMessage.style.display = 'block';
+                return;
+            }
             window.location.href = `experiment.html?${parameters.toString()}`;
         });
 

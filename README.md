@@ -20,6 +20,23 @@ The code is stored as `participant_id` in task data and as `task_code` in clinic
 REDCap project 9123. Its numeric `uin` remains an internal record key. See
 [`docs/participant-codes.md`](docs/participant-codes.md) for the fixed mapping and checks.
 
+The launcher also accepts an optional clinician email for this module. Once configured in
+REDCap, the clinician receives a confirmation after module completion and successful upload,
+or a warning if completion/upload is still unconfirmed an hour after registration reaches
+REDCap. Checkpoints never send completion confirmations. An offline tablet must reconnect
+before REDCap can register the warning; pending snapshots retry when the task site is open.
+See [clinician alerts setup](infrastructure/redcap-relay/README.md#clinician-alerts) before
+deploying the launcher with this feature.
+
+Only one VIREPS setup or experiment tab can be active in a browser profile. Additional
+tabs show **VIREPS is already open** and cannot start a module or upload queued data. Use
+the existing tab. If a module is running there, let it finish before closing that tab, since
+closing it mid-module can lose answers since the last save; then tap **Try again** in the
+blocked tab. The check also
+applies to locally queued saves and uploads; it is not only a visual warning. It requires
+an up-to-date browser with shared-lock support and HTTPS (localhost works for development).
+Separate browsers, profiles and task-site origins do not share this check.
+
 Sixteen tasks are registered in `api/task-registry.js`. Registry keys are what
 `createTaskTimeline()` and the launcher take.
 

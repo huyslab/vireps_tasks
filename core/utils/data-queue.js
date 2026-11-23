@@ -1,9 +1,11 @@
 import {
     REDCAP_ENDPOINT,
     createSignedRequestHeaders,
+    getDeviceAuthorizationStatus,
     hasDeviceIdentity,
     refreshClockCalibration
 } from './device-auth.js';
+import { ensureSingleTab } from './single-tab.js';
 
 /**
  * Durable local outbox for REDCap submissions.
@@ -12,17 +14,22 @@ import {
  * are deliberately separate jobs:
  *
  *   - submitRecord() only writes the newest snapshot to IndexedDB. It never touches the
- *     network, so no failure on the sending side can ever cost data. The one thing it does
- *     consult is whether this session may hold data at all (isCollectionSuppressed) - a
- *     governance question, not a delivery one.
- *   - flushQueue() is the only code that sends. It runs one pass at a time and deletes an
- *     entry only once the endpoint has confirmed receipt.
+ *     network, so no failure on the sending side can ever cost data. Before writing it
+ *     checks that this is the active tab and collection is allowed (isCollectionSuppressed).
+ *   - flushQueue() is the only code that sends. It runs one pass at a time in the tab
+ *     holding the shared lifetime lock, and deletes an entry only after confirmed receipt.
  *
  * Because every save is a cumulative snapshot targeting one REDCap row (the relay imports
  * with overwriteBehavior "normal"), only the newest snapshot per record is ever worth
- * sending. One sender means one in-flight request per record by construction, so no ordering
- * bookkeeping is needed: the single guard is a compare-and-delete on `version`, which stops a
- * completed send from deleting a snapshot that was written while it was in flight.
+ * sending. Two guards keep an older snapshot from winning:
+ *
+ *   - A compare-and-delete on `version` stops a completed send from deleting a snapshot that
+ *     was written while it was in flight.
+ *   - An in-flight lease per record, kept in IndexedDB so it outlives the page, stops any
+ *     page from sending a record while an earlier request for it may still be running on the
+ *     relay. The browser abandoning a request (timeout, closed tab) does not stop the Lambda,
+ *     and a late checkpoint write would otherwise overwrite a final snapshot already marked
+ *     Complete.
  *
  * IndexedDB rather than localStorage: payloads are full per-module jsPsych trial data
  * (potentially several hundred KB), and localStorage is synchronous (blocks the main thread
@@ -41,6 +48,12 @@ const REDCAP_REQUEST_TIMEOUT_MS = 30000;
 const FLUSH_CONCURRENCY = 4;
 const RETRY_BASE_DELAY_MS = 1000;
 const RETRY_MAX_DELAY_MS = 30000;
+// How long a request for a record may still be running on the relay after the browser has
+// lost track of it (a timeout, a dropped connection, a closed tab). It must exceed the relay
+// Lambda's Timeout in infrastructure/redcap-relay/template.yaml (30 s), with margin for the
+// REDCap calls that invocation already made. See markInFlight().
+const IN_FLIGHT_LEASE_MS = 45000;
+const IN_FLIGHT_KEY_PREFIX = 'in_flight:';
 
 let dbPromise = null;
 let activeFlush = null;
@@ -243,6 +256,63 @@ async function dequeueIfUnchanged(entry) {
     }
 }
 
+function inFlightLeaseMs() {
+    const testingLease = Number(window.__redcapInFlightLeaseMsForTesting);
+    return Number.isFinite(testingLease) && testingLease >= 0 ? testingLease : IN_FLIGHT_LEASE_MS;
+}
+
+/**
+ * Whether an earlier request for this record may still be running on the relay. A lease
+ * stamped in the future (the device clock moved back) is ignored rather than trusted, so a
+ * clock change can delay a record by at most one lease. Unreadable storage reports false:
+ * this guard must never hold data back indefinitely.
+ * @param {string} record_id
+ * @returns {Promise<boolean>}
+ */
+async function isInFlightElsewhere(record_id) {
+    try {
+        const db = await openDB();
+        const lease = await new Promise((resolve, reject) => {
+            const request = db.transaction(METADATA_STORE_NAME, 'readonly')
+                .objectStore(METADATA_STORE_NAME)
+                .get(IN_FLIGHT_KEY_PREFIX + record_id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const elapsed = Date.now() - lease?.started_at;
+        return Number.isFinite(elapsed) && elapsed >= 0 && elapsed < inFlightLeaseMs();
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Records that a request for this record is about to leave, or clears that mark once the
+ * relay has definitely finished with it. Failures only log: the lease narrows a race, and
+ * an unwritable lease must not stop delivery.
+ * @param {string} record_id
+ * @param {boolean} inFlight
+ * @returns {Promise<void>}
+ */
+async function markInFlight(record_id, inFlight) {
+    try {
+        const db = await openDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(METADATA_STORE_NAME, 'readwrite');
+            const store = tx.objectStore(METADATA_STORE_NAME);
+            if (inFlight) {
+                store.put({ key: IN_FLIGHT_KEY_PREFIX + record_id, started_at: Date.now() });
+            } else {
+                store.delete(IN_FLIGHT_KEY_PREFIX + record_id);
+            }
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (error) {
+        console.warn(`data-queue: could not update the in-flight mark for ${record_id}:`, error);
+    }
+}
+
 /**
  * Lists every record currently waiting to be sent. Never throws: returns an empty array if
  * IndexedDB is unavailable or the read fails.
@@ -329,7 +399,11 @@ async function sendOnce(record_id, payload) {
                 // so a background retry cannot flip a running session into demo mode.
                 await refreshClockCalibration();
             }
-            throw new Error(`REDCap endpoint responded with HTTP ${response.status}`);
+            const error = new Error(`REDCap endpoint responded with HTTP ${response.status}`);
+            // API Gateway answers 504 when it stops waiting, while the Lambda may run on. Any
+            // other response means the relay has finished with this request.
+            error.relayFinished = response.status !== 504;
+            throw error;
         }
         // Awaited inside the try so the timeout still covers reading the body: a stalled
         // body would otherwise hold this pass open indefinitely.
@@ -375,6 +449,7 @@ function isCollectionSuppressed() {
  * @returns {Promise<boolean>}
  */
 async function canSend() {
+    if (!(await ensureSingleTab())) return false;
     // A suppressed session stores nothing, but a backlog from an earlier one may still be
     // here - and must stay here while the device is unapproved.
     if (isCollectionSuppressed()) {
@@ -405,11 +480,19 @@ async function drainOnce() {
         while (nextRecordIndex < records.length) {
             const entry = records[nextRecordIndex];
             nextRecordIndex += 1;
+            if (await isInFlightElsewhere(entry.record_id)) {
+                allConfirmed = false;
+                console.log(`data-queue: waiting for an earlier request for ${entry.record_id} to finish`);
+                continue;
+            }
+            await markInFlight(entry.record_id, true);
             try {
                 await sendOnce(entry.record_id, entry.payload);
                 await dequeueIfUnchanged(entry);
+                await markInFlight(entry.record_id, false);
                 console.log(`data-queue: sent pending record ${entry.record_id}`);
             } catch (error) {
+                if (error.relayFinished) await markInFlight(entry.record_id, false);
                 allConfirmed = false;
                 console.warn(`data-queue: still unable to send ${entry.record_id}; will retry later:`, error);
             }
@@ -540,6 +623,9 @@ function reportStorageFailure(record_id, error) {
  * @returns {Promise<{stored: boolean, version: number|null}>}
  */
 async function submitRecord(record_id, payload) {
+    if (!(await ensureSingleTab())) {
+        throw new Error('Another VIREPS tab is already open, or this browser cannot safely run the tasks.');
+    }
     if (isCollectionSuppressed()) {
         return { stored: false, version: null };
     }
@@ -554,10 +640,24 @@ async function submitRecord(record_id, payload) {
     return { stored: true, version: entry.version };
 }
 
-// Retry anything left by an earlier session as soon as this page loads.
+// Retry anything left by an earlier session as soon as this page loads. Experiment pages
+// decide demo mode themselves; the setup page never does, so it opts in with
+// <body data-verify-device-before-upload> and the relay is asked first. A backlog then
+// stays put on a device the relay has confirmed is unapproved, rather than being sent only
+// to be rejected. An unavailable verdict reports approved, so an offline or briefly
+// unreachable relay never holds back a legitimate retry.
 if (typeof window !== 'undefined') {
-    requestPersistentStorage();
-    flushQueue();
+    ensureSingleTab().then(async (allowed) => {
+        if (!allowed) return;
+        requestPersistentStorage();
+        if (document.body?.hasAttribute('data-verify-device-before-upload')
+                && await hasDeviceIdentity()
+                && !(await getDeviceAuthorizationStatus()).approved) {
+            console.warn('data-queue: this device is not approved; leaving queued records in place');
+            return;
+        }
+        flushQueue();
+    });
 }
 
 export {
