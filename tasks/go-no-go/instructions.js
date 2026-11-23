@@ -281,8 +281,8 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
 
       ...(settings.signal_valence ? [
         `<p>Look at the frame around the screen.</p>
-         <p>${frameSample('win')} A solid blue frame means you can win ${L.points ? 'points' : 'money'}.</p>
-         <p>${frameSample('avoid_loss')} A double amber frame means you will lose ${L.points ? 'points' : 'money'}.</p>`,
+         <p>${frameSample('win')} A solid blue frame means ${L.stakeWin}.</p>
+         <p>${frameSample('avoid_loss')} A double amber frame means ${L.stakeLose}.</p>`,
       ] : []),
 
       `<p>With some people, ${L.stakeWin}.</p>
@@ -401,11 +401,11 @@ export function prepareGoNoGoInstructions(settings, trainingFaces) {
     },
     ...(settings.signal_valence ? [
       {
-        prompt: `A solid blue frame means I can win ${L.points ? 'points' : 'money'}.`,
+        prompt: `A solid blue frame means there ${L.points ? 'are points' : 'is money'} to win.`,
         correct: 'True',
       },
       {
-        prompt: `A double amber frame means I will lose ${L.points ? 'points' : 'money'}.`,
+        prompt: `A double amber frame means there ${L.points ? 'are points' : 'is money'} to lose.`,
         correct: 'True',
       },
     ] : []),

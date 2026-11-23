@@ -136,7 +136,7 @@ test('default instructions and practice teach both frames and signed points', as
   expect(copy).toContain('A plus number');
   expect(copy).toContain('A minus number');
   expect(copy).not.toMatch(/£|penny|coin|green|red<\/b>/i);
-  expect(copy).toContain('A solid blue frame means you can win points');
-  expect(copy).toContain('A double amber frame means you will lose points');
+  expect(copy).toContain('A solid blue frame means there are <b>points to win</b>');
+  expect(copy).toContain('A double amber frame means there are <b>points to lose</b>');
   expect(copy).toContain('Practice 4 of 4');
 });
