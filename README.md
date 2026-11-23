@@ -30,7 +30,9 @@ deploying the launcher with this feature.
 
 Only one VIREPS setup or experiment tab can be active in a browser profile. Additional
 tabs show **VIREPS is already open** and cannot start a module or upload queued data. Use
-the existing tab, or close it and tap **Try again** in the other tab. The check also
+the existing tab. If a module is running there, let it finish before closing that tab, since
+closing it mid-module can lose answers since the last save; then tap **Try again** in the
+blocked tab. The check also
 applies to locally queued saves and uploads; it is not only a visual warning. It requires
 an up-to-date browser with shared-lock support and HTTPS (localhost works for development).
 Separate browsers, profiles and task-site origins do not share this check.

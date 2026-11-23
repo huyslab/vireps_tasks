@@ -39,7 +39,7 @@ function ensureSingleTab() {
         try {
             navigator.locks.request(LOCK_NAME, { ifAvailable: true }, (lock) => {
                 if (!lock) {
-                    showBlocked('Use the VIREPS tab already open in this browser. To use this tab, close the other tab, then tap Try again.');
+                    showBlocked('VIREPS is already open in another tab in this browser. If a module is running there, let it finish first: closing that tab during a module can lose unsaved answers. Then close the other tab and tap Try again.');
                     resolve(false);
                     return;
                 }

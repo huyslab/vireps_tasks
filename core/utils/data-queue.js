@@ -1,6 +1,7 @@
 import {
     REDCAP_ENDPOINT,
     createSignedRequestHeaders,
+    getDeviceAuthorizationStatus,
     hasDeviceIdentity,
     refreshClockCalibration
 } from './device-auth.js';
@@ -558,13 +559,23 @@ async function submitRecord(record_id, payload) {
     return { stored: true, version: entry.version };
 }
 
-// Retry anything left by an earlier session as soon as this page loads.
+// Retry anything left by an earlier session as soon as this page loads. Experiment pages
+// decide demo mode themselves; the setup page never does, so it opts in with
+// <body data-verify-device-before-upload> and the relay is asked first. A backlog then
+// stays put on a device the relay has confirmed is unapproved, rather than being sent only
+// to be rejected. An unavailable verdict reports approved, so an offline or briefly
+// unreachable relay never holds back a legitimate retry.
 if (typeof window !== 'undefined') {
-    ensureSingleTab().then((allowed) => {
-        if (allowed) {
-            requestPersistentStorage();
-            flushQueue();
+    ensureSingleTab().then(async (allowed) => {
+        if (!allowed) return;
+        requestPersistentStorage();
+        if (document.body?.hasAttribute('data-verify-device-before-upload')
+                && await hasDeviceIdentity()
+                && !(await getDeviceAuthorizationStatus()).approved) {
+            console.warn('data-queue: this device is not approved; leaving queued records in place');
+            return;
         }
+        flushQueue();
     });
 }
 

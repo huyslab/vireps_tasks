@@ -58,7 +58,9 @@ checks and demo/development suppression apply to these snapshots as usual.
 Other tabs display a blocking notice, cannot start a module, and cannot enqueue or send
 snapshots. The queue checks ownership before both storing and sending, so reopening setup
 beside an active experiment cannot create a second outbox sender. Closing the owner releases
-the lock; a blocked tab must reload using **Try again** to become active. There is no timed
+the lock; a blocked tab must reload using **Try again** to become active. The notice tells
+staff to let a running module finish before closing its tab, because closing it mid-module
+loses anything since the last checkpoint. There is no timed
 takeover of a backgrounded experiment. Browsers without Web Locks are blocked, rather than
 silently allowing concurrent tabs. This coordinates pages in one browser profile and origin;
 it cannot prevent a person opening another browser or profile.

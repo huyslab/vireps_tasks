@@ -79,6 +79,7 @@ test('invalid clinician emails block launch and a blank address remains optional
 
 test('only completion marks the snapshot final and reopening the launcher retries its upload', async ({ page, context }) => {
   await context.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: true, verified: true };
     window.__forceOnlineRedcapForTesting = true;
     window.__redcapRetryDelayMsForTesting = 60000;
     window.__redcapDeviceSignerForTesting = async () => ({});
@@ -154,4 +155,44 @@ test('only completion marks the snapshot final and reopening the launcher retrie
       tx.onerror = () => reject(tx.error);
     };
   }))).toBe(0);
+});
+
+test('reopening setup on a device the relay confirms is unapproved leaves the queue in place', async ({ page, context }) => {
+  await context.addInitScript(() => {
+    window.__forceOnlineRedcapForTesting = true;
+    window.__redcapRetryDelayMsForTesting = 60000;
+    window.__redcapDeviceSignerForTesting = async () => ({});
+  });
+  let sends = 0;
+  let failing = true;
+  await context.route(REDCAP_ENDPOINT, async (route) => {
+    if (!failing) sends += 1;
+    await route.fulfill({ status: failing ? 503 : 200, contentType: 'application/json', body: '{}' });
+  });
+  await page.goto('/validation/fixtures/data-queue.html');
+  await page.waitForFunction(() => window.__DATA_QUEUE_FIXTURE_READY === true);
+  await page.evaluate(() => window.__dataQueue.submitRecord('revoked_record', JSON.stringify([{ record_id: 'revoked_record' }])));
+  await page.close();
+
+  // Revocation is confirmed by the relay's status check, as on a real tablet.
+  await context.addInitScript(() => {
+    window.__redcapDeviceStatusForTesting = { approved: false, reason: 'not-approved' };
+  });
+  failing = false;
+  const reopened = await context.newPage();
+  await reopened.goto('/index.html');
+  await reopened.waitForFunction(() => document.readyState === 'complete');
+  await reopened.waitForTimeout(500);
+  expect(sends).toBe(0);
+  const remaining = await reopened.evaluate(() => new Promise((resolve, reject) => {
+    const opening = indexedDB.open('redcap_pending_queue');
+    opening.onerror = () => reject(opening.error);
+    opening.onsuccess = () => {
+      const tx = opening.result.transaction('records', 'readonly');
+      const count = tx.objectStore('records').count();
+      count.onsuccess = () => resolve(count.result);
+      tx.oncomplete = () => opening.result.close();
+    };
+  }));
+  expect(remaining).toBe(1);
 });

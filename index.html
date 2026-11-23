@@ -136,7 +136,7 @@
         }
     </style>
 </head>
-<body>
+<body data-verify-device-before-upload>
     <div class="container">
         <h1 class="title">Experiment setup</h1>
         <p class="subtitle">For the experimenter to complete before handing the device to the participant.</p>
@@ -206,11 +206,13 @@
         import { prepareCompletionReceipt } from './core/utils/completion-receipt.js';
         import { ensureSingleTab } from './core/utils/single-tab.js';
 
-        const activeTab = await ensureSingleTab();
+        // Attach the handler before waiting on the tab lock, so a tap on Start during the
+        // wait is held here instead of falling through to a native form submission.
+        const activeTab = ensureSingleTab();
 
-        document.getElementById('startForm').addEventListener('submit', function(e) {
+        document.getElementById('startForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!activeTab) return;
+            if (!(await activeTab)) return;
 
             const participantId = normalizeParticipantCode(document.getElementById('participantId').value);
             const sessionNumber = document.getElementById('sessionNumber').value;
