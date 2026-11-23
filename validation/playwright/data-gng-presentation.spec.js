@@ -22,6 +22,7 @@ async function walkTrials(page, n) {
   const seen = [];
   for (let i = 0; i < n; i++) {
     await page.waitForSelector(CUE, { state: 'visible', timeout: 20000 });
+    const trialFrame = await page.$('.gng-frame');
     seen.push(
       await page.evaluate(() => {
         const frame = document.querySelector('.gng-frame');
@@ -46,7 +47,6 @@ async function walkTrials(page, n) {
         tintClass: tint ? [...tint.classList].find((c) => c.startsWith('gng-tint-')) ?? null : null,
       };
     }));
-    await expect(page.locator('.gng-frame[hidden]')).toHaveCount(seen[i].frame ? 1 : 0);
     // Wait for the row to be committed rather than for a fixed delay: the row
     // lands at the very end of the trial (resize + feedback + iti), so a timeout
     // tuned to look long enough still left the last trial unwritten when the
@@ -60,6 +60,12 @@ async function walkTrials(page, n) {
         { timeout: 15000, intervals: [100] }
       )
       .toBe(i + 1);
+    if (trialFrame) {
+      // The handle still points to this trial's frame after it leaves the DOM.
+      // Its hidden flag can be checked even after the brief blank interval.
+      expect(await trialFrame.evaluate((frame) => frame.hidden)).toBe(true);
+      await trialFrame.dispose();
+    }
   }
   return seen;
 }
