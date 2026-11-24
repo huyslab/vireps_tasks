@@ -9,8 +9,9 @@ name: Data checks
 #      variable the RELMED dashboard analyses need is recorded, and fails if any
 #      check fails. The report and plots are uploaded as an artifact.
 #   3. On pushes to main, the report and plots are committed to
-#      validation/analysis/report/ if they changed. The simulations are seeded,
-#      so they only change when the tasks' data do.
+#      validation/analysis/report/ if the report's text changed. The simulations
+#      are seeded, so it only changes when the tasks' data do. The plots alone are
+#      not compared: a new R or ggplot2 release can redraw them from the same data.
 
 on:
   pull_request:
@@ -124,16 +125,27 @@ jobs:
             exit 0
           fi
           report=validation/analysis/report
+          # The report's tables and checks come from the data alone; the plots' bytes also
+          # depend on the R and ggplot2 versions CI happens to install. So only a changed
+          # report text means the data changed, and only then are the plots replaced too.
+          if cmp -s validation/analysis/output/sim_report.md "$report/README.md"; then
+            echo "Report unchanged."
+            exit 0
+          fi
           rm -rf "$report"
           mkdir -p "$report"
           cp validation/analysis/output/*.png "$report"/
           cp validation/analysis/output/sim_report.md "$report"/README.md
           git add -A "$report"
-          if git diff --cached --quiet; then
-            echo "Report unchanged."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -q -m "Update simulated-data report for ${GITHUB_SHA::7} [skip ci]"
-          git push origin HEAD:main
+          if ! git push origin HEAD:main; then
+            # A merge can land between the check above and this push.
+            git fetch --depth=1 origin main
+            if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+              echo "main moved on while this run was committing; its own run will update the report."
+              exit 0
+            fi
+            exit 1
+          fi
