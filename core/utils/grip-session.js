@@ -32,7 +32,7 @@ export function getGripCalibration() {
  * Screen that pairs the grip over Bluetooth, replacing any stale handle.
  * `reconnect` words it for a grip that dropped out mid-session.
  */
-export function makeConnectTrial({ reconnect = false } = {}) {
+export function makeConnectTrial({ reconnect = false, skipControl } = {}) {
     const [heading, text, label] = reconnect
         ? ['Reconnect the grip', 'The grip needs to be paired again. Make sure it is switched on and close by, then tap <strong>Connect grip</strong>.', 'dynamometer_reconnect']
         : ['For the experimenter', 'Switch on the grip and select <strong>Connect grip</strong>.', 'dynamometer_connect'];
@@ -45,29 +45,45 @@ export function makeConnectTrial({ reconnect = false } = {}) {
                 <p>${text}</p>
                 <p id="connect-status" class="cal-connection-status" role="status" aria-live="polite"></p>
                 <button id="connect-btn" class="jspsych-btn">Connect grip</button>
+                ${skipControl?.button ?? ''}
             </div></div>`,
         data: { trialphase: label },
         on_load: () => {
             const button = document.getElementById('connect-btn');
             const status = document.getElementById('connect-status');
+            let skipRequested = false;
+            skipControl?.onLoad(() => {
+                skipRequested = true;
+                button.disabled = true;
+            });
             button.addEventListener('click', async () => {
                 button.disabled = true;
                 status.textContent = 'Connecting…';
                 try {
-                    if (window.dynamometerSensor) {
-                        try { await disconnectDynamometer(window.dynamometerSensor); } catch (_) {}
+                    const previousSensor = window.dynamometerSensor;
+                    if (previousSensor) {
                         window.dynamometerSensor = null;
+                        try { await disconnectDynamometer(previousSensor); } catch (_) {}
                     }
-                    window.dynamometerSensor = await connectDynamometer();
-                    startForceStream(window.dynamometerSensor, () => {});
+                    if (skipRequested) return;
+
+                    const sensor = await connectDynamometer();
+                    if (skipRequested) {
+                        await disconnectDynamometer(sensor);
+                        return;
+                    }
+                    window.dynamometerSensor = sensor;
+                    startForceStream(sensor, () => {});
                     jsPsych.finishTrial({ connected: true });
                 } catch (error) {
+                    if (skipRequested) return;
                     status.textContent = `Could not connect: ${error.message}. Please try again.`;
                     button.disabled = false;
                 }
             });
             if (window.simulating) jsPsych.pluginAPI.setTimeout(() => button.click(), 100);
-        }
+        },
+        on_finish: skipControl?.onFinish
     };
 }
 
@@ -77,10 +93,10 @@ export function makeConnectTrial({ reconnect = false } = {}) {
  * grip is connected; otherwise a retry reuses the live connection instead of
  * asking the experimenter to pair the grip again.
  */
-export function makeConnectStep(shouldReconnect) {
+export function makeConnectStep(shouldReconnect, skipControl) {
     let firstPass = true;
     return {
-        timeline: [makeConnectTrial()],
+        timeline: [makeConnectTrial({ skipControl })],
         conditional_function: () => {
             const show = firstPass || shouldReconnect() || !window.dynamometerSensor;
             firstPass = false;
