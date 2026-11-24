@@ -369,7 +369,8 @@ test('skipping a failed grip connection continues Module 2 and records the skip'
 
   await page.getByRole('button', { name: 'Connect grip' }).click();
   await expect(page.locator('#connect-status')).toContainText('Could not connect: No grip device found');
-  await page.getByRole('button', { name: 'Skip grip tasks' }).click();
+  await page.getByRole('button', { name: 'Skip grip tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'Yes, skip grip tasks', exact: true }).click();
   await expect(page.getByText('That is the end of Part 2.', { exact: false })).toBeVisible();
 
   const outcomes = await page.evaluate(() => {

@@ -39,10 +39,29 @@ export function cleanUpDynamometerCalibrationDemo(settings = {}) {
 function makeSkipControl(onSkipGrip) {
     if (typeof onSkipGrip !== 'function') return null;
 
+    // Skipping drops every grip task for the rest of the session and sits beside the
+    // participant's own Next/Continue buttons, so it takes a second, deliberate tap.
+    // The wrappers carry `hidden` because .jspsych-btn sets its own display.
     return {
-        button: '<p><button id="skip-grip-tasks-btn" type="button" class="jspsych-btn jspsych-btn-quiet">Skip grip tasks</button></p>',
+        button: `
+            <p id="skip-grip-tasks"><button id="skip-grip-tasks-btn" type="button" class="jspsych-btn jspsych-btn-quiet">Skip grip tasks</button></p>
+            <div id="skip-grip-tasks-confirm" hidden>
+                <p role="alert">Skip all grip tasks for the rest of this session? This cannot be undone.</p>
+                <p>
+                    <button id="skip-grip-tasks-cancel-btn" type="button" class="jspsych-btn jspsych-btn-quiet">Keep grip tasks</button>
+                    <button id="skip-grip-tasks-confirm-btn" type="button" class="jspsych-btn jspsych-btn-danger">Yes, skip grip tasks</button>
+                </p>
+            </div>`,
         onLoad: beforeSkip => {
-            document.getElementById('skip-grip-tasks-btn').addEventListener('click', () => {
+            const ask = document.getElementById('skip-grip-tasks');
+            const confirm = document.getElementById('skip-grip-tasks-confirm');
+            const toggle = asking => {
+                ask.hidden = asking;
+                confirm.hidden = !asking;
+            };
+            document.getElementById('skip-grip-tasks-btn').addEventListener('click', () => toggle(true));
+            document.getElementById('skip-grip-tasks-cancel-btn').addEventListener('click', () => toggle(false));
+            document.getElementById('skip-grip-tasks-confirm-btn').addEventListener('click', () => {
                 beforeSkip?.();
                 jsPsych.finishTrial({ grip_tasks_skipped: true });
             }, { once: true });
