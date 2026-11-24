@@ -334,6 +334,35 @@ test('skipping after a squeeze timeout ends calibration and releases the grip', 
   });
 });
 
+test('an open skip question survives the squeeze screen timing out', async ({ page }) => {
+  await openTimelineHarness(page);
+  await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    window.simulating = false;
+    window.participantID = 'LCT46Y';
+    const [calibration] = await createTaskTimeline('dynamometer_calibration', {
+      squeezeWaitTimeoutMs: 1500,
+      onSkipGrip: () => {},
+    });
+    window.dynamometerSensor = { close: async () => {} };
+    window.gripTestRun = jsPsych.run([{ ...calibration, timeline: calibration.timeline.slice(2) }]);
+  });
+
+  // Ask on the live squeeze screen, then let the no-squeeze timer move it on.
+  await expect(page.locator('#grip-speed-countdown')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip grip tasks', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Grip not detected' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Skip all grip tasks for the rest of this session?');
+
+  await page.getByRole('button', { name: 'Yes, skip grip tasks', exact: true }).click();
+  const skips = await page.evaluate(async () => {
+    await window.gripTestRun;
+    return jsPsych.data.get().filter({ grip_tasks_skipped: true }).select('trialphase').values;
+  });
+  expect(skips).toEqual(['dynamometer_calibration_retry']);
+});
+
 test('skipping after a successful speed test discards its calibration', async ({ page }) => {
   await openTimelineHarness(page);
   await page.evaluate(async () => {

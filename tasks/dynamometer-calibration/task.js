@@ -42,6 +42,9 @@ function makeSkipControl(onSkipGrip) {
     // Skipping drops every grip task for the rest of the session and sits beside the
     // participant's own Next/Continue buttons, so it takes a second, deliberate tap.
     // The wrappers carry `hidden` because .jspsych-btn sets its own display.
+    // An open question stays open when a screen moves on by itself (a timed-out or
+    // finished squeeze), so staff need not start the skip again on the next screen.
+    let confirming = false;
     return {
         button: `
             <p id="skip-grip-tasks"><button id="skip-grip-tasks-btn" type="button" class="jspsych-btn jspsych-btn-quiet">Skip grip tasks</button></p>
@@ -56,9 +59,11 @@ function makeSkipControl(onSkipGrip) {
             const ask = document.getElementById('skip-grip-tasks');
             const confirm = document.getElementById('skip-grip-tasks-confirm');
             const toggle = asking => {
+                confirming = asking;
                 ask.hidden = asking;
                 confirm.hidden = !asking;
             };
+            toggle(confirming);
             document.getElementById('skip-grip-tasks-btn').addEventListener('click', () => toggle(true));
             document.getElementById('skip-grip-tasks-cancel-btn').addEventListener('click', () => toggle(false));
             document.getElementById('skip-grip-tasks-confirm-btn').addEventListener('click', () => {
