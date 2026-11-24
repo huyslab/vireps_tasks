@@ -30,8 +30,12 @@ test('Module 2 runs tap then grip vigour, rates each vigour task, and ends with 
   expect(elements.filter(element => element.config?.text === 'break_message')).toHaveLength(1);
   // After the grip game, a screen lets participants put the grip down before tapping PIT.
   const pitIndex = elements.findIndex(element => element.name === 'PIT');
-  expect(elements[pitIndex - 1]).toEqual({ type: 'instructions', config: { text: 'grip_down_message' } });
-  expect(elements.some(element => 'grip' in element)).toBe(false);
+  expect(elements[pitIndex - 1]).toMatchObject({ type: 'instructions', config: { text: 'grip_down_message' } });
+  expect(elements.filter(element => element.grip).map(element => element.config?.task_name ?? element.name ?? element.config.text))
+    .toEqual([
+      'break_message', 'dynamometer_calibration', 'dynamometer_vigour',
+      'dynamometer_vigour', 'grip_down_message', 'dynamometer_max_strength',
+    ]);
 });
 
 test('module 2 without a dynamometer is exactly module 2 minus its grip steps', async ({ page }) => {
@@ -326,6 +330,61 @@ test('skipping demo calibration supplies values for the following grip tasks', a
   });
 
   expect(result).toEqual({ hookIsDeclared: true, calibration: 80 });
+});
+
+test('skipping a failed grip connection continues Module 2 and records the skip', async ({ page }) => {
+  await page.goto('/experiment.html?participant_id=invalid%20participant');
+
+  await page.evaluate(async () => {
+    const { createModuleTimeline } = await import('/api/index.js');
+    const { ModuleRegistry } = await import('/api/module-registry.js');
+    const { TaskRegistry } = await import('/api/task-registry.js');
+    window.simulating = false;
+    window.participantID = 'LCT46Y';
+    window.module = 'module_2';
+    window.session = 'wk0';
+    window.module_start_time = '2026-01-01 00:00:00';
+    Object.defineProperty(navigator, 'bluetooth', {
+      configurable: true,
+      value: { requestDevice: async () => { throw new Error('No grip device found'); } },
+    });
+
+    // Keep the real module's order and guards, using short trials for the other games.
+    const elements = ModuleRegistry.module_2.elements;
+    for (const { name } of elements.filter(element => element.type === 'task')) {
+      if (name === 'dynamometer_calibration') continue;
+      TaskRegistry[name].createTimeline = settings => [{
+        type: jsPsychCallFunction,
+        func: () => {},
+        data: { reached_task: name === 'acceptability_judgment' ? `${name}:${settings.task_name}` : name },
+      }];
+    }
+
+    const timeline = await createModuleTimeline('module_2', { session: 'wk0', sequence: 'wk0' });
+    const calibrationIndex = timeline.findIndex(element => element.timeline?.[0]?.name === 'dynamometer-calibration');
+    if (calibrationIndex < 0) throw new Error('Could not find grip calibration in Module 2');
+    jsPsych.data.get().push({ trialphase: 'ratings_before_calibration' });
+    void jsPsych.run(timeline.slice(calibrationIndex));
+  });
+
+  await page.getByRole('button', { name: 'Connect grip' }).click();
+  await expect(page.locator('#connect-status')).toContainText('Could not connect: No grip device found');
+  await page.getByRole('button', { name: 'Skip grip tasks' }).click();
+  await expect(page.getByText('That is the end of Part 2.', { exact: false })).toBeVisible();
+
+  const outcomes = await page.evaluate(() => {
+    const rows = jsPsych.data.get();
+    return {
+      earlierRatings: rows.filter({ trialphase: 'ratings_before_calibration' }).count(),
+      skips: rows.filter({ grip_tasks_skipped: true }).select('trialphase').values,
+      reachedTasks: rows.select('reached_task').values,
+    };
+  });
+  expect(outcomes).toEqual({
+    earlierRatings: 1,
+    skips: ['dynamometer_connect'],
+    reachedTasks: ['PIT', 'acceptability_judgment:PIT', 'vigour_test', 'post_PILT_test'],
+  });
 });
 
 test('Module 2 asks the tablet to turn to landscape before the pavlovian lottery', async ({ browser }) => {

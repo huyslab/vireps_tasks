@@ -7,7 +7,7 @@ const MODULE_2_CONFIG = {
 };
 
 // Module 2. Steps marked `grip: true` need the hand grip; module_2_without_dynamometer
-// is this same list with those steps removed.
+// is this same list with those steps removed. Module 2 can also omit them mid-session.
 const MODULE_2_ELEMENTS = [
     { type: "instructions", config: { text: "start_message" } },
     { type: "task", name: "max_press_test" },
@@ -51,7 +51,7 @@ export const ModuleRegistry = {
     module_2: {
         name: "Module 2: Learning and Effort Tasks",
         moduleConfig: { ...MODULE_2_CONFIG },
-        elements: MODULE_2_ELEMENTS.map(({ grip, ...element }) => element)
+        elements: MODULE_2_ELEMENTS
     },
     // Exactly Module 2 with every grip step left out, so the two cannot drift apart.
     module_2_without_dynamometer: {

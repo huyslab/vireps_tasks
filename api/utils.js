@@ -306,10 +306,13 @@ export async function createModuleTimeline(moduleName, config) {
         }
     });
 
+    let gripTasksSkipped = false;
+    const skipGripTasks = () => { gripTasksSkipped = true; };
     const elementSettings = module.elements.map(element => ({
         ...module.moduleConfig,
         ...element.config,
-        ...moduleRunConfig
+        ...moduleRunConfig,
+        ...(element.grip && element.name === 'dynamometer_calibration' ? { onSkipGrip: skipGripTasks } : {})
     }));
 
     // Create timeline for each element in the module
@@ -328,29 +331,33 @@ export async function createModuleTimeline(moduleName, config) {
 
     const result = await Promise.all(timelines);
 
-    if (enableDemoNavigation) {
-        return result.map((elementTimeline, index) => {
-            const element = module.elements[index];
-            const elementInfo = {
-                index,
-                type: element.type,
-                name: element.name || element.config?.text || element.type,
-                config: element.config || {},
-                onDemoSkip: typeof element.__task?.onDemoSkip === 'function'
-                    ? () => element.__task.onDemoSkip(elementSettings[index])
-                    : null
-            };
+    return result.flatMap((elementTimeline, index) => {
+        const element = module.elements[index];
+        if (!enableDemoNavigation && !element.grip) return elementTimeline;
 
-            return {
-                name: DEMO_MODULE_ELEMENT_TIMELINE_NAME,
-                timeline: Array.isArray(elementTimeline) ? elementTimeline : [elementTimeline],
-                on_timeline_start: () => onDemoElementStart?.(elementInfo),
-                on_timeline_finish: () => onDemoElementFinish?.(elementInfo)
-            };
-        });
-    }
+        const elementNode = {
+            timeline: Array.isArray(elementTimeline) ? elementTimeline : [elementTimeline]
+        };
+        if (element.grip) elementNode.conditional_function = () => !gripTasksSkipped;
+        if (!enableDemoNavigation) return elementNode;
 
-    return result.flat();
+        const elementInfo = {
+            index,
+            type: element.type,
+            name: element.name || element.config?.text || element.type,
+            config: element.config || {},
+            onDemoSkip: typeof element.__task?.onDemoSkip === 'function'
+                ? () => element.__task.onDemoSkip(elementSettings[index])
+                : null
+        };
+
+        return {
+            ...elementNode,
+            name: DEMO_MODULE_ELEMENT_TIMELINE_NAME,
+            on_timeline_start: () => onDemoElementStart?.(elementInfo),
+            on_timeline_finish: () => onDemoElementFinish?.(elementInfo)
+        };
+    });
 }
 
 /**

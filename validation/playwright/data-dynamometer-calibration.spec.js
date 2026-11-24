@@ -281,6 +281,46 @@ test('quick-squeeze test records the median completed squeeze peak', async ({ pa
   expect(result.retry).toBe(false);
 });
 
+test('skipping after a squeeze timeout ends calibration and releases the grip', async ({ page }) => {
+  await openTimelineHarness(page);
+  await page.evaluate(async () => {
+    const { createTaskTimeline } = await import('/api/index.js');
+    window.simulating = false;
+    window.participantID = 'LCT46Y';
+    const [calibration] = await createTaskTimeline('dynamometer_calibration', {
+      squeezeWaitTimeoutMs: 100,
+      onSkipGrip: () => {},
+    });
+
+    // Open the live squeeze screen with a connected grip that sends no readings.
+    window.gripTestDisconnects = 0;
+    window.dynamometerSensor = { close: async () => { window.gripTestDisconnects += 1; } };
+    window.gripTestRun = jsPsych.run([{ ...calibration, timeline: calibration.timeline.slice(2) }]);
+  });
+
+  await expect(page.getByRole('heading', { name: 'Grip not detected' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip grip tasks' }).click();
+  const result = await page.evaluate(async () => {
+    await window.gripTestRun;
+    const { getGripCalibration } = await import('/core/utils/grip-session.js');
+    const rows = jsPsych.data.get();
+    return {
+      skips: rows.filter({ grip_tasks_skipped: true }).select('trialphase').values,
+      timedOut: rows.filter({ squeeze_wait_timed_out: true }).count(),
+      calibration: getGripCalibration(),
+      disconnects: window.gripTestDisconnects,
+      gripReleased: window.dynamometerSensor === null,
+    };
+  });
+  expect(result).toEqual({
+    skips: ['dynamometer_calibration_retry'],
+    timedOut: 1,
+    calibration: null,
+    disconnects: 1,
+    gripReleased: true,
+  });
+});
+
 test('maximum-strength test is separate and records ten maximal squeeze peaks', async ({ page }) => {
   await openTimelineHarness(page);
 
