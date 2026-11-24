@@ -9,10 +9,12 @@ name: Data checks
 #      variable the RELMED dashboard analyses need is recorded, and fails if any
 #      check fails. The report and plots are uploaded as an artifact.
 #   3. On pushes to main, the report and plots are committed to
-#      validation/analysis/report/ if the report's text changed. The simulations
-#      are seeded and R and its packages pinned, so it only changes when the
-#      tasks' data do. The plots alone are not compared, so bumping the pinned
-#      versions, which can redraw them from the same data, commits nothing.
+#      validation/analysis/report/ if the report's text changed. The report
+#      includes a fingerprint of each plot's data, the simulations are seeded and
+#      R and its packages pinned, so it changes exactly when the tasks' data do.
+#      The plots' bytes are not compared, so bumping the pinned versions, which can
+#      redraw the same data, commits nothing. A Release commit landing on main
+#      first does not stop the report being published.
 
 on:
   pull_request:
@@ -20,8 +22,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Keyed on the event too, so a manual run on main cannot cancel the push run that
+# publishes the report (manual runs never publish).
 concurrency:
-  group: data-checks-${{ github.ref }}
+  group: data-checks-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -132,33 +136,54 @@ jobs:
       - name: Commit report to main if it changed
         if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
-          git fetch --depth=1 origin main
-          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
-            echo "main has moved on since this run started; its own run will update the report."
-            exit 0
-          fi
           report=validation/analysis/report
-          # The report's tables and checks come from the data alone; the plots' bytes also
-          # depend on the pinned R and package versions. So only a changed report text
-          # means the data changed, and only then are the plots replaced too.
-          if cmp -s validation/analysis/output/sim_report.md "$report/README.md"; then
-            echo "Report unchanged."
-            exit 0
-          fi
-          rm -rf "$report"
-          mkdir -p "$report"
-          cp validation/analysis/output/*.png "$report"/
-          cp validation/analysis/output/sim_report.md "$report"/README.md
-          git add -A "$report"
+          out=validation/analysis/output
+
+          # main may have moved on since this run's commit. If it moved on only by commits
+          # that start no run of their own and cannot change the data (the Release
+          # workflow's [skip ci] commit, which rewrites CHANGELOG.md and the version string
+          # in experiment.html, or an earlier report commit), this run's report is still
+          # main's and is published on top of them. Any other change has its own run.
+          data_unchanged_since_run() {
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || return 1
+            for file in $(git diff --name-only "$GITHUB_SHA" origin/main); do
+              case "$file" in
+                CHANGELOG.md | "$report"/*) ;;
+                experiment.html)
+                  # Allowed only if it is identical apart from the version string.
+                  blank_version() { git show "$1:experiment.html" | sed 's/version: "[^"]*"/version: ""/'; }
+                  [ "$(blank_version "$GITHUB_SHA")" = "$(blank_version origin/main)" ] || return 1 ;;
+                *) return 1 ;;
+              esac
+            done
+          }
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "Update simulated-data report for ${GITHUB_SHA::7} [skip ci]"
-          if ! git push origin HEAD:main; then
-            # A merge can land between the check above and this push.
-            git fetch --depth=1 origin main
-            if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
-              echo "main moved on while this run was committing; its own run will update the report."
+          # Retry when a push loses a race with another commit to main.
+          for attempt in 1 2 3; do
+            git fetch -q origin main
+            if ! data_unchanged_since_run; then
+              echo "main has changed since this run's commit; its own run will update the report."
               exit 0
             fi
-            exit 1
-          fi
+            git checkout -q --detach origin/main
+            # The report lists every check, summary table and a fingerprint of each plot's
+            # data, so it changes whenever the data do. The plots' bytes also depend on the
+            # pinned R and package versions, so they are not compared on their own.
+            if cmp -s "$out/sim_report.md" "$report/README.md"; then
+              echo "Report unchanged."
+              exit 0
+            fi
+            rm -rf "$report"
+            mkdir -p "$report"
+            cp "$out"/*.png "$report"/
+            cp "$out/sim_report.md" "$report/README.md"
+            git add -A "$report"
+            git commit -q -m "Update simulated-data report for ${GITHUB_SHA::7} [skip ci]"
+            if git push -q origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt); trying again from main's new tip."
+          done
+          exit 1

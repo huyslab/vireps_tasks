@@ -246,9 +246,30 @@ checks <- bind_rows(checks)
 
 # ---- Plots --------------------------------------------------------------------
 
+# A fingerprint of what a plot draws: each layer's built data (positions, groups,
+# colours), not the input frames, which also carry measured RTs that vary run to run.
+# It goes in the report, so the report changes whenever a plot does, even when the
+# tables summarising the data do not, while a renderer that only redraws the same
+# data does not. Numbers are rounded to 10 significant digits to ignore float noise.
+plot_data_hash <- function(p) {
+  text <- unlist(lapply(ggplot_build(p)$data, function(d) {
+    d <- as.data.frame(lapply(d, function(col) {
+      if (is.numeric(col)) format(signif(col, 10), digits = 10, trim = TRUE) else as.character(col)
+    }))
+    capture.output(write.csv(d, row.names = FALSE))
+  }))
+  file <- tempfile(fileext = ".csv")
+  on.exit(unlink(file))
+  writeLines(text, file)
+  substr(unname(tools::md5sum(file)), 1, 12)
+}
+
+plot_hashes <- character()
 save_plot <- function(p, name, width = 8, height = 5) {
   ggsave(file.path(out_dir, paste0(name, ".png")), p, width = width, height = height, dpi = 110)
-  paste0(name, ".png")
+  file <- paste0(name, ".png")
+  plot_hashes[[file]] <<- plot_data_hash(p)
+  file
 }
 plots <- list(
   PILT = c(
@@ -324,7 +345,9 @@ for (t in task_order) {
           md_table(checks |> filter(task == t) |> select(-task)), "",
           "### Summary", "", md_table(summaries[[t]]), "")
   for (i in seq_along(plots[[t]])) {
-    md <- c(md, paste("###", names(plots[[t]])[i]), "", sprintf("![](%s)", plots[[t]][i]), "")
+    file <- plots[[t]][[i]]
+    md <- c(md, paste("###", names(plots[[t]])[i]), "", sprintf("![](%s)", file), "",
+            sprintf("<sub>Plot data fingerprint: `%s`</sub>", plot_hashes[[file]]), "")
   }
 }
 writeLines(md, file.path(out_dir, "sim_report.md"))
