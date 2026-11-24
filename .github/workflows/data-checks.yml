@@ -1,0 +1,189 @@
+name: Data checks
+
+# Runs on every pull request and every push to main:
+#   1. The Playwright "data invariants" project (Desktop Chrome), then
+#      `npm run sim:data`, which simulates PILT, the post-PILT test, reversal and
+#      go/no-go with seeded randomness and publishes a complete run to
+#      validation/sim-data/.
+#   2. validation/analysis/run_sim_analysis.R on that run. It checks that every
+#      variable the RELMED dashboard analyses need is recorded, and fails if any
+#      check fails. The report and plots are uploaded as an artifact.
+#   3. On pushes to main, the report and plots are committed to
+#      validation/analysis/report/ if the report's text changed. The report
+#      includes a fingerprint of each plot's data, the simulations are seeded and
+#      R and its packages pinned, so it changes exactly when the tasks' data do.
+#      The plots' bytes are not compared, so bumping the pinned versions, which can
+#      redraw the same data, commits nothing. A Release commit landing on main
+#      first does not stop the report being published.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Keyed on the event too, so a manual run on main cannot cancel the push run that
+# publishes the report (manual runs never publish).
+concurrency:
+  group: data-checks-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run data invariant tests
+        # The task simulations run in the next step, which also saves their data.
+        run: npx playwright test --project="data invariants" --grep-invert "simulate .* participant"
+        env:
+          CI: true
+
+      - name: Simulate tasks
+        run: npm run sim:data
+        env:
+          CI: true
+
+      - name: Upload simulated data
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-data
+          path: validation/sim-data/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  sim-analysis:
+    needs: playwright
+    # R, its packages and the OS libraries that draw the plots are all pinned, so the
+    # committed report only changes when the data do. Bump them together, on purpose:
+    # the OS release, R_VERSION and the package snapshot date in RSPM (its URL names
+    # the OS release too).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write # to commit the report on pushes to main
+    env:
+      R_VERSION: 4.6.2
+      # A dated Posit Package Manager snapshot: every package, dependencies included,
+      # installs at its version on that day.
+      RSPM: https://packagemanager.posit.co/cran/__linux__/noble/2026-11-20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download simulated data
+        uses: actions/download-artifact@v4
+        with:
+          name: sim-data
+          path: validation/sim-data/
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ env.R_VERSION }}
+          # setup-r reads RSPM from the environment. CRAN points at the same snapshot,
+          # or a newer package on live CRAN would win over the pinned one.
+          cran: ${{ env.RSPM }}
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dplyr
+            any::tidyr
+            any::ggplot2
+            any::jsonlite
+
+      - name: Check variables and run analyses
+        run: Rscript validation/analysis/run_sim_analysis.R
+
+      - name: Add report to job summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f validation/analysis/output/sim_report.md ]; then
+            # Images are relative paths the summary cannot show; keep the tables.
+            grep -v '^!\[\](' validation/analysis/output/sim_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report and plots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-analysis-report
+          path: validation/analysis/output/
+          retention-days: 30
+
+      - name: Commit report to main if it changed
+        if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          report=validation/analysis/report
+          out=validation/analysis/output
+
+          # main may have moved on since this run's commit. If it moved on only by commits
+          # that start no run of their own and cannot change the data (the Release
+          # workflow's [skip ci] commit, which rewrites CHANGELOG.md and the version string
+          # in experiment.html, or an earlier report commit), this run's report is still
+          # main's and is published on top of them. Any other change has its own run.
+          data_unchanged_since_run() {
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || return 1
+            for file in $(git diff --name-only "$GITHUB_SHA" origin/main); do
+              case "$file" in
+                CHANGELOG.md | "$report"/*) ;;
+                experiment.html)
+                  # Allowed only if it is identical apart from the version string.
+                  blank_version() { git show "$1:experiment.html" | sed 's/version: "[^"]*"/version: ""/'; }
+                  [ "$(blank_version "$GITHUB_SHA")" = "$(blank_version origin/main)" ] || return 1 ;;
+                *) return 1 ;;
+              esac
+            done
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Retry when a push loses a race with another commit to main.
+          for attempt in 1 2 3; do
+            git fetch -q origin main
+            if ! data_unchanged_since_run; then
+              echo "main has changed since this run's commit; its own run will update the report."
+              exit 0
+            fi
+            git checkout -q --detach origin/main
+            # The report lists every check, summary table and a fingerprint of each plot's
+            # data, so it changes whenever the data do. The plots' bytes also depend on the
+            # pinned R and package versions, so they are not compared on their own.
+            if cmp -s "$out/sim_report.md" "$report/README.md"; then
+              echo "Report unchanged."
+              exit 0
+            fi
+            rm -rf "$report"
+            mkdir -p "$report"
+            cp "$out"/*.png "$report"/
+            cp "$out/sim_report.md" "$report/README.md"
+            git add -A "$report"
+            git commit -q -m "Update simulated-data report for ${GITHUB_SHA::7} [skip ci]"
+            if git push -q origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt); trying again from main's new tip."
+          done
+          exit 1

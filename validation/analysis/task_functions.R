@@ -82,14 +82,6 @@ plot_gng_accuracy_by_affect <- function(df, id_col = "participant_id") {
     theme_dashboard()
 }
 
-plot_gng_rt <- function(df) {
-  ggplot(df |> filter(go, !is.na(rt)), aes(x = cond_label, y = rt)) +
-    geom_boxplot(outlier.size = 0.5) +
-    labs(x = NULL, y = "Go RT (ms)") +
-    theme_dashboard() +
-    theme(axis.text.x = element_text(angle = 20, hjust = 1))
-}
-
 plot_gng_cumulative_outcome <- function(df, id_col = "participant_id") {
   d <- df |>
     arrange(.data[[id_col]], block, trial) |>
